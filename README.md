@@ -10,12 +10,12 @@ This is a work in progress and will undergo a number of changes.  Probably will 
 
 Current limitations:
 
-    * Only read and administrative queries work, no write queries
-    * No global connection object (r.Table()) doesn't work, only (r.DB().Table()), and query.Run() is instead conn.Run(query)
-    * Not goroutine safe, each gorouting needs its own connection.  Thank god there's no global connection object.
-    * A number of things will be restructured
-    * No pretty-printing of queries
-    * No docs (besides this one!) or like actual tests
+* Only read and administrative queries work, no write queries
+* No global connection object (r.Table()) doesn't work, only (r.DB().Table()), and query.Run() is instead conn.Run(query)
+* Not goroutine safe, each gorouting needs its own connection.  Thank god there's no global connection object.
+* A number of things will be restructured
+* No pretty-printing of queries
+* No docs (besides this one!) or like actual tests
 
 Example:
 
