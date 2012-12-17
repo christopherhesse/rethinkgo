@@ -129,13 +129,8 @@ func (q TableDropQuery) buildProtobuf() (*p.Query, error) {
 type TableInfo struct {
 	name        string
 	database    Database
-	useOutdated bool // TODO: make sure this is settable
+	useOutdated bool
 }
-
-// func (t Table) UseOutdated() Table {
-// 	t.useOutdated = true
-// 	return t
-// }
 
 func (db Database) Table(name string) Expression {
 	value := TableInfo{
@@ -143,7 +138,17 @@ func (db Database) Table(name string) Expression {
 		database:    db,
 		useOutdated: false,
 	}
-	return Expression{kind: Table, value: value}
+	return Expression{kind: TableKind, value: value}
+}
+
+func (e Expression) UseOutdated(useOutdated bool) Expression {
+	// TODO: this will cause an uncatchable runtime error if used incorrectly,
+	// is there an alternative? TableUseOutdated(table), defer error until runtime?
+	// OutdatedTableKind that uses the TableKind expression as a value
+	// and fails on .Term()
+	t := e.value.(TableInfo)
+	t.useOutdated = useOutdated
+	return Expression{kind: TableKind, value: t}
 }
 
 func (table TableInfo) toTableRef() *p.TableRef {

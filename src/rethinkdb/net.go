@@ -332,10 +332,19 @@ func (e RuntimeError) Error() string {
 	return fmt.Sprintf("rethinkdb: Error executing query: %v %v %v", e.response.GetErrorMessage(), getBacktraceFrames(e.response), e.query)
 }
 
+type BadQuery struct {
+	response *p.Response
+	query    RethinkQuery
+}
+
+func (e BadQuery) Error() string {
+	return fmt.Sprintf("rethinkdb: Bad query: %v %v %v", e.response.GetErrorMessage(), getBacktraceFrames(e.response), e.query)
+}
+
 // Internal run function, shared by Rows iterator and normal Run() call
 func (rc *RethinkConnection) run(querybuf *p.Query, query RethinkQuery) (result []string, status p.Response_StatusCode, err error) {
 	if DEBUG {
-		fmt.Printf("query:\n%v", protobufToString(querybuf, 1))
+		fmt.Printf("rethinkdb: query:\n%v", protobufToString(querybuf, 1))
 	}
 
 	r, err := rc.executeQuery(querybuf)
@@ -343,7 +352,7 @@ func (rc *RethinkConnection) run(querybuf *p.Query, query RethinkQuery) (result 
 		return
 	}
 	if DEBUG {
-		fmt.Printf("response:\n%v", protobufToString(r, 1))
+		fmt.Printf("rethinkdb: response:\n%v", protobufToString(r, 1))
 	}
 
 	status = r.GetStatusCode()
@@ -359,7 +368,7 @@ func (rc *RethinkConnection) run(querybuf *p.Query, query RethinkQuery) (result 
 	case p.Response_RUNTIME_ERROR:
 		err = RuntimeError{r, query}
 	case p.Response_BAD_QUERY:
-		err = fmt.Errorf("rethinkdb: Bad query: %v %v %v", r.GetErrorMessage(), getBacktraceFrames(r), query)
+		err = BadQuery{r, query}
 	case p.Response_BROKEN_CLIENT:
 		err = errors.New("rethinkdb: Broken client: server rejected our protocol buffer as malformed, this client library most likely contains a bug")
 	default:
