@@ -6,7 +6,7 @@ rethinkgo
 ***BETA VERSION***
 ===================
 
-This is a work in progress and will undergo a number of changes.  Probably will be mostly done before the end of December 2012.
+This is a work in progress and will undergo a number of changes.  Parity with existing RethinkDB drivers will be mostly done before the end of December 2012.
 
 Example:
 
