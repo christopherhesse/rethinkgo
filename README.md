@@ -1,7 +1,7 @@
 rethinkgo
 =========
 
-[Go language](http://golang.org/) driver for [RethinkDB](http://www.rethinkdb.com/)
+[Go language](http://golang.org/) driver for [RethinkDB](http://www.rethinkdb.com/) made by [Christopher Hesse](http://www.christopherhesse.com/)
 
 ***BETA VERSION***
 ===================
