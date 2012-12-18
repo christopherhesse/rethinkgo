@@ -334,7 +334,7 @@ func toComparisonBuiltin(kind ExpressionKind) *p.Builtin {
 	case LessThanOrEqualKind:
 		c = p.Builtin_LE
 	default:
-		panic("rethinkdb: Unknown expression kind")
+		panic("Unknown expression kind")
 	}
 
 	return &p.Builtin{

@@ -105,7 +105,12 @@ func TestQueries(t *testing.T) {
 		DB("test").Table("marvel").GetById("e62a977a-5f03-4f86-95f6-1fc59d10459d").Replace(map[string]interface{}{"id": "e62a977a-5f03-4f86-95f6-1fc59d10459d", "name": "Iron Man", "age": 99, "strength": 8}),
 		DB("test").Table("marvel").Filter(map[string]interface{}{"name": "Darkhawk"}).Replace(map[string]interface{}{"id": "f4faf171-9947-4108-9ae2-3f77cd53d012", "name": "Darkhawk", "age": 999, "strength": 9}),
 		// DB("test").Table("dc").GetById("aedfebe7-a60a-4b73-8ecd-680dd4b1ac23").Delete(),
-		DB("test").Table("dc").Filter(map[string]interface{}{"name": "Unknown"}).Delete(),
+		// DB("test").Table("dc").Filter(map[string]interface{}{"name": "Unknown"}).Delete(),
+		DB("test").Table("marvel2").Delete(),
+		DB("test").Table("marvel").Map(Row.Attr("strength").Mul(2)),
+		DB("test").Table("marvel").ForEach(func(row Expression) RethinkQuery {
+			return DB("test").Table("marvel2").Insert(row)
+		}),
 	}
 
 	for _, query := range queries {

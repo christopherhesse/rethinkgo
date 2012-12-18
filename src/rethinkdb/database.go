@@ -5,7 +5,7 @@ import (
 	p "rethinkdb/query_language"
 )
 
-func MetaQuery(queryType p.MetaQuery_MetaQueryType) *p.Query {
+func buildMetaQuery(queryType p.MetaQuery_MetaQueryType) *p.Query {
 	return &p.Query{
 		Type: p.Query_META.Enum(),
 		MetaQuery: &p.MetaQuery{
@@ -24,7 +24,7 @@ func DBCreate(name string) CreateDatabaseQuery {
 }
 
 func (q CreateDatabaseQuery) buildProtobuf() (*p.Query, error) {
-	query := MetaQuery(p.MetaQuery_CREATE_DB)
+	query := buildMetaQuery(p.MetaQuery_CREATE_DB)
 	query.MetaQuery.DbName = proto.String(q.name)
 	return query, nil
 }
@@ -39,7 +39,7 @@ func DBDrop(name string) DropDatabaseQuery {
 }
 
 func (q DropDatabaseQuery) buildProtobuf() (*p.Query, error) {
-	query := MetaQuery(p.MetaQuery_DROP_DB)
+	query := buildMetaQuery(p.MetaQuery_DROP_DB)
 	query.MetaQuery.DbName = proto.String(q.name)
 	return query, nil
 }
@@ -53,7 +53,7 @@ func DBList() ListDatabasesQuery {
 }
 
 func (q ListDatabasesQuery) buildProtobuf() (*p.Query, error) {
-	return MetaQuery(p.MetaQuery_LIST_DBS), nil
+	return buildMetaQuery(p.MetaQuery_LIST_DBS), nil
 }
 
 type Database struct {
@@ -79,7 +79,7 @@ func (db Database) TableCreate(name string) TableCreateQuery {
 }
 
 func (q TableCreateQuery) buildProtobuf() (query *p.Query, err error) {
-	query = MetaQuery(p.MetaQuery_CREATE_TABLE)
+	query = buildMetaQuery(p.MetaQuery_CREATE_TABLE)
 	query.MetaQuery.CreateTable = &p.MetaQuery_CreateTable{
 		PrimaryKey: protoStringOrNil(q.PrimaryKey),
 		Datacenter: protoStringOrNil(q.PrimaryDatacenter),
@@ -102,7 +102,7 @@ func (db Database) TableList() TableListQuery {
 }
 
 func (q TableListQuery) buildProtobuf() (*p.Query, error) {
-	query := MetaQuery(p.MetaQuery_LIST_TABLES)
+	query := buildMetaQuery(p.MetaQuery_LIST_TABLES)
 	query.MetaQuery.DbName = proto.String(q.database.name)
 	return query, nil
 }
@@ -118,7 +118,7 @@ func (db Database) TableDrop(name string) TableDropQuery {
 }
 
 func (q TableDropQuery) buildProtobuf() (*p.Query, error) {
-	query := MetaQuery(p.MetaQuery_DROP_TABLE)
+	query := buildMetaQuery(p.MetaQuery_DROP_TABLE)
 	query.MetaQuery.DropTable = &p.TableRef{
 		TableName: proto.String(q.name),
 		DbName:    proto.String(q.database.name),

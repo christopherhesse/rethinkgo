@@ -1,3 +1,5 @@
+// All write queries
+
 package rethinkdb
 
 import (
@@ -190,6 +192,38 @@ func (q DeleteQuery) buildProtobuf() (query *p.Query, err error) {
 
 	query.WriteQuery.Delete = &p.WriteQuery_Delete{
 		View: view,
+	}
+	return
+}
+
+type ForEachQuery struct {
+	stream    Expression
+	queryFunc func(Expression) RethinkQuery
+}
+
+func (e Expression) ForEach(queryFunc (func(Expression) RethinkQuery)) ForEachQuery {
+	return ForEachQuery{stream: e, queryFunc: queryFunc}
+}
+
+func (q ForEachQuery) buildProtobuf() (query *p.Query, err error) {
+	stream, err := buildTerm(q.stream)
+	if err != nil {
+		return
+	}
+
+	name := nextVariableName()
+	generatedQuery := q.queryFunc(LetVar(name))
+	innerQuery, err := generatedQuery.buildProtobuf()
+	if err != nil {
+		return
+	}
+
+	query = buildWriteQuery(p.WriteQuery_FOREACH)
+
+	query.WriteQuery.ForEach = &p.WriteQuery_ForEach{
+		Stream:  stream,
+		Var:     proto.String(name),
+		Queries: []*p.WriteQuery{innerQuery.WriteQuery},
 	}
 	return
 }
