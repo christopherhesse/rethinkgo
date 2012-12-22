@@ -5,18 +5,21 @@ rethinkgo
 
 [API Documentation](http://godoc.org/github.com/christopherhesse/rethinkgo/src/rethinkdb)
 
-***BETA VERSION***
+****This is a work in progress and will undergo a number of changes.  Parity with existing RethinkDB drivers will be mostly done before the end of December 2012.****
+
+Installation
+============
+
+    go get github.com/christopherhesse/rethinkgo/src/rethinkdb
+
+Example
 ===================
-
-This is a work in progress and will undergo a number of changes.  Parity with existing RethinkDB drivers will be mostly done before the end of December 2012.
-
-Example:
 
     package main
 
     import (
         "fmt"
-        r "rethinkdb"
+        r "github.com/christopherhesse/rethinkgo/src/rethinkdb"
     )
 
     func main() {
