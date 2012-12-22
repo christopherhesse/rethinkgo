@@ -3,6 +3,8 @@ rethinkgo
 
 [Go language](http://golang.org/) driver for [RethinkDB](http://www.rethinkdb.com/) made by [Christopher Hesse](http://www.christopherhesse.com/)
 
+[API Documentation](http://godoc.org/github.com/christopherhesse/rethinkgo/src/rethinkdb)
+
 ***BETA VERSION***
 ===================
 

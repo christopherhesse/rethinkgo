@@ -1,62 +1,74 @@
-// Convert Expression trees and queries into protocol buffer form
-// Functions in this file will panic on failure, the caller is expected
-// to recover().
-
 package rethinkdb
+
+// Convert Expression trees and queries into protocol buffer form
+// Functions in this file (except build*) will panic on failure, the caller is
+// expected to recover().
 
 import (
 	"code.google.com/p/goprotobuf/proto"
 	"encoding/json"
+	"errors"
 	"fmt"
+	p "github.com/christopherhesse/rethinkgo/src/rethinkdb/query_language"
 	"reflect"
-	p "rethinkdb/query_language"
 	"runtime"
 )
 
-func toTerm(o interface{}) *p.Term {
+// Expressions contain some state that is required when converting them to
+// protocol buffers, and has to be passed through.
+type context struct {
+	databaseName string
+	useOutdated  bool
+}
+
+func (ctx context) toTerm(o interface{}) *p.Term {
 	e := Expr(o)
 	value := e.value
 
 	switch e.kind {
-	case LiteralKind:
-		return literalToTerm(value)
-	case VariableKind:
+	case literalKind:
+		return ctx.literalToTerm(value)
+	case variableKind:
 		return &p.Term{
 			Type: p.Term_VAR.Enum(),
 			Var:  proto.String(value.(string)),
 		}
-	case ImplicitVariableKind:
+	case useOutdatedKind:
+		useOutdatedArgs := value.(useOutdatedArgs)
+		ctx.useOutdated = useOutdatedArgs.useOutdated
+		return ctx.toTerm(useOutdatedArgs.expr)
+	case implicitVariableKind:
 		return &p.Term{
 			Type: p.Term_IMPLICIT_VAR.Enum(),
 		}
-	case LetKind:
-		letArgs := value.(LetArgs)
+	case letKind:
+		letArgs := value.(letArgs)
 
 		return &p.Term{
 			Type: p.Term_LET.Enum(),
 			Let: &p.Term_Let{
-				Binds: mapToVarTermTuples(letArgs.binds),
-				Expr:  toTerm(letArgs.expr),
+				Binds: ctx.mapToVarTermTuples(letArgs.binds),
+				Expr:  ctx.toTerm(letArgs.expr),
 			},
 		}
-	case IfKind:
-		ifArgs := value.(IfArgs)
+	case ifKind:
+		ifArgs := value.(ifArgs)
 
 		return &p.Term{
 			Type: p.Term_IF.Enum(),
 			If_: &p.Term_If{
-				Test:        toTerm(ifArgs.test),
-				TrueBranch:  toTerm(ifArgs.trueBranch),
-				FalseBranch: toTerm(ifArgs.falseBranch),
+				Test:        ctx.toTerm(ifArgs.test),
+				TrueBranch:  ctx.toTerm(ifArgs.trueBranch),
+				FalseBranch: ctx.toTerm(ifArgs.falseBranch),
 			},
 		}
-	case ErrorKind:
+	case errorKind:
 		return &p.Term{
 			Type:  p.Term_ERROR.Enum(),
 			Error: proto.String(value.(string)),
 		}
-	case GetByKeyKind:
-		getArgs := value.(GetArgs)
+	case getByKeyKind:
+		getArgs := value.(getArgs)
 		table, ok := getArgs.table.(TableInfo)
 		if !ok {
 			panic(".Get() used on something that's not a table")
@@ -65,43 +77,40 @@ func toTerm(o interface{}) *p.Term {
 		return &p.Term{
 			Type: p.Term_GETBYKEY.Enum(),
 			GetByKey: &p.Term_GetByKey{
-				TableRef: table.toTableRef(),
+				TableRef: ctx.toTableRef(table),
 				Attrname: proto.String(getArgs.attribute),
-				Key:      toTerm(getArgs.key),
+				Key:      ctx.toTerm(getArgs.key),
 			},
 		}
-	case TableKind:
+	case tableKind:
 		table := value.(TableInfo)
 		return &p.Term{
 			Type: p.Term_TABLE.Enum(),
 			Table: &p.Term_Table{
-				TableRef: table.toTableRef(),
+				TableRef: ctx.toTableRef(table),
 			},
 		}
-	case JavascriptKind:
+	case javascriptKind:
 		return &p.Term{
 			Type:       p.Term_JAVASCRIPT.Enum(),
 			Javascript: proto.String(value.(string)),
 		}
-	case GroupByKind:
-		groupByArgs := value.(GroupByArgs)
+	case groupByKind:
+		groupByArgs := value.(groupByArgs)
 
 		grouping := func(row Expression) interface{} {
 			return row.Attr(groupByArgs.attribute)
 		}
 		gmr := groupByArgs.groupedMapReduce
-		mapping := gmr["mapping"]
-		base := gmr["base"]
-		reduction := gmr["reduction"]
 
 		result := groupByArgs.expression.GroupedMapReduce(
 			grouping,
-			mapping,
-			base,
-			reduction,
+			gmr.mapping,
+			gmr.base,
+			gmr.reduction,
 		)
 
-		finalizer := gmr["finalizer"]
+		finalizer := gmr.finalizer
 		if finalizer != nil {
 			finalizerFunc := finalizer.(func(Expression) interface{})
 			result = result.Map(func(row Expression) interface{} {
@@ -111,67 +120,67 @@ func toTerm(o interface{}) *p.Term {
 				return row.Merge(result)
 			})
 		}
-		return toTerm(result)
+		return ctx.toTerm(result)
 	}
 
 	// If we're here, the term must be a kind of builtin
-	builtinArgs := value.(BuiltinArgs)
+	builtinArgs := value.(builtinArgs)
 
 	return &p.Term{
 		Type: p.Term_CALL.Enum(),
 		Call: &p.Term_Call{
-			Builtin: toBuiltin(e.kind, builtinArgs.operand),
-			Args:    sliceToTerms(builtinArgs.args),
+			Builtin: ctx.toBuiltin(e.kind, builtinArgs.operand),
+			Args:    ctx.sliceToTerms(builtinArgs.args),
 		},
 	}
 }
 
-func toBuiltin(kind ExpressionKind, operand interface{}) *p.Builtin {
+func (ctx context) toBuiltin(kind expressionKind, operand interface{}) *p.Builtin {
 	var t p.Builtin_BuiltinType
 
 	switch kind {
-	case AddKind:
+	case addKind:
 		t = p.Builtin_ADD
-	case SubtractKind:
+	case subtractKind:
 		t = p.Builtin_SUBTRACT
-	case MultiplyKind:
+	case multiplyKind:
 		t = p.Builtin_MULTIPLY
-	case DivideKind:
+	case divideKind:
 		t = p.Builtin_DIVIDE
-	case ModuloKind:
+	case moduloKind:
 		t = p.Builtin_MODULO
-	case LogicalAndKind:
+	case logicalAndKind:
 		t = p.Builtin_ALL
-	case LogicalOrKind:
+	case logicalOrKind:
 		t = p.Builtin_ANY
-	case LogicalNotKind:
+	case logicalNotKind:
 		t = p.Builtin_NOT
-	case ArrayToStreamKind:
+	case arrayToStreamKind:
 		t = p.Builtin_ARRAYTOSTREAM
-	case StreamToArrayKind:
+	case streamToArrayKind:
 		t = p.Builtin_STREAMTOARRAY
-	case MapMergeKind:
+	case mapMergeKind:
 		t = p.Builtin_MAPMERGE
-	case ArrayAppendKind:
+	case arrayAppendKind:
 		t = p.Builtin_ARRAYAPPEND
-	case DistinctKind:
+	case distinctKind:
 		t = p.Builtin_DISTINCT
-	case LengthKind:
+	case lengthKind:
 		t = p.Builtin_LENGTH
-	case UnionKind:
+	case unionKind:
 		t = p.Builtin_UNION
-	case NthKind:
+	case nthKind:
 		t = p.Builtin_NTH
-	case SliceKind:
+	case sliceKind:
 		t = p.Builtin_SLICE
 
-	case GetAttributeKind, ImplicitGetAttributeKind, HasAttributeKind:
+	case getAttributeKind, implicitGetAttributeKind, hasAttributeKind:
 		switch kind {
-		case GetAttributeKind:
+		case getAttributeKind:
 			t = p.Builtin_GETATTR
-		case ImplicitGetAttributeKind:
+		case implicitGetAttributeKind:
 			t = p.Builtin_IMPLICIT_GETATTR
-		case HasAttributeKind:
+		case hasAttributeKind:
 			t = p.Builtin_HASATTR
 		}
 
@@ -180,11 +189,11 @@ func toBuiltin(kind ExpressionKind, operand interface{}) *p.Builtin {
 			Attr: proto.String(operand.(string)),
 		}
 
-	case PickAttributesKind, WithoutKind:
+	case pickAttributesKind, withoutKind:
 		switch kind {
-		case PickAttributesKind:
+		case pickAttributesKind:
 			t = p.Builtin_PICKATTRS
-		case WithoutKind:
+		case withoutKind:
 			t = p.Builtin_WITHOUT
 
 		}
@@ -194,7 +203,7 @@ func toBuiltin(kind ExpressionKind, operand interface{}) *p.Builtin {
 			Attrs: operand.([]string),
 		}
 
-	case FilterKind:
+	case filterKind:
 		var expr Expression
 		var predicate *p.Predicate
 		// TODO: should this also work with, for instance map[string]string?
@@ -205,17 +214,17 @@ func toBuiltin(kind ExpressionKind, operand interface{}) *p.Builtin {
 			// map, build an expression to do that
 			var args []interface{}
 			for key, value := range m {
-				args = append(args, Attr(key).Eq(value))
+				args = append(args, Row.Attr(key).Eq(value))
 			}
-			expr = naryBuiltin(LogicalAndKind, nil, args...)
-			body := toTerm(expr)
+			expr = naryBuiltin(logicalAndKind, nil, args...)
+			body := ctx.toTerm(expr)
 			predicate = &p.Predicate{
 				Arg:  proto.String("row"),
 				Body: body,
 			}
 		} else {
 			expr = Expr(operand)
-			predicate = toPredicate(expr)
+			predicate = ctx.toPredicate(expr)
 		}
 
 		return &p.Builtin{
@@ -225,8 +234,8 @@ func toBuiltin(kind ExpressionKind, operand interface{}) *p.Builtin {
 			},
 		}
 
-	case OrderByKind:
-		orderByArgs := operand.(OrderByArgs)
+	case orderByKind:
+		orderByArgs := operand.(orderByArgs)
 
 		var orderBys []*p.Builtin_OrderBy
 		for _, ordering := range orderByArgs.orderings {
@@ -235,7 +244,7 @@ func toBuiltin(kind ExpressionKind, operand interface{}) *p.Builtin {
 			attr, ok := ordering.(string)
 			if !ok {
 				// check if it's the special value returned by asc or dec
-				d, ok := ordering.(OrderByAttr)
+				d, ok := ordering.(orderByAttr)
 				if !ok {
 					panic("Invalid attribute type for OrderBy")
 				}
@@ -255,10 +264,10 @@ func toBuiltin(kind ExpressionKind, operand interface{}) *p.Builtin {
 			OrderBy: orderBys,
 		}
 
-	case MapKind, ConcatMapKind:
-		mapping := toMapping(operand)
+	case mapKind, concatMapKind:
+		mapping := ctx.toMapping(operand)
 
-		if kind == MapKind {
+		if kind == mapKind {
 			return &p.Builtin{
 				Type: p.Builtin_MAP.Enum(),
 				Map: &p.Builtin_Map{
@@ -274,42 +283,42 @@ func toBuiltin(kind ExpressionKind, operand interface{}) *p.Builtin {
 			}
 		}
 
-	case ReduceKind:
-		reduceArgs := operand.(ReduceArgs)
-		base := toTerm(reduceArgs.base)
+	case reduceKind:
+		reduceArgs := operand.(reduceArgs)
+		base := ctx.toTerm(reduceArgs.base)
 
 		return &p.Builtin{
 			Type:   p.Builtin_REDUCE.Enum(),
-			Reduce: toReduction(reduceArgs.reduction, base),
+			Reduce: ctx.toReduction(reduceArgs.reduction, base),
 		}
 
-	case GroupedMapReduceKind:
-		groupedMapReduceArgs := operand.(GroupedMapReduceArgs)
-		base := toTerm(groupedMapReduceArgs.base)
+	case GroupedMapreduceKind:
+		groupedMapreduceArgs := operand.(groupedMapReduceArgs)
+		base := ctx.toTerm(groupedMapreduceArgs.base)
 
 		return &p.Builtin{
 			Type: p.Builtin_GROUPEDMAPREDUCE.Enum(),
 			GroupedMapReduce: &p.Builtin_GroupedMapReduce{
-				GroupMapping: toMapping(groupedMapReduceArgs.grouping),
-				ValueMapping: toMapping(groupedMapReduceArgs.mapping),
-				Reduction:    toReduction(groupedMapReduceArgs.reduction, base),
+				GroupMapping: ctx.toMapping(groupedMapreduceArgs.grouping),
+				ValueMapping: ctx.toMapping(groupedMapreduceArgs.mapping),
+				Reduction:    ctx.toReduction(groupedMapreduceArgs.reduction, base),
 			},
 		}
 
-	case RangeKind:
-		rangeArgs := operand.(RangeArgs)
+	case rangeKind:
+		rangeArgs := operand.(rangeArgs)
 
 		return &p.Builtin{
 			Type: p.Builtin_RANGE.Enum(),
 			Range: &p.Builtin_Range{
 				Attrname:   proto.String(rangeArgs.attrname),
-				Lowerbound: toTerm(rangeArgs.lowerbound),
-				Upperbound: toTerm(rangeArgs.upperbound),
+				Lowerbound: ctx.toTerm(rangeArgs.lowerbound),
+				Upperbound: ctx.toTerm(rangeArgs.upperbound),
 			},
 		}
 
 	default:
-		return toComparisonBuiltin(kind)
+		return ctx.toComparisonBuiltin(kind)
 	}
 
 	return &p.Builtin{
@@ -317,21 +326,21 @@ func toBuiltin(kind ExpressionKind, operand interface{}) *p.Builtin {
 	}
 }
 
-func toComparisonBuiltin(kind ExpressionKind) *p.Builtin {
+func (ctx context) toComparisonBuiltin(kind expressionKind) *p.Builtin {
 	var c p.Builtin_Comparison
 
 	switch kind {
-	case EqualityKind:
+	case equalityKind:
 		c = p.Builtin_EQ
-	case InequalityKind:
+	case inequalityKind:
 		c = p.Builtin_NE
-	case GreaterThanKind:
+	case greaterThanKind:
 		c = p.Builtin_GT
-	case GreaterThanOrEqualKind:
+	case greaterThanOrEqualKind:
 		c = p.Builtin_GE
-	case LessThanKind:
+	case lessThanKind:
 		c = p.Builtin_LT
-	case LessThanOrEqualKind:
+	case lessThanOrEqualKind:
 		c = p.Builtin_LE
 	default:
 		panic("Unknown expression kind")
@@ -350,7 +359,7 @@ func nextVariableName() string {
 	return fmt.Sprintf("arg_%v", variableNameCounter)
 }
 
-func compileGoFunc(f interface{}, requiredArgs int) (params []string, body *p.Term) {
+func (ctx context) compileGoFunc(f interface{}, requiredArgs int) (params []string, body *p.Term) {
 	// presumably if we're here, the user has supplied a go func to be
 	// converted to an expression
 	value := reflect.ValueOf(f)
@@ -381,14 +390,14 @@ func compileGoFunc(f interface{}, requiredArgs int) (params []string, body *p.Te
 	}
 
 	outValue := value.Call(args)[0]
-	body = toTerm(outValue.Interface())
+	body = ctx.toTerm(outValue.Interface())
 	return
 }
 
-func compileExpressionFunc(e Expression, requiredArgs int) (params []string, body *p.Term) {
+func (ctx context) compileExpressionFunc(e Expression, requiredArgs int) (params []string, body *p.Term) {
 	// an expression that takes no args, e.g. LetVar("@").Attr("name") or
 	// possibly a Javascript function JS(`row.key`) which does take args
-	body = toTerm(e)
+	body = ctx.toTerm(e)
 	// TODO: see if this is required (maybe check js library as python seems to have this)
 	switch requiredArgs {
 	case 0:
@@ -403,18 +412,18 @@ func compileExpressionFunc(e Expression, requiredArgs int) (params []string, bod
 	return
 }
 
-func compileFunction(o interface{}, requiredArgs int) (params []string, body *p.Term) {
+func (ctx context) compileFunction(o interface{}, requiredArgs int) (params []string, body *p.Term) {
 	e := Expr(o)
 
-	if e.kind == LiteralKind && reflect.ValueOf(e.value).Kind() == reflect.Func {
-		return compileGoFunc(e.value, requiredArgs)
+	if e.kind == literalKind && reflect.ValueOf(e.value).Kind() == reflect.Func {
+		return ctx.compileGoFunc(e.value, requiredArgs)
 	}
 
-	return compileExpressionFunc(e, requiredArgs)
+	return ctx.compileExpressionFunc(e, requiredArgs)
 }
 
-func toMapping(o interface{}) *p.Mapping {
-	args, body := compileFunction(o, 1)
+func (ctx context) toMapping(o interface{}) *p.Mapping {
+	args, body := ctx.compileFunction(o, 1)
 
 	return &p.Mapping{
 		Arg:  proto.String(args[0]),
@@ -422,8 +431,8 @@ func toMapping(o interface{}) *p.Mapping {
 	}
 }
 
-func toPredicate(o interface{}) *p.Predicate {
-	args, body := compileFunction(o, 1)
+func (ctx context) toPredicate(o interface{}) *p.Predicate {
+	args, body := ctx.compileFunction(o, 1)
 
 	return &p.Predicate{
 		Arg:  proto.String(args[0]),
@@ -431,8 +440,8 @@ func toPredicate(o interface{}) *p.Predicate {
 	}
 }
 
-func toReduction(o interface{}, base *p.Term) *p.Reduction {
-	args, body := compileFunction(o, 2)
+func (ctx context) toReduction(o interface{}, base *p.Term) *p.Reduction {
+	args, body := ctx.compileFunction(o, 2)
 
 	return &p.Reduction{
 		Base: base,
@@ -442,7 +451,7 @@ func toReduction(o interface{}, base *p.Term) *p.Reduction {
 	}
 }
 
-func literalToTerm(literal interface{}) *p.Term {
+func (ctx context) literalToTerm(literal interface{}) *p.Term {
 	value := reflect.ValueOf(literal)
 
 	switch value.Kind() {
@@ -455,7 +464,7 @@ func literalToTerm(literal interface{}) *p.Term {
 
 		return &p.Term{
 			Type:  p.Term_ARRAY.Enum(),
-			Array: sliceToTerms(values),
+			Array: ctx.sliceToTerms(values),
 		}
 
 	case reflect.Map:
@@ -467,7 +476,7 @@ func literalToTerm(literal interface{}) *p.Term {
 
 		return &p.Term{
 			Type:   p.Term_OBJECT.Enum(),
-			Object: mapToVarTermTuples(m),
+			Object: ctx.mapToVarTermTuples(m),
 		}
 	}
 
@@ -483,27 +492,45 @@ func literalToTerm(literal interface{}) *p.Term {
 	}
 }
 
-func sliceToTerms(args []interface{}) (terms []*p.Term) {
+func (ctx context) sliceToTerms(args []interface{}) (terms []*p.Term) {
 	for _, arg := range args {
-		terms = append(terms, toTerm(arg))
+		terms = append(terms, ctx.toTerm(arg))
 	}
 	return
 }
 
-func mapToVarTermTuples(m map[string]interface{}) []*p.VarTermTuple {
+func (ctx context) mapToVarTermTuples(m map[string]interface{}) []*p.VarTermTuple {
 	var tuples []*p.VarTermTuple
 	for key, value := range m {
 		tuple := &p.VarTermTuple{
 			Var:  proto.String(key),
-			Term: toTerm(value),
+			Term: ctx.toTerm(value),
 		}
 		tuples = append(tuples, tuple)
 	}
 	return tuples
 }
 
+func makeMetaQuery(queryType p.MetaQuery_MetaQueryType) *p.Query {
+	return &p.Query{
+		Type: p.Query_META.Enum(),
+		MetaQuery: &p.MetaQuery{
+			Type: queryType.Enum(),
+		},
+	}
+}
+
+func makeWriteQuery(queryType p.WriteQuery_WriteQueryType) *p.Query {
+	return &p.Query{
+		Type: p.Query_WRITE.Enum(),
+		WriteQuery: &p.WriteQuery{
+			Type: queryType.Enum(),
+		},
+	}
+}
+
 // Calls toTerm() on the object, and returns any panics as normal errors
-func buildTerm(o interface{}) (term *p.Term, err error) {
+func (ctx context) buildTerm(o interface{}) (term *p.Term, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			if _, ok := r.(runtime.Error); ok {
@@ -512,11 +539,11 @@ func buildTerm(o interface{}) (term *p.Term, err error) {
 			err = fmt.Errorf("rethinkdb: %v", r)
 		}
 	}()
-	return toTerm(o), nil
+	return ctx.toTerm(o), nil
 }
 
 // Calls toMapping() on the object, and returns any panics as normal errors
-func buildMapping(o interface{}) (mapping *p.Mapping, err error) {
+func (ctx context) buildMapping(o interface{}) (mapping *p.Mapping, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			if _, ok := r.(runtime.Error); ok {
@@ -525,12 +552,12 @@ func buildMapping(o interface{}) (mapping *p.Mapping, err error) {
 			err = fmt.Errorf("rethinkdb: %v", r)
 		}
 	}()
-	return toMapping(o), nil
+	return ctx.toMapping(o), nil
 }
 
 // Convert a bare Expression directly to a read query
-func (e Expression) buildProtobuf() (query *p.Query, err error) {
-	term, err := buildTerm(e)
+func (e Expression) buildProtobuf(ctx context) (query *p.Query, err error) {
+	term, err := ctx.buildTerm(e)
 	if err != nil {
 		return
 	}
@@ -540,6 +567,206 @@ func (e Expression) buildProtobuf() (query *p.Query, err error) {
 		ReadQuery: &p.ReadQuery{
 			Term: term,
 		},
+	}
+
+	return
+}
+
+func (q CreateDatabaseQuery) buildProtobuf(ctx context) (*p.Query, error) {
+	query := makeMetaQuery(p.MetaQuery_CREATE_DB)
+	query.MetaQuery.DbName = proto.String(q.name)
+	return query, nil
+}
+
+func (q DropDatabaseQuery) buildProtobuf(ctx context) (*p.Query, error) {
+	query := makeMetaQuery(p.MetaQuery_DROP_DB)
+	query.MetaQuery.DbName = proto.String(q.name)
+	return query, nil
+}
+
+func (q ListDatabasesQuery) buildProtobuf(ctx context) (*p.Query, error) {
+	return makeMetaQuery(p.MetaQuery_LIST_DBS), nil
+}
+
+func (q TableCreateQuery) buildProtobuf(ctx context) (query *p.Query, err error) {
+	query = makeMetaQuery(p.MetaQuery_CREATE_TABLE)
+	query.MetaQuery.CreateTable = &p.MetaQuery_CreateTable{
+		PrimaryKey: protoStringOrNil(q.PrimaryKey),
+		Datacenter: protoStringOrNil(q.PrimaryDatacenter),
+		TableRef: &p.TableRef{
+			DbName:    proto.String(q.database.name),
+			TableName: proto.String(q.name),
+		},
+		CacheSize: protoInt64OrNil(q.CacheSize),
+	}
+	return
+}
+
+func (q TableListQuery) buildProtobuf(ctx context) (*p.Query, error) {
+	query := makeMetaQuery(p.MetaQuery_LIST_TABLES)
+	query.MetaQuery.DbName = proto.String(q.database.name)
+	return query, nil
+}
+
+func (q TableDropQuery) buildProtobuf(ctx context) (*p.Query, error) {
+	query := makeMetaQuery(p.MetaQuery_DROP_TABLE)
+	query.MetaQuery.DropTable = ctx.toTableRef(q.table)
+	return query, nil
+}
+
+func (ctx context) toTableRef(table TableInfo) *p.TableRef {
+	// Use the context's database name if we didn't specify one
+	databaseName := table.database.name
+	if databaseName == "" {
+		databaseName = ctx.databaseName
+	}
+	return &p.TableRef{
+		TableName:   proto.String(table.name),
+		DbName:      proto.String(databaseName),
+		UseOutdated: proto.Bool(ctx.useOutdated),
+	}
+}
+
+func (q InsertQuery) buildProtobuf(ctx context) (query *p.Query, err error) {
+	var terms []*p.Term
+	for _, row := range q.rows {
+		term, err := ctx.buildTerm(row)
+		if err != nil {
+			return nil, err
+		}
+		terms = append(terms, term)
+	}
+
+	table, ok := q.tableExpr.value.(TableInfo)
+	if !ok {
+		err = errors.New("rethinkdb: Inserts can only be performed on tables :(")
+		return
+	}
+
+	query = makeWriteQuery(p.WriteQuery_INSERT)
+
+	query.WriteQuery.Insert = &p.WriteQuery_Insert{
+		TableRef:  ctx.toTableRef(table),
+		Terms:     terms,
+		Overwrite: proto.Bool(q.overwrite),
+	}
+	return
+}
+
+func (q UpdateQuery) buildProtobuf(ctx context) (query *p.Query, err error) {
+	view, err := ctx.buildTerm(q.view)
+	if err != nil {
+		return
+	}
+
+	mapping, err := ctx.buildMapping(q.mapping)
+	if err != nil {
+		return
+	}
+
+	if view.GetType() == p.Term_GETBYKEY {
+		// this is chained off of a .Get(), do a POINTUPDATE
+		query = makeWriteQuery(p.WriteQuery_POINTUPDATE)
+
+		query.WriteQuery.PointUpdate = &p.WriteQuery_PointUpdate{
+			TableRef: view.GetByKey.TableRef,
+			Attrname: view.GetByKey.Attrname,
+			Key:      view.GetByKey.Key,
+			Mapping:  mapping,
+		}
+		return
+	}
+
+	query = makeWriteQuery(p.WriteQuery_UPDATE)
+
+	query.WriteQuery.Update = &p.WriteQuery_Update{
+		View:    view,
+		Mapping: mapping,
+	}
+	return
+}
+
+func (q ReplaceQuery) buildProtobuf(ctx context) (query *p.Query, err error) {
+	view, err := ctx.buildTerm(q.view)
+	if err != nil {
+		return
+	}
+
+	mapping, err := ctx.buildMapping(q.mapping)
+	if err != nil {
+		return
+	}
+
+	if view.GetType() == p.Term_GETBYKEY {
+		query = makeWriteQuery(p.WriteQuery_POINTMUTATE)
+
+		query.WriteQuery.PointMutate = &p.WriteQuery_PointMutate{
+			TableRef: view.GetByKey.TableRef,
+			Attrname: view.GetByKey.Attrname,
+			Key:      view.GetByKey.Key,
+			Mapping:  mapping,
+		}
+		return
+	}
+
+	query = makeWriteQuery(p.WriteQuery_MUTATE)
+
+	query.WriteQuery.Mutate = &p.WriteQuery_Mutate{
+		View:    view,
+		Mapping: mapping,
+	}
+	return
+}
+
+func (q DeleteQuery) buildProtobuf(ctx context) (query *p.Query, err error) {
+	view, err := ctx.buildTerm(q.view)
+	if err != nil {
+		return
+	}
+
+	if view.GetType() == p.Term_GETBYKEY {
+		query = makeWriteQuery(p.WriteQuery_POINTDELETE)
+
+		query.WriteQuery.PointDelete = &p.WriteQuery_PointDelete{
+			TableRef: view.GetByKey.TableRef,
+			Attrname: view.GetByKey.Attrname,
+			Key:      view.GetByKey.Key,
+		}
+		return
+	}
+
+	query = makeWriteQuery(p.WriteQuery_DELETE)
+
+	query.WriteQuery.Delete = &p.WriteQuery_Delete{
+		View: view,
+	}
+	return
+}
+
+func (q ForEachQuery) buildProtobuf(ctx context) (query *p.Query, err error) {
+	stream, err := ctx.buildTerm(q.stream)
+	if err != nil {
+		return
+	}
+
+	name := nextVariableName()
+	generatedQuery := q.queryFunc(LetVar(name))
+	innerQuery, err := generatedQuery.buildProtobuf(ctx)
+	if err != nil {
+		return
+	}
+
+	if innerQuery.WriteQuery == nil {
+		err = errors.New("rethinkdb: ForEach query function must generate a write query")
+		return
+	}
+
+	query = makeWriteQuery(p.WriteQuery_FOREACH)
+
+	query.WriteQuery.ForEach = &p.WriteQuery_ForEach{
+		Stream:  stream,
+		Var:     proto.String(name),
+		Queries: []*p.WriteQuery{innerQuery.WriteQuery},
 	}
 	return
 }
