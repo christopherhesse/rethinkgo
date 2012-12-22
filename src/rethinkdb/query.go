@@ -181,10 +181,14 @@ type letArgs struct {
 // using the bindings it just made.  This is basically just assignment, but
 // expressed in a way that works with the RQL language.
 //
-// Say you want something like this javascript:
+// Say you want something like this pseudo-javascript:
 //
-// var joey = r.table("employees").get("joey");
-// return this.awesomeness * joey.awesomeness;
+//  var results = [];
+//  for (row in r.table("employees")) {
+//      var joey = r.table("employees").get("joey");
+//      results.push(row.awesomeness * joey.awesomeness);
+//  }
+//  return results;
 //
 // You can do the following RQL:
 //
@@ -649,7 +653,7 @@ func Sum(attribute string) GroupedMapReduce {
 func Avg(attribute string) GroupedMapReduce {
 	return GroupedMapReduce{
 		Mapping: func(row Expression) interface{} {
-			return []interface{}{row.Attr(attribute), 1}
+			return Array(row.Attr(attribute), 1)
 		},
 		Base: []int{0, 0},
 		Reduction: func(acc, val Expression) interface{} {
@@ -775,6 +779,7 @@ func (e Expression) Insert(rows ...interface{}) Query {
 
 // TODO: how to make this work - could make it runtime type-assert Query
 // could also have a .Run() specifically defined for InsertQuery
+// could also have .InsertOverwrite() or .Overwrite() instead of .Insert()
 // func (q InsertQuery) Overwrite(overwrite bool) InsertQuery {
 //  q.overwrite = overwrite
 //  return q

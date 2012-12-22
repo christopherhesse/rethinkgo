@@ -34,10 +34,10 @@ func TestQueries(t *testing.T) {
 	employees := Db("test").Table("employees")
 
 	gmr := GroupedMapReduce{
-		mapping:   JS(`this.awesomeness`),
-		base:      0,
-		reduction: JS(`acc + row`),
-		finalizer: nil,
+		Mapping:   JS(`this.awesomeness`),
+		Base:      0,
+		Reduction: JS(`acc + row`),
+		Finalizer: nil,
 	}
 
 	// dcCharacter := Hero{Name: "Bruce Wayne", Strength: 5}

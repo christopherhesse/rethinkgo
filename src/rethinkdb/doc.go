@@ -16,7 +16,7 @@
 //
 // Example usage:
 //
-//  import r "rethinkdb"
+//  import r "github.com/christopherhesse/rethinkgo/src/rethinkdb"
 //
 //  func main() {
 //      // To access a RethinkDB database, you connect to it with the Connect function
@@ -27,7 +27,7 @@
 //      // delete JSON objects ("rows") on the server, as well as manage tables.
 //
 //      query := r.Table("employees")
-//      rows, err := db.Run(query)
+//      rows, err := sess.Run(query)
 //
 //      // If the query was successful, 'rows' is an iterator that can be used to
 //      // iterate over the results.
