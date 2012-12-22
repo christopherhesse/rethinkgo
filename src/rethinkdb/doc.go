@@ -16,7 +16,7 @@
 //
 // Example usage:
 //
-//  import r "github.com/christopherhesse/rethinkgo/src/rethinkdb"
+//  import r "github.com/christopherhesse/rethinkgo"
 //
 //  func main() {
 //      // To access a RethinkDB database, you connect to it with the Connect function

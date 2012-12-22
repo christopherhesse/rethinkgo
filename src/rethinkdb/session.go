@@ -5,7 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	p "github.com/christopherhesse/rethinkgo/src/rethinkdb/query_language"
+	p "github.com/christopherhesse/rethinkgo/query_language"
 	"io"
 	"net"
 )

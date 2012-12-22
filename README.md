@@ -3,14 +3,14 @@ rethinkgo
 
 [Go language](http://golang.org/) driver for [RethinkDB](http://www.rethinkdb.com/) made by [Christopher Hesse](http://www.christopherhesse.com/)
 
-[API Documentation](http://godoc.org/github.com/christopherhesse/rethinkgo/src/rethinkdb)
+[API Documentation](http://godoc.org/github.com/christopherhesse/rethinkgo)
 
 ****This is a work in progress and will undergo a number of changes.  Parity with existing RethinkDB drivers will be mostly done before the end of December 2012.****
 
 Installation
 ============
 
-    go get github.com/christopherhesse/rethinkgo/src/rethinkdb
+    go get github.com/christopherhesse/rethinkgo
 
 Example
 ===================
@@ -19,7 +19,7 @@ Example
 
     import (
         "fmt"
-        r "github.com/christopherhesse/rethinkgo/src/rethinkdb"
+        r "github.com/christopherhesse/rethinkgo"
     )
 
     func main() {
