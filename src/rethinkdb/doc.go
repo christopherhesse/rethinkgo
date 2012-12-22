@@ -14,26 +14,25 @@
 //  import r "rethinkdb"
 //
 //  func main() {
-//      db, err := r.Connect("localhost:8080", "<database name>")
-//  }
+//      // This creates a database session 'session' that may be used to run
+//      // queries on the server.  Queries let you read, insert, update, and
+//      // delete JSON objects ("rows") on the server, as well as manage tables.
+//      sess, err := r.Connect("localhost:8080", "<database name>")
 //
-// This creates a database session 'db' that may be used to run queries on the
-// server.  Queries let you read, insert, update, and delete JSON objects
-// ("rows") on the server, as well as manage tables.
+//      query := r.Table("employees")
+//      rows, err := db.Run(query)
 //
-//  query := r.Table("employees")
-//  rows, err := db.Run(query)
+//      // If the query was successful, 'rows' is an iterator that can be used to
+//      // iterate over the results.
 //
-// If the query was successful, 'rows' is an iterator that can be used to
-// iterate over the results.
-//
-//  for rows.Next() {
-//      var row Employee
-//      err = rows.Scan(&row)
-//      fmt.Println("row:", row)
-//  }
-//  if rows.Err() != nil {
-//      fmt.Println("err:", rows.Err())
+//      for rows.Next() {
+//          var row Employee
+//          err = rows.Scan(&row)
+//          fmt.Println("row:", row)
+//      }
+//      if rows.Err() != nil {
+//          fmt.Println("err:", rows.Err())
+//      }
 //  }
 //
 // Besides this simple read query, you can run almost arbitrary expressions on

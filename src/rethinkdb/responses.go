@@ -1,5 +1,6 @@
 package rethinkdb
 
+// TODO: have some docs using this
 type WriteResponse struct {
 	Inserted      int
 	Errors        int

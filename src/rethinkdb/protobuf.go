@@ -105,12 +105,12 @@ func (ctx context) toTerm(o interface{}) *p.Term {
 
 		result := groupByArgs.expression.GroupedMapReduce(
 			grouping,
-			gmr.mapping,
-			gmr.base,
-			gmr.reduction,
+			gmr.Mapping,
+			gmr.Base,
+			gmr.Reduction,
 		)
 
-		finalizer := gmr.finalizer
+		finalizer := gmr.Finalizer
 		if finalizer != nil {
 			finalizerFunc := finalizer.(func(Expression) interface{})
 			result = result.Map(func(row Expression) interface{} {
@@ -292,7 +292,7 @@ func (ctx context) toBuiltin(kind expressionKind, operand interface{}) *p.Builti
 			Reduce: ctx.toReduction(reduceArgs.reduction, base),
 		}
 
-	case GroupedMapreduceKind:
+	case groupedMapReduceKind:
 		groupedMapreduceArgs := operand.(groupedMapReduceArgs)
 		base := ctx.toTerm(groupedMapreduceArgs.base)
 

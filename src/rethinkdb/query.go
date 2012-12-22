@@ -72,7 +72,7 @@ const (
 	streamToArrayKind
 	arrayToStreamKind
 	reduceKind
-	GroupedMapreduceKind
+	groupedMapReduceKind
 	logicalOrKind
 	logicalAndKind
 	rangeKind
@@ -273,10 +273,10 @@ type groupByArgs struct {
 // r.Avg(attribute), r.Sum(attribute) or a user-built object:
 //
 //  gmr := r.GroupedMapReduce{
-//      mapping: r.JS(`this.awesomeness`),
-//      base: 0,
-//      reduction: r.JS(`acc + row`),
-//      finalizer: nil,
+//      Mapping: r.JS(`this.awesomeness`),
+//      Base: 0,
+//      Reduction: r.JS(`acc + row`),
+//      Finalizer: nil,
 //  }
 //  r.Table("employees").GroupBy("awesomeness", gmr)
 func (e Expression) GroupBy(attribute string, groupedMapReduce GroupedMapReduce) Expression {
@@ -555,7 +555,7 @@ func (e Expression) GroupedMapReduce(grouping, mapping, base, reduction interfac
 		base:      base,
 		reduction: reduction,
 	}
-	return naryBuiltin(GroupedMapreduceKind, operand, e)
+	return naryBuiltin(groupedMapReduceKind, operand, e)
 }
 
 /////////////////////
@@ -624,41 +624,41 @@ func (e Expression) Zip() Expression {
 // GroupedMapReduce stores all the expressions needed to perform a .GroupBy()
 // call, there are three pre-made ones: Count(), Sum(), and Avg().
 type GroupedMapReduce struct {
-	mapping   interface{}
-	base      interface{}
-	reduction interface{}
-	finalizer interface{}
+	Mapping   interface{}
+	Base      interface{}
+	Reduction interface{}
+	Finalizer interface{}
 }
 
 func Count() GroupedMapReduce {
 	return GroupedMapReduce{
-		mapping:   func(row Expression) interface{} { return 1 },
-		base:      0,
-		reduction: func(acc, val Expression) interface{} { return acc.Add(val) },
+		Mapping:   func(row Expression) interface{} { return 1 },
+		Base:      0,
+		Reduction: func(acc, val Expression) interface{} { return acc.Add(val) },
 	}
 }
 
 func Sum(attribute string) GroupedMapReduce {
 	return GroupedMapReduce{
-		mapping:   func(row Expression) interface{} { return row.Attr(attribute) },
-		base:      0,
-		reduction: func(acc, val Expression) interface{} { return acc.Add(val) },
+		Mapping:   func(row Expression) interface{} { return row.Attr(attribute) },
+		Base:      0,
+		Reduction: func(acc, val Expression) interface{} { return acc.Add(val) },
 	}
 }
 
 func Avg(attribute string) GroupedMapReduce {
 	return GroupedMapReduce{
-		mapping: func(row Expression) interface{} {
+		Mapping: func(row Expression) interface{} {
 			return []interface{}{row.Attr(attribute), 1}
 		},
-		base: []int{0, 0},
-		reduction: func(acc, val Expression) interface{} {
+		Base: []int{0, 0},
+		Reduction: func(acc, val Expression) interface{} {
 			return []interface{}{
 				acc.Nth(0).Add(val.Nth(0)),
 				acc.Nth(1).Add(val.Nth(1)),
 			}
 		},
-		finalizer: func(row Expression) interface{} {
+		Finalizer: func(row Expression) interface{} {
 			return row.Nth(0).Div(row.Nth(1))
 		},
 	}
@@ -773,7 +773,8 @@ func (e Expression) Insert(rows ...interface{}) Query {
 	}}
 }
 
-// TODO: how to make this work
+// TODO: how to make this work - could make it runtime type-assert Query
+// could also have a .Run() specifically defined for InsertQuery
 // func (q InsertQuery) Overwrite(overwrite bool) InsertQuery {
 //  q.overwrite = overwrite
 //  return q
