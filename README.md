@@ -63,12 +63,12 @@ Differences from official RethinkDB drivers
 * No errors are generated when creating queries, only when running them, so Table() returns only an Expression type, but sess.Run(query) returns (*Rows, error)
 * There's no r(attributeName) or row[attributeName] function call / item indexing to get attributes of the "current" row or a specific row respectively.  Instead, there is a .Attr() method on the global "Row" object (r.Row) and any row Expressions that can be used to access attributes.  Example:
 
-        r.DB("test").Table("marvel").OuterJoin(DB("test").Table("dc"),
+        r.Table("marvel").OuterJoin(r.Table("dc"),
             func(marvel, dc r.Expression) interface{} {
                 return marvel.Attr("strength").Eq(dc.Attr("strength"))
             })
 
-        r.DB("test").Table("marvel").Map(r.Row.Attr("strength").Mul(2))
+        r.Table("marvel").Map(r.Row.Attr("strength").Mul(2))
 
 Current limitations that will gradually be fixed
 ================================================
