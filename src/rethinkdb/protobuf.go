@@ -1,4 +1,4 @@
-package rethinkdb
+package rethinkgo
 
 // Convert Expression trees and queries into protocol buffer form
 // Functions in this file (except build*) will panic on failure, the caller is

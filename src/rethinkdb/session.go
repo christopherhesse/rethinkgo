@@ -1,4 +1,4 @@
-package rethinkdb
+package rethinkgo
 
 import (
 	"code.google.com/p/goprotobuf/proto"

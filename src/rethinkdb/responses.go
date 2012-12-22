@@ -1,4 +1,4 @@
-package rethinkdb
+package rethinkgo
 
 // TODO: have some docs using this
 type WriteResponse struct {

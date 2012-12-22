@@ -1,4 +1,4 @@
-package rethinkdb
+package rethinkgo
 
 // Let user create queries as RQL Expression trees, any errors are deferred
 // until the query is run, so most all functions take interface{} types.

@@ -45,4 +45,4 @@
 // Besides this simple read query, you can run almost arbitrary expressions on
 // the server, even Javascript code.  See the rest of these docs for more
 // details.
-package rethinkdb
+package rethinkgo

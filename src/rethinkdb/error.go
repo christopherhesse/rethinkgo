@@ -1,4 +1,4 @@
-package rethinkdb
+package rethinkgo
 
 import (
 	"errors"
