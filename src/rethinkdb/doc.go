@@ -1,23 +1,30 @@
-// Package rethinkgo implements the RethinkDB API for Go.  RethinkDB is an open-
-// source distributed database in the style of MongoDB.
+// Package rethinkgo implements the RethinkDB API for Go.  RethinkDB is an
+// open-source distributed database in the style of MongoDB.
 //
 //  http://www.rethinkdb.com/
 //
+// If you haven't tried it out, give it a try, it takes about a minute to setup
+// and has a sweet web console.
+//
+//  http://www.rethinkdb.com/docs/guides/quickstart/
+//
 // If you are familiar with the RethinkDB API, this package should be
-// straightforward to use, if not, the docs for this package contain plenty of
-// examples.  The official RethinkDB API docs are also quite good:
+// straightforward to use.  If not, the docs for this package contain plenty of
+// examples, but you may want to look through the RethinkDB tutorials:
 //
 //  http://www.rethinkdb.com/docs/
 //
-// To access a RethinkDB database, you connect to it with the Connect function:
+// Example usage:
 //
 //  import r "rethinkdb"
 //
 //  func main() {
-//      // This creates a database session 'session' that may be used to run
+//      // To access a RethinkDB database, you connect to it with the Connect function
+//      sess, err := r.Connect("localhost:8080", "<database name>")
+//
+//      // This creates a database session 'sess' that may be used to run
 //      // queries on the server.  Queries let you read, insert, update, and
 //      // delete JSON objects ("rows") on the server, as well as manage tables.
-//      sess, err := r.Connect("localhost:8080", "<database name>")
 //
 //      query := r.Table("employees")
 //      rows, err := db.Run(query)
