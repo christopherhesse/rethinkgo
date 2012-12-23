@@ -8,6 +8,7 @@ import (
 	p "github.com/christopherhesse/rethinkgo/query_language"
 	"io"
 	"net"
+	"runtime"
 )
 
 var debugMode bool = false
@@ -178,7 +179,7 @@ func (s *Session) Run(query RethinkQuery) (*Rows, error) {
 	ctx := context{databaseName: s.database}
 	querybuf, err := buildProtobuf(ctx, query)
 	if err != nil {
-		return nl, err
+		return nil, err
 	}
 
 	querybuf.Token = proto.Int64(s.getToken())
@@ -220,7 +221,7 @@ func (s *Session) Run(query RethinkQuery) (*Rows, error) {
 
 // buildProtobuf converts a query to a protobuf and catches any panics raised
 // by the protobuf functions.
-func buildProtobuf(ctx Context, query RethinkQuery) (protobuf *p.Query, err error) {
+func buildProtobuf(ctx context, query RethinkQuery) (protobuf *p.Query, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			if _, ok := r.(runtime.Error); ok {

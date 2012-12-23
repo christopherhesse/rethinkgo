@@ -7,11 +7,9 @@ package rethinkgo
 import (
 	"code.google.com/p/goprotobuf/proto"
 	"encoding/json"
-	"errors"
 	"fmt"
 	p "github.com/christopherhesse/rethinkgo/query_language"
 	"reflect"
-	"runtime"
 )
 
 // Expressions contain some state that is required when converting them to
@@ -69,7 +67,7 @@ func (ctx context) toTerm(o interface{}) *p.Term {
 		}
 	case getByKeyKind:
 		getArgs := value.(getArgs)
-		table, ok := getArgs.table.(TableInfo)
+		table, ok := getArgs.table.(tableInfo)
 		if !ok {
 			panic(".Get() used on something that's not a table")
 		}
@@ -83,7 +81,7 @@ func (ctx context) toTerm(o interface{}) *p.Term {
 			},
 		}
 	case tableKind:
-		table := value.(TableInfo)
+		table := value.(tableInfo)
 		return &p.Term{
 			Type: p.Term_TABLE.Enum(),
 			Table: &p.Term_Table{
@@ -511,6 +509,19 @@ func (ctx context) mapToVarTermTuples(m map[string]interface{}) []*p.VarTermTupl
 	return tuples
 }
 
+func (ctx context) toTableRef(table tableInfo) *p.TableRef {
+	// Use the context's database name if we didn't specify one
+	databaseName := table.database.name
+	if databaseName == "" {
+		databaseName = ctx.databaseName
+	}
+	return &p.TableRef{
+		TableName:   proto.String(table.name),
+		DbName:      proto.String(databaseName),
+		UseOutdated: proto.Bool(ctx.useOutdated),
+	}
+}
+
 func makeMetaQuery(queryType p.MetaQuery_MetaQueryType) *p.Query {
 	return &p.Query{
 		Type: p.Query_META.Enum(),
@@ -529,7 +540,7 @@ func makeWriteQuery(queryType p.WriteQuery_WriteQueryType) *p.Query {
 	}
 }
 
-// Convert a bare Expression directly to a read query
+// toProtobuf converts a bare Expression directly to a read query protobuf
 func (e Expression) toProtobuf(ctx context) *p.Query {
 	return &p.Query{
 		Type: p.Query_READ.Enum(),
@@ -539,224 +550,153 @@ func (e Expression) toProtobuf(ctx context) *p.Query {
 	}
 }
 
+// toProtobuf converts a complete query to a protobuf
 func (q Query) toProtobuf(ctx context) *p.Query {
-	switch q.(type) {
+	switch v := q.value.(type) {
 	case createDatabaseQuery:
+		query := makeMetaQuery(p.MetaQuery_CREATE_DB)
+		query.MetaQuery.DbName = proto.String(v.name)
+		return query
+
 	case dropDatabaseQuery:
-case listDatabasesQuery:
-case tableCreateQuery:
-case tableListQuery:
-case tableDropQuery:
+		query := makeMetaQuery(p.MetaQuery_DROP_DB)
+		query.MetaQuery.DbName = proto.String(v.name)
+		return query
 
-	}
-	return &p.Query{
-		Type: p.Query_READ.Enum(),
-		ReadQuery: &p.ReadQuery{
-			Term: ctx.toTerm(e),
-		},
-	}
-}
+	case listDatabasesQuery:
+		return makeMetaQuery(p.MetaQuery_LIST_DBS)
 
-// Query is the type returned by any call that terminates a query (for instance,
-// .Insert()), and provides .Run() and .RunSingle() methods to run the Query on
-// the last created connection.
-type Query interface{}
-
-func (q CreateDatabaseQuery) buildProtobuf(ctx context) (*p.Query, error) {
-	query := makeMetaQuery(p.MetaQuery_CREATE_DB)
-	query.MetaQuery.DbName = proto.String(q.name)
-	return query, nil
-}
-
-func (q DropDatabaseQuery) buildProtobuf(ctx context) (*p.Query, error) {
-	query := makeMetaQuery(p.MetaQuery_DROP_DB)
-	query.MetaQuery.DbName = proto.String(q.name)
-	return query, nil
-}
-
-func (q ListDatabasesQuery) buildProtobuf(ctx context) (*p.Query, error) {
-	return makeMetaQuery(p.MetaQuery_LIST_DBS), nil
-}
-
-func (q TableCreateQuery) buildProtobuf(ctx context) (query *p.Query, err error) {
-	query = makeMetaQuery(p.MetaQuery_CREATE_TABLE)
-	query.MetaQuery.CreateTable = &p.MetaQuery_CreateTable{
-		PrimaryKey: protoStringOrNil(q.PrimaryKey),
-		Datacenter: protoStringOrNil(q.PrimaryDatacenter),
-		TableRef: &p.TableRef{
-			DbName:    proto.String(q.database.name),
-			TableName: proto.String(q.name),
-		},
-		CacheSize: protoInt64OrNil(q.CacheSize),
-	}
-	return
-}
-
-func (q TableListQuery) buildProtobuf(ctx context) (*p.Query, error) {
-	query := makeMetaQuery(p.MetaQuery_LIST_TABLES)
-	query.MetaQuery.DbName = proto.String(q.database.name)
-	return query, nil
-}
-
-func (q TableDropQuery) buildProtobuf(ctx context) (*p.Query, error) {
-	query := makeMetaQuery(p.MetaQuery_DROP_TABLE)
-	query.MetaQuery.DropTable = ctx.toTableRef(q.table)
-	return query, nil
-}
-
-func (ctx context) toTableRef(table TableInfo) *p.TableRef {
-	// Use the context's database name if we didn't specify one
-	databaseName := table.database.name
-	if databaseName == "" {
-		databaseName = ctx.databaseName
-	}
-	return &p.TableRef{
-		TableName:   proto.String(table.name),
-		DbName:      proto.String(databaseName),
-		UseOutdated: proto.Bool(ctx.useOutdated),
-	}
-}
-
-func (q InsertQuery) buildProtobuf(ctx context) (query *p.Query, err error) {
-	var terms []*p.Term
-	for _, row := range q.rows {
-		term, err := ctx.buildTerm(row)
-		if err != nil {
-			return nil, err
+	case tableCreateQuery:
+		query := makeMetaQuery(p.MetaQuery_CREATE_TABLE)
+		query.MetaQuery.CreateTable = &p.MetaQuery_CreateTable{
+			PrimaryKey: protoStringOrNil(v.PrimaryKey),
+			Datacenter: protoStringOrNil(v.PrimaryDatacenter),
+			TableRef: &p.TableRef{
+				DbName:    proto.String(v.database.name),
+				TableName: proto.String(v.name),
+			},
+			CacheSize: protoInt64OrNil(v.CacheSize),
 		}
-		terms = append(terms, term)
-	}
+		return query
 
-	table, ok := q.tableExpr.value.(TableInfo)
-	if !ok {
-		err = errors.New("rethinkdb: Inserts can only be performed on tables :(")
-		return
-	}
+	case tableListQuery:
+		query := makeMetaQuery(p.MetaQuery_LIST_TABLES)
+		query.MetaQuery.DbName = proto.String(v.database.name)
+		return query
 
-	query = makeWriteQuery(p.WriteQuery_INSERT)
+	case tableDropQuery:
+		query := makeMetaQuery(p.MetaQuery_DROP_TABLE)
+		query.MetaQuery.DropTable = ctx.toTableRef(v.table)
+		return query
 
-	query.WriteQuery.Insert = &p.WriteQuery_Insert{
-		TableRef:  ctx.toTableRef(table),
-		Terms:     terms,
-		Overwrite: proto.Bool(q.overwrite),
-	}
-	return
-}
-
-func (q UpdateQuery) buildProtobuf(ctx context) (query *p.Query, err error) {
-	view, err := ctx.buildTerm(q.view)
-	if err != nil {
-		return
-	}
-
-	mapping, err := ctx.buildMapping(q.mapping)
-	if err != nil {
-		return
-	}
-
-	if view.GetType() == p.Term_GETBYKEY {
-		// this is chained off of a .Get(), do a POINTUPDATE
-		query = makeWriteQuery(p.WriteQuery_POINTUPDATE)
-
-		query.WriteQuery.PointUpdate = &p.WriteQuery_PointUpdate{
-			TableRef: view.GetByKey.TableRef,
-			Attrname: view.GetByKey.Attrname,
-			Key:      view.GetByKey.Key,
-			Mapping:  mapping,
+	case insertQuery:
+		var terms []*p.Term
+		for _, row := range v.rows {
+			terms = append(terms, ctx.toTerm(row))
 		}
-		return
-	}
 
-	query = makeWriteQuery(p.WriteQuery_UPDATE)
-
-	query.WriteQuery.Update = &p.WriteQuery_Update{
-		View:    view,
-		Mapping: mapping,
-	}
-	return
-}
-
-func (q ReplaceQuery) buildProtobuf(ctx context) (query *p.Query, err error) {
-	view, err := ctx.buildTerm(q.view)
-	if err != nil {
-		return
-	}
-
-	mapping, err := ctx.buildMapping(q.mapping)
-	if err != nil {
-		return
-	}
-
-	if view.GetType() == p.Term_GETBYKEY {
-		query = makeWriteQuery(p.WriteQuery_POINTMUTATE)
-
-		query.WriteQuery.PointMutate = &p.WriteQuery_PointMutate{
-			TableRef: view.GetByKey.TableRef,
-			Attrname: view.GetByKey.Attrname,
-			Key:      view.GetByKey.Key,
-			Mapping:  mapping,
+		table, ok := v.tableExpr.value.(tableInfo)
+		if !ok {
+			panic("Inserts can only be performed on tables :(")
 		}
-		return
-	}
 
-	query = makeWriteQuery(p.WriteQuery_MUTATE)
+		query := makeWriteQuery(p.WriteQuery_INSERT)
 
-	query.WriteQuery.Mutate = &p.WriteQuery_Mutate{
-		View:    view,
-		Mapping: mapping,
-	}
-	return
-}
-
-func (q DeleteQuery) buildProtobuf(ctx context) (query *p.Query, err error) {
-	view, err := ctx.buildTerm(q.view)
-	if err != nil {
-		return
-	}
-
-	if view.GetType() == p.Term_GETBYKEY {
-		query = makeWriteQuery(p.WriteQuery_POINTDELETE)
-
-		query.WriteQuery.PointDelete = &p.WriteQuery_PointDelete{
-			TableRef: view.GetByKey.TableRef,
-			Attrname: view.GetByKey.Attrname,
-			Key:      view.GetByKey.Key,
+		query.WriteQuery.Insert = &p.WriteQuery_Insert{
+			TableRef:  ctx.toTableRef(table),
+			Terms:     terms,
+			Overwrite: proto.Bool(v.overwrite),
 		}
-		return
+		return query
+
+	case updateQuery:
+		view := ctx.toTerm(v.view)
+		mapping := ctx.toMapping(v.mapping)
+
+		if view.GetType() == p.Term_GETBYKEY {
+			// this is chained off of a .Get(), do a POINTUPDATE
+			query := makeWriteQuery(p.WriteQuery_POINTUPDATE)
+
+			query.WriteQuery.PointUpdate = &p.WriteQuery_PointUpdate{
+				TableRef: view.GetByKey.TableRef,
+				Attrname: view.GetByKey.Attrname,
+				Key:      view.GetByKey.Key,
+				Mapping:  mapping,
+			}
+			return query
+		}
+
+		query := makeWriteQuery(p.WriteQuery_UPDATE)
+
+		query.WriteQuery.Update = &p.WriteQuery_Update{
+			View:    view,
+			Mapping: mapping,
+		}
+		return query
+
+	case replaceQuery:
+		view := ctx.toTerm(v.view)
+		mapping := ctx.toMapping(v.mapping)
+
+		if view.GetType() == p.Term_GETBYKEY {
+			query := makeWriteQuery(p.WriteQuery_POINTMUTATE)
+
+			query.WriteQuery.PointMutate = &p.WriteQuery_PointMutate{
+				TableRef: view.GetByKey.TableRef,
+				Attrname: view.GetByKey.Attrname,
+				Key:      view.GetByKey.Key,
+				Mapping:  mapping,
+			}
+			return query
+		}
+
+		query := makeWriteQuery(p.WriteQuery_MUTATE)
+
+		query.WriteQuery.Mutate = &p.WriteQuery_Mutate{
+			View:    view,
+			Mapping: mapping,
+		}
+		return query
+
+	case deleteQuery:
+		view := ctx.toTerm(v.view)
+
+		if view.GetType() == p.Term_GETBYKEY {
+			query := makeWriteQuery(p.WriteQuery_POINTDELETE)
+
+			query.WriteQuery.PointDelete = &p.WriteQuery_PointDelete{
+				TableRef: view.GetByKey.TableRef,
+				Attrname: view.GetByKey.Attrname,
+				Key:      view.GetByKey.Key,
+			}
+			return query
+		}
+
+		query := makeWriteQuery(p.WriteQuery_DELETE)
+
+		query.WriteQuery.Delete = &p.WriteQuery_Delete{
+			View: view,
+		}
+		return query
+
+	case forEachQuery:
+		stream := ctx.toTerm(v.stream)
+		name := nextVariableName()
+		generatedQuery := v.queryFunc(LetVar(name))
+		innerQuery := generatedQuery.toProtobuf(ctx)
+
+		if innerQuery.WriteQuery == nil {
+			panic("ForEach query function must generate a write query")
+		}
+
+		query := makeWriteQuery(p.WriteQuery_FOREACH)
+
+		query.WriteQuery.ForEach = &p.WriteQuery_ForEach{
+			Stream:  stream,
+			Var:     proto.String(name),
+			Queries: []*p.WriteQuery{innerQuery.WriteQuery},
+		}
+		return query
 	}
-
-	query = makeWriteQuery(p.WriteQuery_DELETE)
-
-	query.WriteQuery.Delete = &p.WriteQuery_Delete{
-		View: view,
-	}
-	return
-}
-
-func (q ForEachQuery) buildProtobuf(ctx context) (query *p.Query, err error) {
-	stream, err := ctx.buildTerm(q.stream)
-	if err != nil {
-		return
-	}
-
-	name := nextVariableName()
-	generatedQuery := q.queryFunc(LetVar(name))
-	innerQuery, err := generatedQuery.buildProtobuf(ctx)
-	if err != nil {
-		return
-	}
-
-	if innerQuery.WriteQuery == nil {
-		err = errors.New("rethinkdb: ForEach query function must generate a write query")
-		return
-	}
-
-	query = makeWriteQuery(p.WriteQuery_FOREACH)
-
-	query.WriteQuery.ForEach = &p.WriteQuery_ForEach{
-		Stream:  stream,
-		Var:     proto.String(name),
-		Queries: []*p.WriteQuery{innerQuery.WriteQuery},
-	}
-	return
+	panic("Unknown query type")
 }

@@ -5,6 +5,9 @@ package rethinkgo
 // interface{} is effectively a void* type that we look at later to determine
 // the underlying type and perform any conversions.
 
+type Map map[string]interface{}
+type List []interface{}
+
 type expressionKind int
 
 const (
@@ -98,6 +101,14 @@ type Expression struct {
 	value interface{}
 }
 
+// Query is the type returned by any call that terminates a query (for instance,
+// .Insert()), and provides .Run() and .RunSingle() methods to run the Query on
+// the last created connection.  Methods that generate a query are generally
+// located on Expression objects.
+type Query struct {
+	value interface{}
+}
+
 // Row supplies access to the current row in any query, even if there's no go
 // func with a reference to it.
 //
@@ -119,28 +130,20 @@ var Row = Expression{kind: implicitVariableKind}
 //
 // Example usage:
 //
-//  r.Expr(map[string]string{"go": "awesome", "rethinkdb": "awesomer"})
-func Expr(value interface{}) Expression {
-	v, ok := value.(Expression)
-	if ok {
-		return v
+//  r.Expr(Map{"go": "awesome", "rethinkdb": "awesomer"})
+func Expr(values ...interface{}) Expression {
+	switch len(values) {
+	case 0:
+		return Expression{kind: literalKind, value: nil}
+	case 1:
+		value := values[0]
+		v, ok := value.(Expression)
+		if ok {
+			return v
+		}
+		return Expression{kind: literalKind, value: value}
 	}
-	return Expression{kind: literalKind, value: value}
-}
-
-// Array takes a series of items and converts them into an array.  This is just
-// a convenience function for when you don't want to specify the types.
-//
-// Example usage:
-//
-//  founder1 := map[string]interface{}{"Name": "Slava Akhmechet"}
-//  founder2 := map[string]interface{}{"Name": "Mike Glukhovsky"}
-//  // Without Array:
-//  r.Expr([]map[string]interface{}{founder1, founder2})
-//  // With Array:
-//  r.Array(founder1, founder2)
-func Array(values ...interface{}) Expression {
-	return Expr(values)
+	return Expression{kind: literalKind, value: values}
 }
 
 ///////////
@@ -158,7 +161,7 @@ func Array(values ...interface{}) Expression {
 // Example usage:
 //
 //  r.Table("employees").Map(r.JS(`this.first_name[0] + ' Fucking ' + this.last_name[0]`))
-//  r.JS(`[1,2,3]`) // (same effect as r.Array(1,2,3))
+//  r.JS(`[1,2,3]`) // (same effect as r.Expr(1,2,3))
 //  r.JS(`({name: 2})`) // Parens are required here, otherwise eval() thinks it's a block.
 func JS(body string) Expression {
 	return Expression{kind: javascriptKind, value: body}
@@ -332,7 +335,7 @@ func (e Expression) Attr(name string) Expression {
 //
 // Example usage:
 //
-//  r.Array(1,2,3).Add(r.Array(4,5,6))
+//  r.Expr(1,2,3).Add(r.Expr(4,5,6))
 //  r.Expr(2).Add(2)
 func (e Expression) Add(operand interface{}) Expression {
 	return naryBuiltin(addKind, nil, e, operand)
@@ -572,8 +575,8 @@ func (leftExpr Expression) InnerJoin(rightExpr Expression, predicate Predicate) 
 	return leftExpr.ConcatMap(func(left Expression) interface{} {
 		return rightExpr.ConcatMap(func(right Expression) interface{} {
 			return Branch(predicate(left, right),
-				Array(map[string]interface{}{"left": left, "right": right}),
-				Array(),
+				List{Map{"left": left, "right": right}},
+				List{},
 			)
 		})
 	})
@@ -585,14 +588,14 @@ func (leftExpr Expression) OuterJoin(rightExpr Expression, predicate Predicate) 
 		return Let(map[string]interface{}{"matches": rightExpr.ConcatMap(func(right Expression) Expression {
 			return Branch(
 				predicate(left, right),
-				Array(map[string]interface{}{"left": left, "right": right}),
-				Array(),
+				List{Map{"left": left, "right": right}},
+				List{},
 			)
 		}).StreamToArray()},
 			Branch(
 				LetVar("matches").Count().Gt(0),
 				LetVar("matches"),
-				Array(map[string]interface{}{"left": left}),
+				List{Map{"left": left}},
 			))
 	})
 }
@@ -601,8 +604,8 @@ func (leftExpr Expression) EqJoin(leftAttribute string, rightExpr Expression, ri
 	return leftExpr.ConcatMap(func(left Expression) interface{} {
 		return Let(map[string]interface{}{"right": rightExpr.Get(left.Attr(leftAttribute), rightAttribute)},
 			Branch(LetVar("right").Ne(nil),
-				Array(map[string]interface{}{"left": left, "right": LetVar("right")}),
-				Array(),
+				List{Map{"left": left, "right": LetVar("right")}},
+				List{},
 			))
 	})
 }
@@ -645,7 +648,7 @@ func Sum(attribute string) GroupedMapReduce {
 func Avg(attribute string) GroupedMapReduce {
 	return GroupedMapReduce{
 		Mapping: func(row Expression) interface{} {
-			return Array(row.Attr(attribute), 1)
+			return List{row.Attr(attribute), 1}
 		},
 		Base: []int{0, 0},
 		Reduction: func(acc, val Expression) interface{} {
@@ -669,7 +672,7 @@ type createDatabaseQuery struct {
 
 // Create a database
 func DBCreate(name string) Query {
-	return CreateDatabaseQuery{name}
+	return Query{createDatabaseQuery{name}}
 }
 
 type dropDatabaseQuery struct {
@@ -678,14 +681,14 @@ type dropDatabaseQuery struct {
 
 // Drop database
 func DBDrop(name string) Query {
-	return DropDatabaseQuery{name}
+	return Query{dropDatabaseQuery{name}}
 }
 
 type listDatabasesQuery struct{}
 
 // List all databases
 func DBList() Query {
-	return ListDatabasesQuery{}
+	return Query{listDatabasesQuery{}}
 }
 
 type Database struct {
@@ -707,7 +710,7 @@ type tableCreateQuery struct {
 }
 
 func (db Database) TableCreate(name string) Query {
-	return TableCreateQuery{name: name, database: db}
+	return Query{tableCreateQuery{name: name, database: db}}
 }
 
 type tableListQuery struct {
@@ -716,29 +719,29 @@ type tableListQuery struct {
 
 // List all tables in this database
 func (db Database) TableList() Query {
-	return TableListQuery{db}
+	return Query{tableListQuery{db}}
 }
 
 type tableDropQuery struct {
-	table TableInfo
+	table tableInfo
 }
 
 // Drop a table from a database
 func (db Database) TableDrop(name string) Query {
-	table := TableInfo{
+	table := tableInfo{
 		name:     name,
 		database: db,
 	}
-	return TableDropQuery{table: table}
+	return Query{tableDropQuery{table: table}}
 }
 
-type TableInfo struct {
+type tableInfo struct {
 	name     string
 	database Database
 }
 
 func (db Database) Table(name string) Expression {
-	value := TableInfo{
+	value := tableInfo{
 		name:     name,
 		database: db,
 	}
@@ -746,7 +749,7 @@ func (db Database) Table(name string) Expression {
 }
 
 func Table(name string) Expression {
-	value := TableInfo{
+	value := tableInfo{
 		name: name,
 	}
 	return Expression{kind: tableKind, value: value}
@@ -754,7 +757,7 @@ func Table(name string) Expression {
 
 // Write Queries
 
-type InsertQuery struct {
+type insertQuery struct {
 	tableExpr Expression
 	rows      []interface{}
 	overwrite bool
@@ -762,11 +765,11 @@ type InsertQuery struct {
 
 func (e Expression) Insert(rows ...interface{}) Query {
 	// Assume the expression is a table for now, we'll check later in buildProtobuf
-	return InsertQuery{
+	return Query{insertQuery{
 		tableExpr: e,
 		rows:      rows,
 		overwrite: false,
-	}
+	}}
 }
 
 // TODO: how to make this work - could make it runtime type-assert Query
@@ -777,43 +780,43 @@ func (e Expression) Insert(rows ...interface{}) Query {
 //  return q
 // }
 
-type UpdateQuery struct {
+type updateQuery struct {
 	view    Expression
 	mapping interface{}
 }
 
 func (e Expression) Update(mapping interface{}) Query {
-	return UpdateQuery{
+	return Query{updateQuery{
 		view:    e,
 		mapping: mapping,
-	}
+	}}
 }
 
-type ReplaceQuery struct {
+type replaceQuery struct {
 	view    Expression
 	mapping interface{}
 }
 
 func (e Expression) Replace(mapping interface{}) Query {
-	return ReplaceQuery{
+	return Query{replaceQuery{
 		view:    e,
 		mapping: mapping,
-	}
+	}}
 }
 
-type DeleteQuery struct {
+type deleteQuery struct {
 	view Expression
 }
 
 func (e Expression) Delete() Query {
-	return DeleteQuery{view: e}
+	return Query{deleteQuery{view: e}}
 }
 
-type ForEachQuery struct {
+type forEachQuery struct {
 	stream    Expression
 	queryFunc func(Expression) RethinkQuery
 }
 
 func (e Expression) ForEach(queryFunc (func(Expression) RethinkQuery)) Query {
-	return ForEachQuery{stream: e, queryFunc: queryFunc}
+	return Query{forEachQuery{stream: e, queryFunc: queryFunc}}
 }

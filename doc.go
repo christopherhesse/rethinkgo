@@ -18,6 +18,12 @@
 //
 //  import r "github.com/christopherhesse/rethinkgo"
 //
+//  type Employee struct {
+//      FirstName string
+//      LastName string
+//      Job string
+//  }
+//
 //  func main() {
 //      // To access a RethinkDB database, you connect to it with the Connect function
 //      sess, err := r.Connect("localhost:8080", "<database name>")
