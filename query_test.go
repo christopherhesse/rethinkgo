@@ -45,9 +45,9 @@ func TestQueries(t *testing.T) {
 	// TODO: test useoutdated, useoutdated(false), default database on connection, database overriding by connection, two connections
 
 	queries := []RethinkQuery{
-		DBCreate("testdb"),
-		DBList(),
-		DBDrop("testdb"),
+		DbCreate("testdb"),
+		DbList(),
+		DbDrop("testdb"),
 		JS("({name:2})").Attr("name"),
 		employees.GroupBy("awesomeness", Sum("awesomeness")),
 		employees.Map(func(row Expression) interface{} { return 1 }),
@@ -58,9 +58,9 @@ func TestQueries(t *testing.T) {
 		Expr(1, 2, 3),
 		JS(`[1,2,3]`),
 		Expr(1, 2, 3).Add(Expr(4, 5, 6)),
-		// Expr(3).Div(2),
-		// employees.Map(Row.Attr("awesomeness")),
-		// employees.Filter(Map{"first_name": "Marc"}),
+		Expr(3).Div(2),
+		employees.Map(Row.Attr("awesomeness")),
+		employees.Filter(Map{"first_name": "Marc"}),
 
 		// employees.Map(Branch(Row.Attr("first_name").Eq("Marc"), "is probably marc", "who cares")),
 

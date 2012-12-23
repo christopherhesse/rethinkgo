@@ -202,27 +202,14 @@ func (ctx context) toBuiltin(kind expressionKind, operand interface{}) *p.Builti
 		}
 
 	case filterKind:
-		var expr Expression
 		var predicate *p.Predicate
-		// TODO: should this also work with, for instance map[string]string?
-		m, ok := operand.(map[string]interface{})
-		if ok {
+		if reflect.ValueOf(operand).Kind() == reflect.Map {
 			// if we get a map like this, the user actually wants to compare
 			// individual keys in the document to see if it matches the provided
 			// map, build an expression to do that
-			var args []interface{}
-			for key, value := range m {
-				args = append(args, Row.Attr(key).Eq(value))
-			}
-			expr = naryBuiltin(logicalAndKind, nil, args...)
-			body := ctx.toTerm(expr)
-			predicate = &p.Predicate{
-				Arg:  proto.String("row"),
-				Body: body,
-			}
+			predicate = ctx.mapToPredicate(operand)
 		} else {
-			expr = Expr(operand)
-			predicate = ctx.toPredicate(expr)
+			predicate = ctx.toPredicate(operand)
 		}
 
 		return &p.Builtin{
@@ -464,18 +451,6 @@ func (ctx context) literalToTerm(literal interface{}) *p.Term {
 			Type:  p.Term_ARRAY.Enum(),
 			Array: ctx.sliceToTerms(values),
 		}
-
-	case reflect.Map:
-		m, ok := literal.(map[string]interface{})
-		if !ok {
-			// Nope, try JSON encoder
-			break
-		}
-
-		return &p.Term{
-			Type:   p.Term_OBJECT.Enum(),
-			Object: ctx.mapToVarTermTuples(m),
-		}
 	}
 
 	// hopefully it's JSONable
@@ -495,6 +470,29 @@ func (ctx context) sliceToTerms(args []interface{}) (terms []*p.Term) {
 		terms = append(terms, ctx.toTerm(arg))
 	}
 	return
+}
+
+func (ctx context) mapToPredicate(m interface{}) *p.Predicate {
+	mapValue := reflect.ValueOf(m)
+	mapType := mapValue.Type()
+	keyType := mapType.Key()
+
+	if keyType.Kind() != reflect.String {
+		panic("string keys only in maps")
+	}
+
+	var args []interface{}
+	for _, keyValue := range mapValue.MapKeys() {
+		key := keyValue.String()
+		valueValue := mapValue.MapIndex(keyValue)
+		value := valueValue.Interface()
+
+		args = append(args, Row.Attr(key).Eq(value))
+	}
+
+	// And all these terms together
+	expr := naryBuiltin(logicalAndKind, nil, args...)
+	return ctx.toPredicate(expr)
 }
 
 func (ctx context) mapToVarTermTuples(m map[string]interface{}) []*p.VarTermTuple {
