@@ -380,10 +380,9 @@ func (ctx context) compileGoFunc(f interface{}, requiredArgs int) (params []stri
 }
 
 func (ctx context) compileExpressionFunc(e Expression, requiredArgs int) (params []string, body *p.Term) {
-	// an expression that takes no args, e.g. LetVar("@").Attr("name") or
+	// an expression that takes no args, e.g. Row.Attr("name") or
 	// possibly a Javascript function JS(`row.key`) which does take args
 	body = ctx.toTerm(e)
-	// TODO: see if this is required (maybe check js library as python seems to have this)
 	switch requiredArgs {
 	case 0:
 		// do nothing
@@ -441,15 +440,15 @@ func (ctx context) literalToTerm(literal interface{}) *p.Term {
 
 	switch value.Kind() {
 	case reflect.Array, reflect.Slice:
-		values, ok := literal.([]interface{})
-		if !ok {
-			// Nope, try JSON encoder instead
-			break
-		}
-
 		return &p.Term{
 			Type:  p.Term_ARRAY.Enum(),
-			Array: ctx.sliceToTerms(values),
+			Array: ctx.sliceToTerms(literal),
+		}
+
+	case reflect.Map:
+		return &p.Term{
+			Type:   p.Term_OBJECT.Enum(),
+			Object: ctx.mapToVarTermTuples(literal),
 		}
 	}
 
@@ -465,14 +464,29 @@ func (ctx context) literalToTerm(literal interface{}) *p.Term {
 	}
 }
 
-func (ctx context) sliceToTerms(args []interface{}) (terms []*p.Term) {
-	for _, arg := range args {
+func (ctx context) sliceToTerms(a interface{}) (terms []*p.Term) {
+	for _, arg := range toArray(a) {
 		terms = append(terms, ctx.toTerm(arg))
 	}
 	return
 }
 
-func (ctx context) mapToPredicate(m interface{}) *p.Predicate {
+// toArray and toObject seem overly complicated, like maybe some sort
+// of assignment assertion would be enough
+func toArray(a interface{}) []interface{} {
+	result := []interface{}{}
+
+	arrayValue := reflect.ValueOf(a)
+	for i := 0; i < arrayValue.Len(); i++ {
+		value := arrayValue.Index(i).Interface()
+		result = append(result, value)
+	}
+	return result
+}
+
+func toObject(m interface{}) map[string]interface{} {
+	result := map[string]interface{}{}
+
 	mapValue := reflect.ValueOf(m)
 	mapType := mapValue.Type()
 	keyType := mapType.Key()
@@ -481,12 +495,18 @@ func (ctx context) mapToPredicate(m interface{}) *p.Predicate {
 		panic("string keys only in maps")
 	}
 
-	var args []interface{}
 	for _, keyValue := range mapValue.MapKeys() {
 		key := keyValue.String()
 		valueValue := mapValue.MapIndex(keyValue)
 		value := valueValue.Interface()
+		result[key] = value
+	}
+	return result
+}
 
+func (ctx context) mapToPredicate(m interface{}) *p.Predicate {
+	var args []interface{}
+	for key, value := range toObject(m) {
 		args = append(args, Row.Attr(key).Eq(value))
 	}
 
@@ -495,9 +515,9 @@ func (ctx context) mapToPredicate(m interface{}) *p.Predicate {
 	return ctx.toPredicate(expr)
 }
 
-func (ctx context) mapToVarTermTuples(m map[string]interface{}) []*p.VarTermTuple {
+func (ctx context) mapToVarTermTuples(m interface{}) []*p.VarTermTuple {
 	var tuples []*p.VarTermTuple
-	for key, value := range m {
+	for key, value := range toObject(m) {
 		tuple := &p.VarTermTuple{
 			Var:  proto.String(key),
 			Term: ctx.toTerm(value),
@@ -567,13 +587,13 @@ func (q Query) toProtobuf(ctx context) *p.Query {
 	case tableCreateQuery:
 		query := makeMetaQuery(p.MetaQuery_CREATE_TABLE)
 		query.MetaQuery.CreateTable = &p.MetaQuery_CreateTable{
-			PrimaryKey: protoStringOrNil(v.PrimaryKey),
-			Datacenter: protoStringOrNil(v.PrimaryDatacenter),
+			PrimaryKey: protoStringOrNil(v.spec.PrimaryKey),
+			Datacenter: protoStringOrNil(v.spec.PrimaryDatacenter),
 			TableRef: &p.TableRef{
 				DbName:    proto.String(v.database.name),
-				TableName: proto.String(v.name),
+				TableName: proto.String(v.spec.Name),
 			},
-			CacheSize: protoInt64OrNil(v.CacheSize),
+			CacheSize: protoInt64OrNil(v.spec.CacheSize),
 		}
 		return query
 

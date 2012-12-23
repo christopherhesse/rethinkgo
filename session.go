@@ -77,27 +77,27 @@ func readMessage(conn net.Conn) ([]byte, error) {
 }
 
 // Read a protobuf message from a stream
-func readResponse(conn net.Conn) (response *p.Response, err error) {
+func readResponse(conn net.Conn) (*p.Response, error) {
 	data, err := readMessage(conn)
 	if err != nil {
-		return
+		return nil, err
 	}
-	response = &p.Response{}
+	response := &p.Response{}
 	err = proto.Unmarshal(data, response)
-	return
+	return response, err
 }
 
 // Connect create a new connection to the database.
 //
 //  Connect("localhost:28015", "test")
-func Connect(address, database string) (s *Session, err error) {
-	s = &Session{address: address, database: database, closed: true}
-	err = s.Reconnect()
+func Connect(address, database string) (*Session, error) {
+	s := &Session{address: address, database: database, closed: true}
+	err := s.Reconnect()
 	if err != nil {
-		return
+		return nil, err
 	}
 	LastSession = s
-	return
+	return s, nil
 }
 
 // Close closes the database, freeing any associated resources.
@@ -167,7 +167,6 @@ func (s *Session) executeQuery(protobuf *p.Query) (response *p.Response, err err
 // through the resulting JSON rows with rows.Next() and rows.Scan(&dest).
 //
 //  rows, err := db.Run(query)
-//  defer rows.Close()  TODO: is this important?
 //  for rows.Next() {
 //      var row map[string]interface{}
 //      err = rows.Scan(&row)

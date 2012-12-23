@@ -106,7 +106,8 @@ type Expression struct {
 // the last created connection.  Methods that generate a query are generally
 // located on Expression objects.
 type Query struct {
-	value interface{}
+	value     interface{}
+	nonatomic bool
 }
 
 // Row supplies access to the current row in any query, even if there's no go
@@ -670,7 +671,15 @@ type createDatabaseQuery struct {
 	name string
 }
 
-// Create a database
+// DbCreate create a database with the supplied name.
+//
+// Example usage:
+//
+//  _, err := r.DbCreate("company").Run()
+//
+// Example response:
+//
+//  nil
 func DbCreate(name string) Query {
 	return Query{createDatabaseQuery{name}}
 }
@@ -679,46 +688,95 @@ type dropDatabaseQuery struct {
 	name string
 }
 
-// Drop database
+// DbDrop deletes the specified database
+//
+// Example usage:
+//
+//  _, err := r.DbDrop("company").Run()
+//
+// Example response:
+//
+//  nil
 func DbDrop(name string) Query {
 	return Query{dropDatabaseQuery{name}}
 }
 
 type listDatabasesQuery struct{}
 
-// List all databases
+// DbList lists all databases on the server
+//
+// Example usage:
+//
+//  rows, err := r.DbList().Run()
+//  var databases []string
+//  err = rows.Collect(&databases)
+//
+// Example response:
+//
+//  []string{"test", "company"}
 func DbList() Query {
 	return Query{listDatabasesQuery{}}
 }
 
-type Database struct {
+type database struct {
 	name string
 }
 
-func Db(name string) Database {
-	return Database{name}
+// Db lets you perform operations within a specific database (this will override
+// the database specified to the connection).  This can be used to access or
+// create/list/delete tables within any database available on the server.
+func Db(name string) database {
+	return database{name}
 }
 
 type tableCreateQuery struct {
-	name     string
-	database Database
+	database database
+	spec     TableSpec
+}
 
-	// These can be set by the user
+// TableSpec lets you specify the various parameters for a table, then create it
+// with TableCreateSpec().
+type TableSpec struct {
+	Name              string
 	PrimaryKey        string
 	PrimaryDatacenter string
 	CacheSize         int64
 }
 
-func (db Database) TableCreate(name string) Query {
-	return Query{tableCreateQuery{name: name, database: db}}
+// TableCreate creates a table with the specified name.
+//
+// Example usage:
+//
+//  _, err := r.Db("company").TableCreate("employees").Run()
+//
+// Example response:
+//
+//  nil
+func (db database) TableCreate(name string) Query {
+	spec := TableSpec{Name: name}
+	return Query{tableCreateQuery{spec: spec, database: db}}
+}
+
+// TableCreateSpec creates a table with the specified attributes.
+//
+// Example usage:
+//
+//  spec := TableSpec{Name: "employees", PrimaryKey: "userid"}
+//  _, err := r.Db("company").TableCreateSpec(spec).Run()
+//
+// Example response:
+//
+//  nil
+func (db database) TableCreateSpec(spec TableSpec) Query {
+	return Query{tableCreateQuery{spec: spec, database: db}}
 }
 
 type tableListQuery struct {
-	database Database
+	database database
 }
 
 // List all tables in this database
-func (db Database) TableList() Query {
+func (db database) TableList() Query {
 	return Query{tableListQuery{db}}
 }
 
@@ -727,7 +785,7 @@ type tableDropQuery struct {
 }
 
 // Drop a table from a database
-func (db Database) TableDrop(name string) Query {
+func (db database) TableDrop(name string) Query {
 	table := tableInfo{
 		name:     name,
 		database: db,
@@ -737,10 +795,10 @@ func (db Database) TableDrop(name string) Query {
 
 type tableInfo struct {
 	name     string
-	database Database
+	database database
 }
 
-func (db Database) Table(name string) Expression {
+func (db database) Table(name string) Expression {
 	value := tableInfo{
 		name:     name,
 		database: db,
@@ -778,6 +836,10 @@ func (e Expression) Insert(rows ...interface{}) Query {
 // func (q InsertQuery) Overwrite(overwrite bool) InsertQuery {
 //  q.overwrite = overwrite
 //  return q
+// }
+// TODO: need some way to set atomic on write queries
+//
+// func (q Query) Atomic(false) Query {
 // }
 
 type updateQuery struct {
