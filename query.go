@@ -671,7 +671,7 @@ type createDatabaseQuery struct {
 }
 
 // Create a database
-func DBCreate(name string) Query {
+func DbCreate(name string) Query {
 	return Query{createDatabaseQuery{name}}
 }
 
@@ -680,14 +680,14 @@ type dropDatabaseQuery struct {
 }
 
 // Drop database
-func DBDrop(name string) Query {
+func DbDrop(name string) Query {
 	return Query{dropDatabaseQuery{name}}
 }
 
 type listDatabasesQuery struct{}
 
 // List all databases
-func DBList() Query {
+func DbList() Query {
 	return Query{listDatabasesQuery{}}
 }
 
