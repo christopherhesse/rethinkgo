@@ -1,7 +1,7 @@
 package rethinkgo
 
 // Convert Expression trees and queries into protocol buffer form
-// Functions in this file (except build*) will panic on failure, the caller is
+// Functions in this file will panic on failure, the caller is
 // expected to recover().
 
 import (
@@ -529,48 +529,38 @@ func makeWriteQuery(queryType p.WriteQuery_WriteQueryType) *p.Query {
 	}
 }
 
-// Calls toTerm() on the object, and returns any panics as normal errors
-func (ctx context) buildTerm(o interface{}) (term *p.Term, err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			if _, ok := r.(runtime.Error); ok {
-				panic(r)
-			}
-			err = fmt.Errorf("rethinkdb: %v", r)
-		}
-	}()
-	return ctx.toTerm(o), nil
-}
-
-// Calls toMapping() on the object, and returns any panics as normal errors
-func (ctx context) buildMapping(o interface{}) (mapping *p.Mapping, err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			if _, ok := r.(runtime.Error); ok {
-				panic(r)
-			}
-			err = fmt.Errorf("rethinkdb: %v", r)
-		}
-	}()
-	return ctx.toMapping(o), nil
-}
-
 // Convert a bare Expression directly to a read query
-func (e Expression) buildProtobuf(ctx context) (query *p.Query, err error) {
-	term, err := ctx.buildTerm(e)
-	if err != nil {
-		return
-	}
-
-	query = &p.Query{
+func (e Expression) toProtobuf(ctx context) *p.Query {
+	return &p.Query{
 		Type: p.Query_READ.Enum(),
 		ReadQuery: &p.ReadQuery{
-			Term: term,
+			Term: ctx.toTerm(e),
 		},
 	}
-
-	return
 }
+
+func (q Query) toProtobuf(ctx context) *p.Query {
+	switch q.(type) {
+	case createDatabaseQuery:
+	case dropDatabaseQuery:
+case listDatabasesQuery:
+case tableCreateQuery:
+case tableListQuery:
+case tableDropQuery:
+
+	}
+	return &p.Query{
+		Type: p.Query_READ.Enum(),
+		ReadQuery: &p.ReadQuery{
+			Term: ctx.toTerm(e),
+		},
+	}
+}
+
+// Query is the type returned by any call that terminates a query (for instance,
+// .Insert()), and provides .Run() and .RunSingle() methods to run the Query on
+// the last created connection.
+type Query interface{}
 
 func (q CreateDatabaseQuery) buildProtobuf(ctx context) (*p.Query, error) {
 	query := makeMetaQuery(p.MetaQuery_CREATE_DB)

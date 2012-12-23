@@ -174,47 +174,63 @@ func (s *Session) executeQuery(protobuf *p.Query) (response *p.Response, err err
 //  if rows.Err() {
 //      ...
 //  }
-func (s *Session) Run(query RethinkQuery) (rows *Rows, err error) {
+func (s *Session) Run(query RethinkQuery) (*Rows, error) {
 	ctx := context{databaseName: s.database}
-	querybuf, err := query.buildProtobuf(ctx)
+	querybuf, err := buildProtobuf(ctx, query)
 	if err != nil {
-		return
+		return nl, err
 	}
 
 	querybuf.Token = proto.Int64(s.getToken())
 
 	buffer, status, err := s.run(querybuf, query)
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	switch status {
 	case p.Response_SUCCESS_JSON:
 		// single document (or json) response, return an iterator anyway for
 		// consistency of types
-		rows = &Rows{
+		return &Rows{
 			buffer:   buffer,
 			complete: true,
-		}
+		}, nil
 	case p.Response_SUCCESS_PARTIAL:
 		// beginning of stream of rows
-		rows = &Rows{
+		return &Rows{
 			session:  s,
 			buffer:   buffer,
 			complete: false,
 			token:    *querybuf.Token,
 			query:    query,
-		}
+		}, nil
 	case p.Response_SUCCESS_STREAM:
 		// end of a stream of rows, since we got this on the initial query
 		// we can just return all the responses in one go
-		rows = &Rows{
+		return &Rows{
 			buffer:   buffer,
 			complete: true,
-		}
+		}, nil
 	case p.Response_SUCCESS_EMPTY:
 		// nothing to do here
 	}
+	return nil, nil
+}
+
+// buildProtobuf converts a query to a protobuf and catches any panics raised
+// by the protobuf functions.
+func buildProtobuf(ctx Context, query RethinkQuery) (protobuf *p.Query, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			if _, ok := r.(runtime.Error); ok {
+				panic(r)
+			}
+			err = fmt.Errorf("rethinkdb: %v", r)
+		}
+	}()
+
+	protobuf = query.toProtobuf(ctx)
 	return
 }
 
@@ -294,7 +310,7 @@ func getBacktraceFrames(response *p.Response) []string {
 // RethinkQuery is an interface that all queries must implement to be sent to
 // the database.
 type RethinkQuery interface {
-	buildProtobuf(context) (*p.Query, error)
+	toProtobuf(context) *p.Query
 }
 
 func runLastSession(query RethinkQuery) (*Rows, error) {

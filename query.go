@@ -5,14 +5,6 @@ package rethinkgo
 // interface{} is effectively a void* type that we look at later to determine
 // the underlying type and perform any conversions.
 
-// Query is the type returned by any call that terminates a query (for instance,
-// .Insert()), and provides .Run() and .RunSingle() methods to run the Query on
-// the last created connection.
-type Query struct {
-	// this is apparently called an embedded interface
-	RethinkQuery
-}
-
 type expressionKind int
 
 const (
@@ -671,29 +663,29 @@ func Avg(attribute string) GroupedMapReduce {
 // Meta Queries
 // Database administration (e.g. database create, table drop, etc)
 
-type CreateDatabaseQuery struct {
+type createDatabaseQuery struct {
 	name string
 }
 
 // Create a database
 func DBCreate(name string) Query {
-	return Query{CreateDatabaseQuery{name}}
+	return CreateDatabaseQuery{name}
 }
 
-type DropDatabaseQuery struct {
+type dropDatabaseQuery struct {
 	name string
 }
 
 // Drop database
 func DBDrop(name string) Query {
-	return Query{DropDatabaseQuery{name}}
+	return DropDatabaseQuery{name}
 }
 
-type ListDatabasesQuery struct{}
+type listDatabasesQuery struct{}
 
 // List all databases
 func DBList() Query {
-	return Query{ListDatabasesQuery{}}
+	return ListDatabasesQuery{}
 }
 
 type Database struct {
@@ -704,7 +696,7 @@ func Db(name string) Database {
 	return Database{name}
 }
 
-type TableCreateQuery struct {
+type tableCreateQuery struct {
 	name     string
 	database Database
 
@@ -715,19 +707,19 @@ type TableCreateQuery struct {
 }
 
 func (db Database) TableCreate(name string) Query {
-	return Query{TableCreateQuery{name: name, database: db}}
+	return TableCreateQuery{name: name, database: db}
 }
 
-type TableListQuery struct {
+type tableListQuery struct {
 	database Database
 }
 
 // List all tables in this database
 func (db Database) TableList() Query {
-	return Query{TableListQuery{db}}
+	return TableListQuery{db}
 }
 
-type TableDropQuery struct {
+type tableDropQuery struct {
 	table TableInfo
 }
 
@@ -737,7 +729,7 @@ func (db Database) TableDrop(name string) Query {
 		name:     name,
 		database: db,
 	}
-	return Query{TableDropQuery{table: table}}
+	return TableDropQuery{table: table}
 }
 
 type TableInfo struct {
@@ -770,11 +762,11 @@ type InsertQuery struct {
 
 func (e Expression) Insert(rows ...interface{}) Query {
 	// Assume the expression is a table for now, we'll check later in buildProtobuf
-	return Query{InsertQuery{
+	return InsertQuery{
 		tableExpr: e,
 		rows:      rows,
 		overwrite: false,
-	}}
+	}
 }
 
 // TODO: how to make this work - could make it runtime type-assert Query
@@ -791,10 +783,10 @@ type UpdateQuery struct {
 }
 
 func (e Expression) Update(mapping interface{}) Query {
-	return Query{UpdateQuery{
+	return UpdateQuery{
 		view:    e,
 		mapping: mapping,
-	}}
+	}
 }
 
 type ReplaceQuery struct {
@@ -803,10 +795,10 @@ type ReplaceQuery struct {
 }
 
 func (e Expression) Replace(mapping interface{}) Query {
-	return Query{ReplaceQuery{
+	return ReplaceQuery{
 		view:    e,
 		mapping: mapping,
-	}}
+	}
 }
 
 type DeleteQuery struct {
@@ -814,7 +806,7 @@ type DeleteQuery struct {
 }
 
 func (e Expression) Delete() Query {
-	return Query{DeleteQuery{view: e}}
+	return DeleteQuery{view: e}
 }
 
 type ForEachQuery struct {
@@ -823,5 +815,5 @@ type ForEachQuery struct {
 }
 
 func (e Expression) ForEach(queryFunc (func(Expression) RethinkQuery)) Query {
-	return Query{ForEachQuery{stream: e, queryFunc: queryFunc}}
+	return ForEachQuery{stream: e, queryFunc: queryFunc}
 }
