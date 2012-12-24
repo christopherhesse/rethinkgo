@@ -19,6 +19,9 @@ type context struct {
 	useOutdated  bool
 }
 
+// seems like there could be a better way to organize these so this isn't
+// necessary
+
 func (q MetaQuery) Run() (*Rows, error) {
 	return runLastSession(q)
 }
@@ -384,9 +387,9 @@ func (ctx context) compileGoFunc(f interface{}, requiredArgs int) (params []stri
 	// presumably if we're here, the user has supplied a go func to be
 	// converted to an expression
 	value := reflect.ValueOf(f)
-	type_ := value.Type()
+	valueType := value.Type()
 
-	if type_.NumIn() != requiredArgs {
+	if valueType.NumIn() != requiredArgs {
 		panic("Function expression has incorrect number of arguments")
 	}
 
@@ -394,19 +397,20 @@ func (ctx context) compileGoFunc(f interface{}, requiredArgs int) (params []stri
 	// the args have generated names because when the function is serialized,
 	// the server can't figure out which variable is which in a closure
 	var args []reflect.Value
-	for i := 0; i < type_.NumIn(); i++ {
+	for i := 0; i < valueType.NumIn(); i++ {
 		name := nextVariableName()
 		args = append(args, reflect.ValueOf(LetVar(name)))
 		params = append(params, name)
 
 		// make sure all input arguments are of type Expression
-		if !type_.In(i).AssignableTo(reflect.TypeOf(Expression{})) {
+		if !valueType.In(i).AssignableTo(reflect.TypeOf(Expression{})) {
 			panic("Function argument is not of type Expression")
 		}
 	}
 
+	// TODO: make this support multiple return values as an array/slice
 	// check output types
-	if type_.NumOut() != 1 {
+	if valueType.NumOut() != 1 {
 		panic("Function does not have a single return value")
 	}
 
@@ -500,28 +504,29 @@ func (ctx context) literalToTerm(literal interface{}) *p.Term {
 	}
 }
 
-func (ctx context) sliceToTerms(a interface{}) (terms []*p.Term) {
+func (ctx context) sliceToTerms(a interface{}) []*p.Term {
+	terms := []*p.Term{}
 	for _, arg := range toArray(a) {
 		terms = append(terms, ctx.toTerm(arg))
 	}
-	return
+	return terms
 }
 
 // toArray and toObject seem overly complicated, like maybe some sort
 // of assignment assertion would be enough
 func toArray(a interface{}) []interface{} {
-	result := []interface{}{}
+	array := []interface{}{}
 
 	arrayValue := reflect.ValueOf(a)
 	for i := 0; i < arrayValue.Len(); i++ {
 		value := arrayValue.Index(i).Interface()
-		result = append(result, value)
+		array = append(array, value)
 	}
-	return result
+	return array
 }
 
 func toObject(m interface{}) map[string]interface{} {
-	result := map[string]interface{}{}
+	object := map[string]interface{}{}
 
 	mapValue := reflect.ValueOf(m)
 	mapType := mapValue.Type()
@@ -535,13 +540,13 @@ func toObject(m interface{}) map[string]interface{} {
 		key := keyValue.String()
 		valueValue := mapValue.MapIndex(keyValue)
 		value := valueValue.Interface()
-		result[key] = value
+		object[key] = value
 	}
-	return result
+	return object
 }
 
 func (ctx context) mapToPredicate(m interface{}) *p.Predicate {
-	var args []interface{}
+	args := []interface{}{}
 	for key, value := range toObject(m) {
 		args = append(args, Row.Attr(key).Eq(value))
 	}
@@ -587,29 +592,29 @@ func (e Expression) toProtobuf(ctx context) *p.Query {
 }
 
 // toProtobuf converts a complete query to a protobuf
-func (q Query) toProtobuf(ctx context) *p.Query {
-	var metaQuery *p.MetaQuery
+func (q MetaQuery) toProtobuf(ctx context) *p.Query {
+	var metaQueryProto *p.MetaQuery
 
-	switch v := q.value.(type) {
+	switch v := q.query.(type) {
 	case createDatabaseQuery:
-		metaQuery = &p.MetaQuery{
+		metaQueryProto = &p.MetaQuery{
 			Type:   p.MetaQuery_CREATE_DB.Enum(),
 			DbName: proto.String(v.name),
 		}
 
 	case dropDatabaseQuery:
-		metaQuery = &p.MetaQuery{
+		metaQueryProto = &p.MetaQuery{
 			Type:   p.MetaQuery_DROP_DB.Enum(),
 			DbName: proto.String(v.name),
 		}
 
 	case listDatabasesQuery:
-		metaQuery = &p.MetaQuery{
+		metaQueryProto = &p.MetaQuery{
 			Type: p.MetaQuery_LIST_DBS.Enum(),
 		}
 
 	case tableCreateQuery:
-		metaQuery = &p.MetaQuery{
+		metaQueryProto = &p.MetaQuery{
 			Type: p.MetaQuery_CREATE_TABLE.Enum(),
 			CreateTable: &p.MetaQuery_CreateTable{
 				PrimaryKey: protoStringOrNil(v.spec.PrimaryKey),
@@ -623,32 +628,30 @@ func (q Query) toProtobuf(ctx context) *p.Query {
 		}
 
 	case tableListQuery:
-		metaQuery = &p.MetaQuery{
+		metaQueryProto = &p.MetaQuery{
 			Type:   p.MetaQuery_LIST_TABLES.Enum(),
 			DbName: proto.String(v.database.name),
 		}
 
 	case tableDropQuery:
-		metaQuery = &p.MetaQuery{
+		metaQueryProto = &p.MetaQuery{
 			Type:      p.MetaQuery_DROP_TABLE.Enum(),
 			DropTable: ctx.toTableRef(v.table),
 		}
-
 	default:
-		// write query
-		return ctx.writeQueryToProtobuf(q)
+		panic("Unknown MetaQuery type")
 	}
 
 	return &p.Query{
 		Type:      p.Query_META.Enum(),
-		MetaQuery: metaQuery,
+		MetaQuery: metaQueryProto,
 	}
 }
 
-func (ctx context) writeQueryToProtobuf(query Query) *p.Query {
-	var writeQuery *p.WriteQuery
+func (q WriteQuery) toProtobuf(ctx context) *p.Query {
+	var writeQueryProto *p.WriteQuery
 
-	switch v := query.value.(type) {
+	switch v := q.query.(type) {
 	case insertQuery:
 		var terms []*p.Term
 		for _, row := range v.rows {
@@ -660,12 +663,12 @@ func (ctx context) writeQueryToProtobuf(query Query) *p.Query {
 			panic("Inserts can only be performed on tables :(")
 		}
 
-		writeQuery = &p.WriteQuery{
+		writeQueryProto = &p.WriteQuery{
 			Type: p.WriteQuery_INSERT.Enum(),
 			Insert: &p.WriteQuery_Insert{
 				TableRef:  ctx.toTableRef(table),
 				Terms:     terms,
-				Overwrite: proto.Bool(query.overwrite),
+				Overwrite: proto.Bool(q.overwrite),
 			},
 		}
 
@@ -675,7 +678,7 @@ func (ctx context) writeQueryToProtobuf(query Query) *p.Query {
 
 		if view.GetType() == p.Term_GETBYKEY {
 			// this is chained off of a .Get(), do a POINTUPDATE
-			writeQuery = &p.WriteQuery{
+			writeQueryProto = &p.WriteQuery{
 				Type: p.WriteQuery_POINTUPDATE.Enum(),
 				PointUpdate: &p.WriteQuery_PointUpdate{
 					TableRef: view.GetByKey.TableRef,
@@ -685,7 +688,7 @@ func (ctx context) writeQueryToProtobuf(query Query) *p.Query {
 				},
 			}
 		} else {
-			writeQuery = &p.WriteQuery{
+			writeQueryProto = &p.WriteQuery{
 				Type: p.WriteQuery_UPDATE.Enum(),
 				Update: &p.WriteQuery_Update{
 					View:    view,
@@ -699,7 +702,7 @@ func (ctx context) writeQueryToProtobuf(query Query) *p.Query {
 		mapping := ctx.toMapping(v.mapping)
 
 		if view.GetType() == p.Term_GETBYKEY {
-			writeQuery = &p.WriteQuery{
+			writeQueryProto = &p.WriteQuery{
 				Type: p.WriteQuery_POINTMUTATE.Enum(),
 				PointMutate: &p.WriteQuery_PointMutate{
 					TableRef: view.GetByKey.TableRef,
@@ -709,7 +712,7 @@ func (ctx context) writeQueryToProtobuf(query Query) *p.Query {
 				},
 			}
 		} else {
-			writeQuery = &p.WriteQuery{
+			writeQueryProto = &p.WriteQuery{
 				Type: p.WriteQuery_MUTATE.Enum(),
 				Mutate: &p.WriteQuery_Mutate{
 					View:    view,
@@ -722,7 +725,7 @@ func (ctx context) writeQueryToProtobuf(query Query) *p.Query {
 		view := ctx.toTerm(v.view)
 
 		if view.GetType() == p.Term_GETBYKEY {
-			writeQuery = &p.WriteQuery{
+			writeQueryProto = &p.WriteQuery{
 				Type: p.WriteQuery_POINTDELETE.Enum(),
 				PointDelete: &p.WriteQuery_PointDelete{
 					TableRef: view.GetByKey.TableRef,
@@ -731,7 +734,7 @@ func (ctx context) writeQueryToProtobuf(query Query) *p.Query {
 				},
 			}
 		} else {
-			writeQuery = &p.WriteQuery{
+			writeQueryProto = &p.WriteQuery{
 				Type: p.WriteQuery_DELETE.Enum(),
 				Delete: &p.WriteQuery_Delete{
 					View: view,
@@ -749,7 +752,7 @@ func (ctx context) writeQueryToProtobuf(query Query) *p.Query {
 			panic("ForEach query function must generate a write query")
 		}
 
-		writeQuery = &p.WriteQuery{
+		writeQueryProto = &p.WriteQuery{
 			Type: p.WriteQuery_FOREACH.Enum(),
 			ForEach: &p.WriteQuery_ForEach{
 				Stream:  stream,
@@ -758,13 +761,13 @@ func (ctx context) writeQueryToProtobuf(query Query) *p.Query {
 			},
 		}
 	default:
-		panic("Unknown query type")
+		panic("Unknown writequery type")
 	}
 
-	writeQuery.Atomic = proto.Bool(!query.nonatomic)
+	writeQueryProto.Atomic = proto.Bool(!q.nonatomic)
 
 	return &p.Query{
 		Type:       p.Query_WRITE.Enum(),
-		WriteQuery: writeQuery,
+		WriteQuery: writeQueryProto,
 	}
 }

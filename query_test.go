@@ -42,7 +42,7 @@ func TestQueries(t *testing.T) {
 
 	// dcCharacter := Hero{Name: "Bruce Wayne", Strength: 5}
 
-	queries := []RethinkQuery{
+	queries := []Query{
 		DbCreate("testdb"),
 		DbList(),
 		DbDrop("testdb"),
@@ -139,7 +139,7 @@ func TestQueries(t *testing.T) {
 		// // Db("test").Table("dc").Filter(map[string]interface{}{"name": "Unknown"}).Delete(),
 		// Db("test").Table("marvel2").Delete(),
 		// Db("test").Table("marvel").Map(Row.Attr("strength").Mul(2)),
-		// Db("test").Table("marvel").ForEach(func(row Expression) RethinkQuery {
+		// Db("test").Table("marvel").ForEach(func(row Expression) Query {
 		// 	return Db("test").Table("marvel2").Insert(row)
 		// }),
 		// Db("test").Table("table_that_doesnt_exist"),
@@ -187,9 +187,9 @@ func TestQueries(t *testing.T) {
 	// fmt.Println("insert:", response, err)
 }
 
-func assertError(s *Session, q RethinkQuery) {
+func assertError(s *Session, q Query) {
 	_, err := s.Run(q)
-	e := err.(RethinkError)
+	e := err.(Error)
 	fmt.Println("err:", e)
 }
 

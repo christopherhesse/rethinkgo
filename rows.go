@@ -21,7 +21,7 @@ type Rows struct {
 	complete bool
 	lasterr  error
 	token    int64
-	query    RethinkQuery
+	query    Query
 }
 
 func (rows *Rows) continueQuery() error {

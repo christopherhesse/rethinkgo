@@ -82,19 +82,6 @@ const (
 	lessThanOrEqualKind
 )
 
-// Query is the interface for queries that can be .Run(), this includes
-// Expression (run as a read query), MetaQuery, and WriteQuery
-// returned by any call that terminates a query (for instance,
-// .Insert()), and provides .Run() and .RunSingle() methods to run the Query on
-// the last created connection.  Methods that generate a query are generally
-// located on Expression objects.
-type Query interface {
-	toProtobuf(context) *p.Query // will panic on errors
-	Run() (*Rows, error)
-	RunOne(interface{}) error
-	RunCollect(interface{}) error
-}
-
 // Expression represents an RQL expression, such as .Filter(), which, when
 // called on another expression, filters the results of that expression when run
 // on the server.  It is used as the argument type of any functions used in RQL.
@@ -117,7 +104,7 @@ type Expression struct {
 // WriteQuery is the type returned by any method that writes to a table, this
 // includes .Insert(), .Update(), .Delete(), .ForEach(), and .Replace()
 type WriteQuery struct {
-	value     interface{}
+	query     interface{}
 	nonatomic bool
 	overwrite bool // for insert query
 }
@@ -126,7 +113,7 @@ type WriteQuery struct {
 // databases, this includes .TableCreate(), .TableList(), .TableDrop(),
 // .DbCreate(), .DbList(), and .DbDrop()
 type MetaQuery struct {
-	value interface{}
+	query interface{}
 }
 
 // Row supplies access to the current row in any query, even if there's no go
@@ -223,8 +210,8 @@ func LetVar(name string) Expression {
 	return Expression{kind: variableKind, value: name}
 }
 
-// Error tells the server to respond with a RuntimeError, useful for testing.
-func Error(message string) Expression {
+// Err tells the server to respond with a RuntimeError, useful for testing.
+func Err(message string) Expression {
 	return Expression{kind: errorKind, value: message}
 }
 

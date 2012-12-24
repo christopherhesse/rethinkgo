@@ -25,6 +25,19 @@ type Session struct {
 	closed   bool
 }
 
+// Query is the interface for queries that can be .Run(), this includes
+// Expression (run as a read query), MetaQuery, and WriteQuery
+// returned by any call that terminates a query (for instance,
+// .Insert()), and provides .Run() and .RunSingle() methods to run the Query on
+// the last created connection.  Methods that generate a query are generally
+// located on Expression objects.
+type Query interface {
+	toProtobuf(context) *p.Query // will panic on errors
+	Run() (*Rows, error)
+	RunOne(interface{}) error
+	RunCollect(interface{}) error
+}
+
 // SetDebug causes all queries send to the server and responses received to be
 // printed to stdout in raw form.
 func SetDebug(debug bool) {
@@ -143,20 +156,20 @@ func (s *Session) getToken() int64 {
 
 // executeQuery sends a single query to the server and retrieves the raw
 // response
-func (s *Session) executeQuery(protobuf *p.Query) (response *p.Response, err error) {
+func (s *Session) executeQuery(protobuf *p.Query) (responseProto *p.Response, err error) {
 	if err = writeQuery(s.conn, protobuf); err != nil {
 		return
 	}
 
 	for {
-		response, err = readResponse(s.conn)
+		responseProto, err = readResponse(s.conn)
 		if err != nil {
 			return
 		}
 
-		if response.GetToken() == protobuf.GetToken() {
+		if responseProto.GetToken() == protobuf.GetToken() {
 			break
-		} else if response.GetToken() > protobuf.GetToken() {
+		} else if responseProto.GetToken() > protobuf.GetToken() {
 			return nil, errors.New("rethinkdb: The server returned a response for a protobuf that was not submitted by us")
 		}
 	}
@@ -174,16 +187,16 @@ func (s *Session) executeQuery(protobuf *p.Query) (response *p.Response, err err
 //  if rows.Err() {
 //      ...
 //  }
-func (s *Session) Run(query RethinkQuery) (*Rows, error) {
+func (s *Session) Run(query Query) (*Rows, error) {
 	ctx := context{databaseName: s.database}
-	querybuf, err := buildProtobuf(ctx, query)
+	queryProto, err := buildProtobuf(ctx, query)
 	if err != nil {
 		return nil, err
 	}
 
-	querybuf.Token = proto.Int64(s.getToken())
+	queryProto.Token = proto.Int64(s.getToken())
 
-	buffer, status, err := s.run(querybuf, query)
+	buffer, status, err := s.run(queryProto, query)
 	if err != nil {
 		return nil, err
 	}
@@ -202,7 +215,7 @@ func (s *Session) Run(query RethinkQuery) (*Rows, error) {
 			session:  s,
 			buffer:   buffer,
 			complete: false,
-			token:    *querybuf.Token,
+			token:    queryProto.GetToken(),
 			query:    query,
 		}, nil
 	case p.Response_SUCCESS_STREAM:
@@ -220,7 +233,7 @@ func (s *Session) Run(query RethinkQuery) (*Rows, error) {
 
 // buildProtobuf converts a query to a protobuf and catches any panics raised
 // by the protobuf functions.
-func buildProtobuf(ctx context, query RethinkQuery) (protobuf *p.Query, err error) {
+func buildProtobuf(ctx context, query Query) (queryProto *p.Query, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			if _, ok := r.(runtime.Error); ok {
@@ -230,12 +243,12 @@ func buildProtobuf(ctx context, query RethinkQuery) (protobuf *p.Query, err erro
 		}
 	}()
 
-	protobuf = query.toProtobuf(ctx)
+	queryProto = query.toProtobuf(ctx)
 	return
 }
 
-// RunSingle runs a query and scans the first result into the provided variable
-func (s *Session) RunSingle(query RethinkQuery, row interface{}) error {
+// RunOne runs a query and scans the first result into the provided variable
+func (s *Session) RunOne(query Query, row interface{}) error {
 	rows, err := s.Run(query)
 	if err != nil {
 		return err
@@ -245,7 +258,7 @@ func (s *Session) RunSingle(query RethinkQuery, row interface{}) error {
 		err = rows.Scan(row)
 		if err != nil {
 			if err == io.EOF {
-				return RethinkError{Err: ErrNoRows}
+				return Error{Err: ErrNoRows}
 			} else {
 				return err
 			}
@@ -255,15 +268,25 @@ func (s *Session) RunSingle(query RethinkQuery, row interface{}) error {
 	return rows.Err()
 }
 
+// RunOne runs a query and scans the first result into the provided variable
+func (s *Session) RunCollect(query Query, result interface{}) error {
+	rows, err := s.Run(query)
+	if err != nil {
+		return err
+	}
+
+	return rows.Collect(result)
+}
+
 // Internal run function, shared by Rows iterator and normal Run() call
 // Runs a protocol buffer formatted query, returns a list of strings and
 // a status code.
-func (s *Session) run(querybuf *p.Query, query RethinkQuery) (result []string, status p.Response_StatusCode, err error) {
+func (s *Session) run(queryProto *p.Query, query Query) (result []string, status p.Response_StatusCode, err error) {
 	if debugMode {
-		fmt.Printf("rethinkdb: query:\n%v", protobufToString(querybuf, 1))
+		fmt.Printf("rethinkdb: query:\n%v", protobufToString(queryProto, 1))
 	}
 
-	r, err := s.executeQuery(querybuf)
+	r, err := s.executeQuery(queryProto)
 	if err != nil {
 		return
 	}
@@ -283,7 +306,7 @@ func (s *Session) run(querybuf *p.Query, query RethinkQuery) (result []string, s
 		// nothing to do here, we'll end up returning a nil result
 	default:
 		// some sort of error
-		e := RethinkError{Response: r, Query: query}
+		e := Error{Response: r, Query: query}
 		switch status {
 		case p.Response_RUNTIME_ERROR:
 			e.Err = ErrRuntime
@@ -292,7 +315,7 @@ func (s *Session) run(querybuf *p.Query, query RethinkQuery) (result []string, s
 		case p.Response_BROKEN_CLIENT:
 			e.Err = ErrBrokenClient
 		default:
-			e.Err = fmt.Errorf("Unexpected status code from server: %v", r.StatusCode)
+			e.Err = fmt.Errorf("rethinkdb: Unexpected status code from server: %v", r.StatusCode)
 		}
 		err = e
 	}

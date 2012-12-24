@@ -6,13 +6,13 @@ import (
 	p "github.com/christopherhesse/rethinkgo/query_language"
 )
 
-type RethinkError struct {
+type Error struct {
 	Response *p.Response
-	Query    RethinkQuery
+	Query    Query
 	Err      error
 }
 
-func (e RethinkError) Error() string {
+func (e Error) Error() string {
 	if e.Response == nil {
 		return fmt.Sprintf("rethinkdb: %v", e.Err)
 	}
