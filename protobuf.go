@@ -19,6 +19,42 @@ type context struct {
 	useOutdated  bool
 }
 
+func (q MetaQuery) Run() (*Rows, error) {
+	return runLastSession(q)
+}
+
+func (q MetaQuery) RunOne(row interface{}) error {
+	return runOneLastSession(q, row)
+}
+
+func (q MetaQuery) RunCollect(rows interface{}) error {
+	return runCollectLastSession(q, rows)
+}
+
+func (q WriteQuery) Run() (*Rows, error) {
+	return runLastSession(q)
+}
+
+func (q WriteQuery) RunOne(row interface{}) error {
+	return runOneLastSession(q, row)
+}
+
+func (q WriteQuery) RunCollect(rows interface{}) error {
+	return runCollectLastSession(q, rows)
+}
+
+func (e Expression) Run() (*Rows, error) {
+	return runLastSession(e)
+}
+
+func (e Expression) RunOne(row interface{}) error {
+	return runOneLastSession(e, row)
+}
+
+func (q Expression) RunCollect(rows interface{}) error {
+	return runCollectLastSession(q, rows)
+}
+
 func (ctx context) toTerm(o interface{}) *p.Term {
 	e := Expr(o)
 	value := e.value
@@ -540,24 +576,6 @@ func (ctx context) toTableRef(table tableInfo) *p.TableRef {
 	}
 }
 
-func makeMetaQuery(queryType p.MetaQuery_MetaQueryType) *p.Query {
-	return &p.Query{
-		Type: p.Query_META.Enum(),
-		MetaQuery: &p.MetaQuery{
-			Type: queryType.Enum(),
-		},
-	}
-}
-
-func makeWriteQuery(queryType p.WriteQuery_WriteQueryType) *p.Query {
-	return &p.Query{
-		Type: p.Query_WRITE.Enum(),
-		WriteQuery: &p.WriteQuery{
-			Type: queryType.Enum(),
-		},
-	}
-}
-
 // toProtobuf converts a bare Expression directly to a read query protobuf
 func (e Expression) toProtobuf(ctx context) *p.Query {
 	return &p.Query{
@@ -570,43 +588,67 @@ func (e Expression) toProtobuf(ctx context) *p.Query {
 
 // toProtobuf converts a complete query to a protobuf
 func (q Query) toProtobuf(ctx context) *p.Query {
+	var metaQuery *p.MetaQuery
+
 	switch v := q.value.(type) {
 	case createDatabaseQuery:
-		query := makeMetaQuery(p.MetaQuery_CREATE_DB)
-		query.MetaQuery.DbName = proto.String(v.name)
-		return query
+		metaQuery = &p.MetaQuery{
+			Type:   p.MetaQuery_CREATE_DB.Enum(),
+			DbName: proto.String(v.name),
+		}
 
 	case dropDatabaseQuery:
-		query := makeMetaQuery(p.MetaQuery_DROP_DB)
-		query.MetaQuery.DbName = proto.String(v.name)
-		return query
+		metaQuery = &p.MetaQuery{
+			Type:   p.MetaQuery_DROP_DB.Enum(),
+			DbName: proto.String(v.name),
+		}
 
 	case listDatabasesQuery:
-		return makeMetaQuery(p.MetaQuery_LIST_DBS)
+		metaQuery = &p.MetaQuery{
+			Type: p.MetaQuery_LIST_DBS.Enum(),
+		}
 
 	case tableCreateQuery:
-		query := makeMetaQuery(p.MetaQuery_CREATE_TABLE)
-		query.MetaQuery.CreateTable = &p.MetaQuery_CreateTable{
-			PrimaryKey: protoStringOrNil(v.spec.PrimaryKey),
-			Datacenter: protoStringOrNil(v.spec.PrimaryDatacenter),
-			TableRef: &p.TableRef{
-				DbName:    proto.String(v.database.name),
-				TableName: proto.String(v.spec.Name),
+		metaQuery = &p.MetaQuery{
+			Type: p.MetaQuery_CREATE_TABLE.Enum(),
+			CreateTable: &p.MetaQuery_CreateTable{
+				PrimaryKey: protoStringOrNil(v.spec.PrimaryKey),
+				Datacenter: protoStringOrNil(v.spec.PrimaryDatacenter),
+				TableRef: &p.TableRef{
+					DbName:    proto.String(v.database.name),
+					TableName: proto.String(v.spec.Name),
+				},
+				CacheSize: protoInt64OrNil(v.spec.CacheSize),
 			},
-			CacheSize: protoInt64OrNil(v.spec.CacheSize),
 		}
-		return query
 
 	case tableListQuery:
-		query := makeMetaQuery(p.MetaQuery_LIST_TABLES)
-		query.MetaQuery.DbName = proto.String(v.database.name)
-		return query
+		metaQuery = &p.MetaQuery{
+			Type:   p.MetaQuery_LIST_TABLES.Enum(),
+			DbName: proto.String(v.database.name),
+		}
 
 	case tableDropQuery:
-		query := makeMetaQuery(p.MetaQuery_DROP_TABLE)
-		query.MetaQuery.DropTable = ctx.toTableRef(v.table)
-		return query
+		metaQuery = &p.MetaQuery{
+			Type:      p.MetaQuery_DROP_TABLE.Enum(),
+			DropTable: ctx.toTableRef(v.table),
+		}
 
+	default:
+		// write query
+		return ctx.writeQueryToProtobuf(q)
+	}
+
+	return &p.Query{
+		Type:      p.Query_META.Enum(),
+		MetaQuery: metaQuery,
+	}
+}
+
+func (ctx context) writeQueryToProtobuf(query Query) *p.Query {
+	var writeQuery *p.WriteQuery
+
+	switch v := query.value.(type) {
 	case insertQuery:
 		var terms []*p.Term
 		for _, row := range v.rows {
@@ -618,14 +660,14 @@ func (q Query) toProtobuf(ctx context) *p.Query {
 			panic("Inserts can only be performed on tables :(")
 		}
 
-		query := makeWriteQuery(p.WriteQuery_INSERT)
-
-		query.WriteQuery.Insert = &p.WriteQuery_Insert{
-			TableRef:  ctx.toTableRef(table),
-			Terms:     terms,
-			Overwrite: proto.Bool(v.overwrite),
+		writeQuery = &p.WriteQuery{
+			Type: p.WriteQuery_INSERT.Enum(),
+			Insert: &p.WriteQuery_Insert{
+				TableRef:  ctx.toTableRef(table),
+				Terms:     terms,
+				Overwrite: proto.Bool(query.overwrite),
+			},
 		}
-		return query
 
 	case updateQuery:
 		view := ctx.toTerm(v.view)
@@ -633,69 +675,69 @@ func (q Query) toProtobuf(ctx context) *p.Query {
 
 		if view.GetType() == p.Term_GETBYKEY {
 			// this is chained off of a .Get(), do a POINTUPDATE
-			query := makeWriteQuery(p.WriteQuery_POINTUPDATE)
-
-			query.WriteQuery.PointUpdate = &p.WriteQuery_PointUpdate{
-				TableRef: view.GetByKey.TableRef,
-				Attrname: view.GetByKey.Attrname,
-				Key:      view.GetByKey.Key,
-				Mapping:  mapping,
+			writeQuery = &p.WriteQuery{
+				Type: p.WriteQuery_POINTUPDATE.Enum(),
+				PointUpdate: &p.WriteQuery_PointUpdate{
+					TableRef: view.GetByKey.TableRef,
+					Attrname: view.GetByKey.Attrname,
+					Key:      view.GetByKey.Key,
+					Mapping:  mapping,
+				},
 			}
-			return query
+		} else {
+			writeQuery = &p.WriteQuery{
+				Type: p.WriteQuery_UPDATE.Enum(),
+				Update: &p.WriteQuery_Update{
+					View:    view,
+					Mapping: mapping,
+				},
+			}
 		}
-
-		query := makeWriteQuery(p.WriteQuery_UPDATE)
-
-		query.WriteQuery.Update = &p.WriteQuery_Update{
-			View:    view,
-			Mapping: mapping,
-		}
-		return query
 
 	case replaceQuery:
 		view := ctx.toTerm(v.view)
 		mapping := ctx.toMapping(v.mapping)
 
 		if view.GetType() == p.Term_GETBYKEY {
-			query := makeWriteQuery(p.WriteQuery_POINTMUTATE)
-
-			query.WriteQuery.PointMutate = &p.WriteQuery_PointMutate{
-				TableRef: view.GetByKey.TableRef,
-				Attrname: view.GetByKey.Attrname,
-				Key:      view.GetByKey.Key,
-				Mapping:  mapping,
+			writeQuery = &p.WriteQuery{
+				Type: p.WriteQuery_POINTMUTATE.Enum(),
+				PointMutate: &p.WriteQuery_PointMutate{
+					TableRef: view.GetByKey.TableRef,
+					Attrname: view.GetByKey.Attrname,
+					Key:      view.GetByKey.Key,
+					Mapping:  mapping,
+				},
 			}
-			return query
+		} else {
+			writeQuery = &p.WriteQuery{
+				Type: p.WriteQuery_MUTATE.Enum(),
+				Mutate: &p.WriteQuery_Mutate{
+					View:    view,
+					Mapping: mapping,
+				},
+			}
 		}
-
-		query := makeWriteQuery(p.WriteQuery_MUTATE)
-
-		query.WriteQuery.Mutate = &p.WriteQuery_Mutate{
-			View:    view,
-			Mapping: mapping,
-		}
-		return query
 
 	case deleteQuery:
 		view := ctx.toTerm(v.view)
 
 		if view.GetType() == p.Term_GETBYKEY {
-			query := makeWriteQuery(p.WriteQuery_POINTDELETE)
-
-			query.WriteQuery.PointDelete = &p.WriteQuery_PointDelete{
-				TableRef: view.GetByKey.TableRef,
-				Attrname: view.GetByKey.Attrname,
-				Key:      view.GetByKey.Key,
+			writeQuery = &p.WriteQuery{
+				Type: p.WriteQuery_POINTDELETE.Enum(),
+				PointDelete: &p.WriteQuery_PointDelete{
+					TableRef: view.GetByKey.TableRef,
+					Attrname: view.GetByKey.Attrname,
+					Key:      view.GetByKey.Key,
+				},
 			}
-			return query
+		} else {
+			writeQuery = &p.WriteQuery{
+				Type: p.WriteQuery_DELETE.Enum(),
+				Delete: &p.WriteQuery_Delete{
+					View: view,
+				},
+			}
 		}
-
-		query := makeWriteQuery(p.WriteQuery_DELETE)
-
-		query.WriteQuery.Delete = &p.WriteQuery_Delete{
-			View: view,
-		}
-		return query
 
 	case forEachQuery:
 		stream := ctx.toTerm(v.stream)
@@ -707,14 +749,22 @@ func (q Query) toProtobuf(ctx context) *p.Query {
 			panic("ForEach query function must generate a write query")
 		}
 
-		query := makeWriteQuery(p.WriteQuery_FOREACH)
-
-		query.WriteQuery.ForEach = &p.WriteQuery_ForEach{
-			Stream:  stream,
-			Var:     proto.String(name),
-			Queries: []*p.WriteQuery{innerQuery.WriteQuery},
+		writeQuery = &p.WriteQuery{
+			Type: p.WriteQuery_FOREACH.Enum(),
+			ForEach: &p.WriteQuery_ForEach{
+				Stream:  stream,
+				Var:     proto.String(name),
+				Queries: []*p.WriteQuery{innerQuery.WriteQuery},
+			},
 		}
-		return query
+	default:
+		panic("Unknown query type")
 	}
-	panic("Unknown query type")
+
+	writeQuery.Atomic = proto.Bool(!query.nonatomic)
+
+	return &p.Query{
+		Type:       p.Query_WRITE.Enum(),
+		WriteQuery: writeQuery,
+	}
 }

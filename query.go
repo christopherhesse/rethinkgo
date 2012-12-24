@@ -82,6 +82,19 @@ const (
 	lessThanOrEqualKind
 )
 
+// Query is the interface for queries that can be .Run(), this includes
+// Expression (run as a read query), MetaQuery, and WriteQuery
+// returned by any call that terminates a query (for instance,
+// .Insert()), and provides .Run() and .RunSingle() methods to run the Query on
+// the last created connection.  Methods that generate a query are generally
+// located on Expression objects.
+type Query interface {
+	toProtobuf(context) *p.Query // will panic on errors
+	Run() (*Rows, error)
+	RunOne(interface{}) error
+	RunCollect(interface{}) error
+}
+
 // Expression represents an RQL expression, such as .Filter(), which, when
 // called on another expression, filters the results of that expression when run
 // on the server.  It is used as the argument type of any functions used in RQL.
@@ -97,17 +110,23 @@ const (
 // The func() object as well as the '1' constant could each be wrapped in an
 // Expr() call but that is done automatically by this library.
 type Expression struct {
-	kind  expressionKind
 	value interface{}
+	kind  expressionKind // TODO: can this be removed? just use types?
 }
 
-// Query is the type returned by any call that terminates a query (for instance,
-// .Insert()), and provides .Run() and .RunSingle() methods to run the Query on
-// the last created connection.  Methods that generate a query are generally
-// located on Expression objects.
-type Query struct {
+// WriteQuery is the type returned by any method that writes to a table, this
+// includes .Insert(), .Update(), .Delete(), .ForEach(), and .Replace()
+type WriteQuery struct {
 	value     interface{}
 	nonatomic bool
+	overwrite bool // for insert query
+}
+
+// MetaQuery is the type returned by methods that create/modify/delete
+// databases, this includes .TableCreate(), .TableList(), .TableDrop(),
+// .DbCreate(), .DbList(), and .DbDrop()
+type MetaQuery struct {
+	value interface{}
 }
 
 // Row supplies access to the current row in any query, even if there's no go
@@ -680,8 +699,8 @@ type createDatabaseQuery struct {
 // Example response:
 //
 //  nil
-func DbCreate(name string) Query {
-	return Query{createDatabaseQuery{name}}
+func DbCreate(name string) MetaQuery {
+	return MetaQuery{query: createDatabaseQuery{name}}
 }
 
 type dropDatabaseQuery struct {
@@ -697,8 +716,8 @@ type dropDatabaseQuery struct {
 // Example response:
 //
 //  nil
-func DbDrop(name string) Query {
-	return Query{dropDatabaseQuery{name}}
+func DbDrop(name string) MetaQuery {
+	return MetaQuery{query: dropDatabaseQuery{name}}
 }
 
 type listDatabasesQuery struct{}
@@ -714,8 +733,8 @@ type listDatabasesQuery struct{}
 // Example response:
 //
 //  []string{"test", "company"}
-func DbList() Query {
-	return Query{listDatabasesQuery{}}
+func DbList() MetaQuery {
+	return MetaQuery{query: listDatabasesQuery{}}
 }
 
 type database struct {
@@ -752,9 +771,9 @@ type TableSpec struct {
 // Example response:
 //
 //  nil
-func (db database) TableCreate(name string) Query {
+func (db database) TableCreate(name string) MetaQuery {
 	spec := TableSpec{Name: name}
-	return Query{tableCreateQuery{spec: spec, database: db}}
+	return MetaQuery{query: tableCreateQuery{spec: spec, database: db}}
 }
 
 // TableCreateSpec creates a table with the specified attributes.
@@ -767,8 +786,8 @@ func (db database) TableCreate(name string) Query {
 // Example response:
 //
 //  nil
-func (db database) TableCreateSpec(spec TableSpec) Query {
-	return Query{tableCreateQuery{spec: spec, database: db}}
+func (db database) TableCreateSpec(spec TableSpec) MetaQuery {
+	return MetaQuery{query: tableCreateQuery{spec: spec, database: db}}
 }
 
 type tableListQuery struct {
@@ -776,8 +795,8 @@ type tableListQuery struct {
 }
 
 // List all tables in this database
-func (db database) TableList() Query {
-	return Query{tableListQuery{db}}
+func (db database) TableList() MetaQuery {
+	return MetaQuery{query: tableListQuery{db}}
 }
 
 type tableDropQuery struct {
@@ -785,12 +804,12 @@ type tableDropQuery struct {
 }
 
 // Drop a table from a database
-func (db database) TableDrop(name string) Query {
+func (db database) TableDrop(name string) MetaQuery {
 	table := tableInfo{
 		name:     name,
 		database: db,
 	}
-	return Query{tableDropQuery{table: table}}
+	return MetaQuery{query: tableDropQuery{table: table}}
 }
 
 type tableInfo struct {
@@ -813,42 +832,38 @@ func Table(name string) Expression {
 	return Expression{kind: tableKind, value: value}
 }
 
-// Write Queries
-
 type insertQuery struct {
 	tableExpr Expression
 	rows      []interface{}
 	overwrite bool
 }
 
-func (e Expression) Insert(rows ...interface{}) Query {
+func (e Expression) Insert(rows ...interface{}) WriteQuery {
 	// Assume the expression is a table for now, we'll check later in buildProtobuf
-	return Query{insertQuery{
+	return WriteQuery{query: insertQuery{
 		tableExpr: e,
 		rows:      rows,
 		overwrite: false,
 	}}
 }
 
-// TODO: how to make this work - could make it runtime type-assert Query
-// could also have a .Run() specifically defined for InsertQuery
-// could also have .InsertOverwrite() or .Overwrite() instead of .Insert()
-// func (q InsertQuery) Overwrite(overwrite bool) InsertQuery {
-//  q.overwrite = overwrite
-//  return q
-// }
-// TODO: need some way to set atomic on write queries
-//
-// func (q Query) Atomic(false) Query {
-// }
+func (q WriteQuery) Overwrite(overwrite bool) WriteQuery {
+	q.overwrite = overwrite
+	return q
+}
+
+func (q WriteQuery) Atomic(atomic bool) WriteQuery {
+	q.nonatomic = !atomic
+	return q
+}
 
 type updateQuery struct {
 	view    Expression
 	mapping interface{}
 }
 
-func (e Expression) Update(mapping interface{}) Query {
-	return Query{updateQuery{
+func (e Expression) Update(mapping interface{}) WriteQuery {
+	return WriteQuery{query: updateQuery{
 		view:    e,
 		mapping: mapping,
 	}}
@@ -859,8 +874,8 @@ type replaceQuery struct {
 	mapping interface{}
 }
 
-func (e Expression) Replace(mapping interface{}) Query {
-	return Query{replaceQuery{
+func (e Expression) Replace(mapping interface{}) WriteQuery {
+	return WriteQuery{query: replaceQuery{
 		view:    e,
 		mapping: mapping,
 	}}
@@ -870,15 +885,15 @@ type deleteQuery struct {
 	view Expression
 }
 
-func (e Expression) Delete() Query {
-	return Query{deleteQuery{view: e}}
+func (e Expression) Delete() WriteQuery {
+	return WriteQuery{query: deleteQuery{view: e}}
 }
 
 type forEachQuery struct {
 	stream    Expression
-	queryFunc func(Expression) RethinkQuery
+	queryFunc func(Expression) Query
 }
 
-func (e Expression) ForEach(queryFunc (func(Expression) RethinkQuery)) Query {
-	return Query{forEachQuery{stream: e, queryFunc: queryFunc}}
+func (e Expression) ForEach(queryFunc (func(Expression) Query)) WriteQuery {
+	return WriteQuery{query: forEachQuery{stream: e, queryFunc: queryFunc}}
 }

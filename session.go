@@ -307,38 +307,23 @@ func getBacktraceFrames(response *p.Response) []string {
 	return bt.Frame
 }
 
-// RethinkQuery is an interface that all queries must implement to be sent to
-// the database.
-type RethinkQuery interface {
-	toProtobuf(context) *p.Query
-}
-
-func runLastSession(query RethinkQuery) (*Rows, error) {
+func runLastSession(query Query) (*Rows, error) {
 	if LastSession == nil {
-		return nil, RethinkError{Err: ErrNoDb}
+		return nil, Error{Err: ErrNoDb}
 	}
 	return LastSession.Run(query)
 }
 
-func runSingleLastSession(query RethinkQuery, row interface{}) error {
+func runOneLastSession(query Query, row interface{}) error {
 	if LastSession == nil {
-		return RethinkError{Err: ErrNoDb}
+		return Error{Err: ErrNoDb}
 	}
-	return LastSession.RunSingle(query, row)
+	return LastSession.RunOne(query, row)
 }
 
-func (q Query) Run() (*Rows, error) {
-	return runLastSession(q)
-}
-
-func (q Query) RunSingle(row interface{}) error {
-	return runSingleLastSession(q, row)
-}
-
-func (e Expression) Run() (*Rows, error) {
-	return runLastSession(e)
-}
-
-func (e Expression) RunSingle(row interface{}) error {
-	return runSingleLastSession(e, row)
+func runCollectLastSession(query Query, rows interface{}) error {
+	if LastSession == nil {
+		return Error{Err: ErrNoDb}
+	}
+	return LastSession.RunCollect(query, rows)
 }

@@ -129,7 +129,7 @@ func TestQueries(t *testing.T) {
 		// Expr([]int{1, 2, 2, 3, 2, 2}).ArrayToStream().Distinct(),
 		// Db("test").Table("dc").Insert(map[string]interface{}{"name": "Unknown", "strength": 1}),
 		// Db("test").Table("dc").Insert(dcCharacter),
-		Table("employees").Update(Map{"awesomeness": JS(`row.awesomeness + 1`)}),
+		Table("employees").Update(Map{"awesomeness": JS(`row.awesomeness + 1`)}).Atomic(false),
 		// Table("employees").Update(Map{"awesomeness": Row.Attr("awesomeness").Add(1)}),
 
 		// Db("test").Table("marvel").GetById("e62a977a-5f03-4f86-95f6-1fc59d10459d").Update(map[string]interface{}{"age": 29}),
@@ -155,6 +155,8 @@ func TestQueries(t *testing.T) {
 
 	// spec := TableSpec{Name: "employees", PrimaryKey: "userid"}
 	// rows, err := Db("company").TableCreateSpec(spec).Run()
+	// TableCreate("employees").SetPrimaryKey("userid")
+
 	// rows, err := Db("company").TableList().Run()
 	// rows, err := DbList().Run()
 	// var databases []string
