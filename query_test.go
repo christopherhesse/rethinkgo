@@ -15,8 +15,10 @@ import (
 // Global expressions used in tests
 var arr = Expr(1, 2, 3, 4, 5, 6)
 var tobj = Expr(Map{"a": 1, "b": 2, "c": 3})
-var tab = Table("test")
+var tab = Table("table1")
 var tab2 = Table("table2")
+var tbl = Table("table3")
+var tbl4 = Table("table4")
 var gobj = Expr(List{
 	Map{"g1": 1, "g2": 1, "num": 0},
 	Map{"g1": 1, "g2": 2, "num": 5},
@@ -28,7 +30,6 @@ var j1 = Table("joins1")
 var j2 = Table("joins2")
 var j3 = Table("joins3")
 var docs []Map
-var tbl = Table("table3")
 
 // Hook up gocheck into the gotest runner.
 func Test(t *testing.T) { TestingT(t) }
@@ -53,7 +54,7 @@ func resetDatabase(c *C) {
 	_, err := DbCreate("test").Run()
 	c.Assert(err, IsNil)
 
-	_, err = Db("test").TableCreate("test").Run()
+	_, err = Db("test").TableCreate("table1").Run()
 	c.Assert(err, IsNil)
 
 	pair := ExpectPair{tab.Insert(Map{"id": 0, "num": 20}), Map{"inserted": 1, "errors": 0}}
@@ -87,6 +88,9 @@ func resetDatabase(c *C) {
 	}
 
 	tbl.Insert(docs).Run()
+
+	_, err = Db("test").TableCreate("table4").Run()
+	c.Assert(err, IsNil)
 
 	// joins tables
 	s1 := List{
@@ -259,13 +263,25 @@ var testSimpleGroups = map[string][]ExpectPair{
 		{Expr(1, 1, 2, 3, 3, 3, 3).Distinct(), List{1, 2, 3}},
 	},
 	"map": {
-		{arr.Map(func(a Expression) Expression { return a.Add(1) }).Nth(2), 4},
+		{arr.Map(func(a Expression) Expression {
+			return a.Add(1)
+		}).Nth(2),
+			4,
+		},
 	},
 	"reduce": {
-		{arr.Reduce(0, func(a, b Expression) Expression { return a.Add(b) }), 21},
+		{arr.Reduce(0, func(a, b Expression) Expression {
+			return a.Add(b)
+		}),
+			21,
+		},
 	},
 	"filter": {
-		{arr.Filter(func(val Expression) Expression { return val.Lt(3) }).Count(), 2},
+		{arr.Filter(func(val Expression) Expression {
+			return val.Lt(3)
+		}).Count(),
+			2,
+		},
 	},
 	"contains": {
 		{tobj.Contains("a"), true},
@@ -308,7 +324,11 @@ var testSimpleGroups = map[string][]ExpectPair{
 		{tab.Union(tab).Count().Eq(tab.Count().Mul(2)), true},
 	},
 	"tablefilter": {
-		{tab.Filter(func(row Expression) Expression { return row.Attr("num").Gt(16) }).Count(), 4},
+		{tab.Filter(func(row Expression) Expression {
+			return row.Attr("num").Gt(16)
+		}).Count(),
+			4,
+		},
 		{tab.Filter(Row.Attr("num").Gt(16)).Count(), 4},
 		{tab.Filter(Map{"num": 16}).Nth(0), Map{"id": 4, "num": 16}},
 		{tab.Filter(Map{"num": Expr(20).Sub(Row.Attr("id"))}).Count(), 10},
@@ -320,13 +340,19 @@ var testSimpleGroups = map[string][]ExpectPair{
 		{tab.Map(Row.Attr("num")).Reduce(0, func(a, b Expression) Expression { return b.Add(a) }), 155},
 	},
 	"tablechain": {
-		{tab.Filter(func(row Expression) Expression { return Row.Attr("num").Gt(16) }).Count(), 4},
+		{tab.Filter(func(row Expression) Expression {
+			return Row.Attr("num").Gt(16)
+		}).Count(),
+			4,
+		},
 
 		{tab.Map(func(row Expression) Expression {
 			return Row.Attr("num").Add(2)
 		}).Filter(func(val Expression) Expression {
 			return val.Gt(16)
-		}).Count(), 6},
+		}).Count(),
+			6,
+		},
 
 		{tab.Filter(func(row Expression) Expression {
 			return Row.Attr("num").Gt(16)
@@ -334,7 +360,9 @@ var testSimpleGroups = map[string][]ExpectPair{
 			return row.Attr("num").Mul(4)
 		}).Reduce(0, func(acc, val Expression) Expression {
 			return acc.Add(val)
-		}), 296},
+		}),
+			296,
+		},
 	},
 	"between": {
 		{tab.BetweenIds(2, 3).Count(), 2},
@@ -496,6 +524,11 @@ var testSimpleGroups = map[string][]ExpectPair{
 		},
 	},
 	"nonatomic": {
+		{tbl.Update(func(row Expression) interface{} {
+			return Map{"count": 0}
+		}),
+			MatchMap{"updated": 10},
+		},
 		{tbl.Update(func(row Expression) interface{} {
 			return Map{"x": JS(`1`)}
 		}),
@@ -678,53 +711,67 @@ var testSimpleGroups = map[string][]ExpectPair{
 		}),
 			7,
 		},
-		// {tbl.GetById(0).Replace(
-		// 	Map{
-		// 		"id":    0,
-		// 		"count": tbl.GetById(3).Attr("count"),
-		// 		"x":     tbl.GetById(3).Attr("x"),
-		// 	}),
-		// 	ErrorResponse{},
-		// },
-		// {tbl.GetById(0).Replace(
-		// 	Map{
-		// 		"id":    0,
-		// 		"count": tbl.GetById(3).Attr("count"),
-		// 		"x":     tbl.GetById(3).Attr("x"),
-		// 	}).Atomic(false),
-		// 	MatchMap{"inserted": 1},
-		// },
-		// tbl.get(1).replace(tbl.get(3).merge({id:1})).run(atype(rerr));
-		// tbl.get(1).replace(tbl.get(3).merge({id:1}), true).run(attreq('inserted', 1));
-		// tbl.get(2).replace(tbl.get(1).merge({id:2}), true).run(attreq('inserted', 1));
-		// {tbl.Map(func(a Expression) Expression {
-		// 	return a.Attr("x")
-		// }).Reduce(0, func(a, b Expression) Expression {
-		// 	return a.Add(b)
-		// }),
-		// 	10,
-		// },
+		{tbl.GetById(0).Replace(
+			Map{
+				"id":    0,
+				"count": tbl.GetById(3).Attr("count"),
+				"x":     tbl.GetById(3).Attr("x"),
+			}),
+			ErrorResponse{},
+		},
+		{tbl.GetById(0).Replace(
+			Map{
+				"id":    0,
+				"count": tbl.GetById(3).Attr("count"),
+				"x":     tbl.GetById(3).Attr("x"),
+			}).Atomic(false),
+			MatchMap{"inserted": 1},
+		},
+		{tbl.GetById(1).Replace(
+			tbl.GetById(3).Merge(Map{"id": 1}),
+		),
+			ErrorResponse{},
+		},
+		{tbl.GetById(1).Replace(
+			tbl.GetById(3).Merge(Map{"id": 1}),
+		).Atomic(false),
+			MatchMap{"inserted": 1},
+		},
+		{tbl.GetById(2).Replace(
+			tbl.GetById(1).Merge(Map{"id": 2}),
+		).Atomic(false),
+			MatchMap{"inserted": 1},
+		},
+		{tbl.Map(func(a Expression) Expression {
+			return a.Attr("x")
+		}).Reduce(0, func(a, b Expression) Expression {
+			return a.Add(b)
+		}),
+			10,
+		},
+	},
+	"delete": {
+		{tab.GetById(0).Delete(),
+			MatchMap{"deleted": 1},
+		},
+		{tab.Count(),
+			9,
+		},
+		{tab.Delete(),
+			MatchMap{"deleted": 9},
+		},
+		{tab.Count(),
+			0,
+		},
+	},
+	"foreach": {
+		{Expr(1, 2, 3).ForEach(func(a Expression) Query {
+			return tbl4.Insert(Map{"id": a, "fe": true})
+		}),
+			MatchMap{"inserted": 3},
+		},
 	},
 }
-
-// function testPointDelete1() {
-//     tab.get(0).del().run(objeq({
-//         deleted:1
-//     }));
-// }
-
-// function testPointDelete2() {
-//     tab.count().run(aeq(9));
-// }
-
-// function testDelete1() {
-//     tab.count().run(aeq(9));
-//     tab.del().run(objeq({deleted:9}));
-// }
-
-// function testDelete2() {
-//     tab.count().run(aeq(0));
-// }
 
 // function testForEach1() {
 //     r([1,2,3]).forEach(function(a) {return tab.insert({id:a, fe:true})}).run(objeq({
@@ -835,23 +882,23 @@ var testStreamGroups = map[string][]ExpectPair{
 
 func (s *RethinkSuite) TestGroups(c *C) {
 	for group, pairs := range testSimpleGroups {
-		fmt.Println("group:", group)
-		if group != "nonatomic" {
+		if group != "foreach" {
 			continue
 		}
-		for _, pair := range pairs {
+		for index, pair := range pairs {
+			fmt.Println("group:", group, index)
 			runSimpleQuery(c, pair)
 		}
 		resetDatabase(c)
 	}
 
-	for group, pairs := range testStreamGroups {
-		fmt.Println("group:", group)
-		for _, pair := range pairs {
-			runStreamQuery(c, pair)
-		}
-		resetDatabase(c)
-	}
+	// for group, pairs := range testStreamGroups {
+	// 	for index, pair := range pairs {
+	// 		fmt.Println("group:", group, index)
+	// 		runStreamQuery(c, pair)
+	// 	}
+	// 	resetDatabase(c)
+	// }
 }
 
 func (s *RethinkSuite) TestGet(c *C) {
