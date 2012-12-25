@@ -435,7 +435,7 @@ func (ctx context) compileGoFunc(f interface{}, requiredArgs int) (params []stri
 
 func (ctx context) compileExpressionFunc(e Expression, requiredArgs int) (params []string, body *p.Term) {
 	// an expression that takes no args, e.g. Row.Attr("name") or
-	// possibly a Javascript function JS(`row.key`) which does take args
+	// possibly a Javascript function Js(`row.key`) which does take args
 	body = ctx.toTerm(e)
 	switch requiredArgs {
 	case 0:

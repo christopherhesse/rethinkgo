@@ -486,7 +486,7 @@ var testSimpleGroups = map[string][]ExpectPair{
 	},
 	"det": {
 		{tbl3.Update(func(row Expression) interface{} {
-			return Map{"count": JS(`0`)}
+			return Map{"count": Js(`0`)}
 		}),
 			MatchMap{"errors": 10},
 		},
@@ -527,12 +527,12 @@ var testSimpleGroups = map[string][]ExpectPair{
 			MatchMap{"updated": 10},
 		},
 		{tbl3.Update(func(row Expression) interface{} {
-			return Map{"x": JS(`1`)}
+			return Map{"x": Js(`1`)}
 		}),
 			MatchMap{"errors": 10},
 		},
 		{tbl3.Update(func(row Expression) interface{} {
-			return Map{"x": JS(`1`)}
+			return Map{"x": Js(`1`)}
 		}).Atomic(false),
 			MatchMap{"updated": 10},
 		},
@@ -544,12 +544,12 @@ var testSimpleGroups = map[string][]ExpectPair{
 			10,
 		},
 		{tbl3.GetById(0).Update(func(row Expression) interface{} {
-			return Map{"x": JS(`1`)}
+			return Map{"x": Js(`1`)}
 		}),
 			ErrorResponse{},
 		},
 		{tbl3.GetById(0).Update(func(row Expression) interface{} {
-			return Map{"x": JS(`2`)}
+			return Map{"x": Js(`2`)}
 		}).Atomic(false),
 			MatchMap{"updated": 1},
 		},
@@ -561,12 +561,12 @@ var testSimpleGroups = map[string][]ExpectPair{
 			11,
 		},
 		{tbl3.Update(func(row Expression) interface{} {
-			return Map{"x": JS(`x`)}
+			return Map{"x": Js(`x`)}
 		}),
 			MatchMap{"errors": 10},
 		},
 		{tbl3.Update(func(row Expression) interface{} {
-			return Map{"x": JS(`x`)}
+			return Map{"x": Js(`x`)}
 		}).Atomic(false),
 			MatchMap{"errors": 10},
 		},
@@ -578,12 +578,12 @@ var testSimpleGroups = map[string][]ExpectPair{
 			11,
 		},
 		{tbl3.GetById(0).Update(func(row Expression) interface{} {
-			return Map{"x": JS(`x`)}
+			return Map{"x": Js(`x`)}
 		}),
 			ErrorResponse{},
 		},
 		{tbl3.GetById(0).Update(func(row Expression) interface{} {
-			return Map{"x": JS(`x`)}
+			return Map{"x": Js(`x`)}
 		}).Atomic(false),
 			ErrorResponse{},
 		},
@@ -595,12 +595,12 @@ var testSimpleGroups = map[string][]ExpectPair{
 			11,
 		},
 		{tbl3.Update(func(row Expression) interface{} {
-			return Branch(JS(`true`), nil, Map{"x": 0.1})
+			return Branch(Js(`true`), nil, Map{"x": 0.1})
 		}),
 			MatchMap{"errors": 10},
 		},
 		{tbl3.Update(func(row Expression) interface{} {
-			return Branch(JS(`true`), nil, Map{"x": 0.1})
+			return Branch(Js(`true`), nil, Map{"x": 0.1})
 		}).Atomic(false),
 			MatchMap{"skipped": 10},
 		},
@@ -612,12 +612,12 @@ var testSimpleGroups = map[string][]ExpectPair{
 			11,
 		},
 		{tbl3.GetById(0).Replace(func(row Expression) interface{} {
-			return Branch(JS(`true`), row, nil)
+			return Branch(Js(`true`), row, nil)
 		}),
 			ErrorResponse{},
 		},
 		{tbl3.GetById(0).Replace(func(row Expression) interface{} {
-			return Branch(JS(`true`), row, nil)
+			return Branch(Js(`true`), row, nil)
 		}).Atomic(false),
 			MatchMap{"modified": 1},
 		},
@@ -630,7 +630,7 @@ var testSimpleGroups = map[string][]ExpectPair{
 		},
 		{tbl3.Replace(
 			Fn("rowA", Branch(
-				JS("rowA.id == 1"),
+				Js("rowA.id == 1"),
 				LetVar("rowA").Merge(Map{"x": 2}),
 				LetVar("rowA"),
 			))),
@@ -638,7 +638,7 @@ var testSimpleGroups = map[string][]ExpectPair{
 		},
 		{tbl3.Replace(
 			Fn("rowA", Branch(
-				JS("rowA.id == 1"),
+				Js("rowA.id == 1"),
 				LetVar("rowA").Merge(Map{"x": 2}),
 				LetVar("rowA"),
 			))).Atomic(false),
@@ -652,12 +652,12 @@ var testSimpleGroups = map[string][]ExpectPair{
 			12,
 		},
 		{tbl3.GetById(0).Replace(func(row Expression) interface{} {
-			return Branch(JS(`x`), row, nil)
+			return Branch(Js(`x`), row, nil)
 		}),
 			ErrorResponse{},
 		},
 		{tbl3.GetById(0).Replace(func(row Expression) interface{} {
-			return Branch(JS(`x`), row, nil)
+			return Branch(Js(`x`), row, nil)
 		}).Atomic(false),
 			ErrorResponse{},
 		},
@@ -669,12 +669,12 @@ var testSimpleGroups = map[string][]ExpectPair{
 			12,
 		},
 		{tbl3.GetById(0).Replace(func(row Expression) interface{} {
-			return Branch(JS(`true`), nil, row)
+			return Branch(Js(`true`), nil, row)
 		}),
 			ErrorResponse{},
 		},
 		{tbl3.GetById(0).Replace(func(row Expression) interface{} {
-			return Branch(JS(`true`), nil, row)
+			return Branch(Js(`true`), nil, row)
 		}).Atomic(false),
 			MatchMap{"deleted": 1},
 		},
@@ -687,7 +687,7 @@ var testSimpleGroups = map[string][]ExpectPair{
 		},
 		{tbl3.Replace(
 			Fn("rowA", Branch(
-				JS("rowA.id < 3"),
+				Js("rowA.id < 3"),
 				nil,
 				LetVar("rowA"),
 			))),
@@ -695,7 +695,7 @@ var testSimpleGroups = map[string][]ExpectPair{
 		},
 		{tbl3.Replace(
 			Fn("rowA", Branch(
-				JS("rowA.id < 3"),
+				Js("rowA.id < 3"),
 				nil,
 				LetVar("rowA"),
 			))).Atomic(false),

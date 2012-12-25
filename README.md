@@ -24,7 +24,7 @@ Example
 
     func main() {
         rc, _ := r.Connect("localhost:28015", "test")
-        query := r.Expr([]int{1, 2, 3}).ArrayToStream().Map(r.JS(`row*2`))
+        query := r.Expr([]int{1, 2, 3}).ArrayToStream().Map(r.Js(`row*2`))
         rows, _ := rc.Run(query)
 
         var result int

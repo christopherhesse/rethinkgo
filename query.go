@@ -174,10 +174,10 @@ func Expr(values ...interface{}) Expression {
 //
 // Example usage:
 //
-//  r.Table("employees").Map(r.JS(`this.first_name[0] + ' Fucking ' + this.last_name[0]`))
-//  r.JS(`[1,2,3]`) // (same effect as r.Expr(1,2,3))
-//  r.JS(`({name: 2})`) // Parens are required here, otherwise eval() thinks it's a block.
-func JS(body string) Expression {
+//  r.Table("employees").Map(r.Js(`this.first_name[0] + ' Fucking ' + this.last_name[0]`))
+//  r.Js(`[1,2,3]`) // (same effect as r.Expr(1,2,3))
+//  r.Js(`({name: 2})`) // Parens are required here, otherwise eval() thinks it's a block.
+func Js(body string) Expression {
 	return Expression{kind: javascriptKind, value: body}
 }
 
@@ -257,7 +257,7 @@ type ifArgs struct {
 //  // RQL expression
 //  r.Branch(r.Row.Attr("first_name").Eq("Marc"), "is probably marc", "who cares")
 //  // Equivalent Javascript expression
-//  r.JS(`this.first_name == "Marc" ? "is probably marc" : "who cares"`)
+//  r.Js(`this.first_name == "Marc" ? "is probably marc" : "who cares"`)
 func Branch(test, trueBranch, falseBranch interface{}) Expression {
 	value := ifArgs{
 		test:        test,
@@ -307,9 +307,9 @@ type groupByArgs struct {
 // r.Avg(attribute), r.Sum(attribute) or a user-built object:
 //
 //  gmr := r.GroupedMapReduce{
-//      Mapping: r.JS(`this.awesomeness`),
+//      Mapping: r.Js(`this.awesomeness`),
 //      Base: 0,
-//      Reduction: r.JS(`acc + row`),
+//      Reduction: r.Js(`acc + row`),
 //      Finalizer: nil,
 //  }
 //  r.Table("employees").GroupBy("awesomeness", gmr)
