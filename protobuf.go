@@ -10,6 +10,7 @@ import (
 	"fmt"
 	p "github.com/christopherhesse/rethinkgo/query_language"
 	"reflect"
+	"strings"
 )
 
 // Expressions contain some state that is required when converting them to
@@ -436,11 +437,17 @@ func (ctx context) compileExpressionFunc(e Expression, requiredArgs int) (params
 	return
 }
 
-func (ctx context) compileFunction(o interface{}, requiredArgs int) (params []string, body *p.Term) {
+func (ctx context) compileFunction(o interface{}, requiredArgs int) ([]string, *p.Term) {
 	e := Expr(o)
 
 	if e.kind == literalKind && reflect.ValueOf(e.value).Kind() == reflect.Func {
 		return ctx.compileGoFunc(e.value, requiredArgs)
+	}
+
+	if e.kind == functionKind {
+		fnArgs := e.value.(fnArgs)
+		params := strings.Split(fnArgs.args, ", ")
+		return params, ctx.toTerm(fnArgs.body)
 	}
 
 	return ctx.compileExpressionFunc(e, requiredArgs)
@@ -546,13 +553,12 @@ func toObject(m interface{}) map[string]interface{} {
 }
 
 func (ctx context) mapToPredicate(m interface{}) *p.Predicate {
-	args := []interface{}{}
+	expr := Expr(true)
+	// And all these terms together
 	for key, value := range toObject(m) {
-		args = append(args, Row.Attr(key).Eq(value))
+		expr = expr.And(Row.Attr(key).Eq(value))
 	}
 
-	// And all these terms together
-	expr := naryBuiltin(logicalAndKind, nil, args...)
 	return ctx.toPredicate(expr)
 }
 

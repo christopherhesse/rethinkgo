@@ -13,6 +13,7 @@ type expressionKind int
 const (
 	// These I just made up
 	literalKind expressionKind = iota // converted to an Expression
+	functionKind
 	groupByKind
 	useOutdatedKind
 
@@ -172,6 +173,27 @@ func Expr(values ...interface{}) Expression {
 //  r.JS(`({name: 2})`) // Parens are required here, otherwise eval() thinks it's a block.
 func JS(body string) Expression {
 	return Expression{kind: javascriptKind, value: body}
+}
+
+type fnArgs struct {
+	args string
+	body interface{}
+}
+
+// Fn creates a function expression that takes the specified args, this is
+// useful in some cases, for instance, if you want to create a function body
+// that uses Js().  Without this, automatic variable names are generated and
+// need to be interpolated into the javascript.
+//
+// Example usage:
+//
+//  Fn("rowA, rowB", Js("rowA.awesomeness + rowB.awesomeness"))
+func Fn(args string, body interface{}) Expression {
+	value := fnArgs{
+		args: args,
+		body: body,
+	}
+	return Expression{kind: functionKind, value: value}
 }
 
 type letArgs struct {
@@ -445,7 +467,16 @@ func (e Expression) Append(operand interface{}) Expression {
 }
 
 func (e Expression) Union(operands ...interface{}) Expression {
-	return naryBuiltin(unionKind, nil, e, operands)
+	// elements of operands should be among the rest of the args to the UNION call,
+	// at the same level as the expression
+	// table.Union(table) needs to end up being
+	// UNION Args: [table, table]
+	// instead of
+	// UNION Args: [table, [table]]
+	// so flatten the list of operands
+	args := []interface{}{e}
+	args = append(args, operands...)
+	return naryBuiltin(unionKind, nil, args...)
 }
 
 func (e Expression) Nth(operand interface{}) Expression {
@@ -476,8 +507,12 @@ func (e Expression) Filter(operand interface{}) Expression {
 	return naryBuiltin(filterKind, operand, e)
 }
 
-func (e Expression) Contains(key string) Expression {
-	return naryBuiltin(hasAttributeKind, key, e)
+func (e Expression) Contains(keys ...string) Expression {
+	expr := Expr(true)
+	for _, key := range keys {
+		expr = expr.And(naryBuiltin(hasAttributeKind, key, e))
+	}
+	return expr
 }
 
 func (e Expression) Pick(attributes ...string) Expression {
@@ -576,9 +611,7 @@ func (e Expression) Without(attributes ...string) Expression {
 	return e.Map(Row.Unpick(attributes...))
 }
 
-type Predicate func(Expression, Expression) interface{}
-
-func (leftExpr Expression) InnerJoin(rightExpr Expression, predicate Predicate) Expression {
+func (leftExpr Expression) InnerJoin(rightExpr Expression, predicate func(Expression, Expression) Expression) Expression {
 	return leftExpr.ConcatMap(func(left Expression) interface{} {
 		return rightExpr.ConcatMap(func(right Expression) interface{} {
 			return Branch(predicate(left, right),
@@ -589,10 +622,10 @@ func (leftExpr Expression) InnerJoin(rightExpr Expression, predicate Predicate) 
 	})
 }
 
-func (leftExpr Expression) OuterJoin(rightExpr Expression, predicate Predicate) Expression {
+func (leftExpr Expression) OuterJoin(rightExpr Expression, predicate func(Expression, Expression) Expression) Expression {
 	// This is a left outer join
 	return leftExpr.ConcatMap(func(left Expression) interface{} {
-		return Let(map[string]interface{}{"matches": rightExpr.ConcatMap(func(right Expression) Expression {
+		return Let(Map{"matches": rightExpr.ConcatMap(func(right Expression) Expression {
 			return Branch(
 				predicate(left, right),
 				List{Map{"left": left, "right": right}},
@@ -609,7 +642,7 @@ func (leftExpr Expression) OuterJoin(rightExpr Expression, predicate Predicate) 
 
 func (leftExpr Expression) EqJoin(leftAttribute string, rightExpr Expression, rightAttribute string) Expression {
 	return leftExpr.ConcatMap(func(left Expression) interface{} {
-		return Let(map[string]interface{}{"right": rightExpr.Get(left.Attr(leftAttribute), rightAttribute)},
+		return Let(Map{"right": rightExpr.Get(left.Attr(leftAttribute), rightAttribute)},
 			Branch(LetVar("right").Ne(nil),
 				List{Map{"left": left, "right": LetVar("right")}},
 				List{},

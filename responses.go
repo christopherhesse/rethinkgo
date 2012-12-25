@@ -11,5 +11,5 @@ type WriteResponse struct {
 	FirstError    string   `json:"first_error"` // populated if Errors > 0
 }
 
-// UpdateResponse
-// {\"updated\": 3, \"skipped\": 0, \"errors\": 0} FirstError"
+// Update: updated, skipped, errors, first_error
+// Replace: deleted, errors, inserted, modified, first_error

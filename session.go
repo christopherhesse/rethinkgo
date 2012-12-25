@@ -254,6 +254,11 @@ func (s *Session) RunOne(query Query, row interface{}) error {
 		return err
 	}
 
+	if rows == nil {
+		// empty response
+		return errors.New("rethinkdb: Attempted to read empty response into variable")
+	}
+
 	if rows.Next() {
 		err = rows.Scan(row)
 		if err != nil {

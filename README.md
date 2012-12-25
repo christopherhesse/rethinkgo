@@ -54,14 +54,11 @@ See the [json docs](http://golang.org/pkg/encoding/json/) for more information.
 Differences from official RethinkDB drivers
 ===========================================
 
-* Go does not have optional args, so all optional args are required for this driver.
-    * A convenience method named ".GetById()" has been added for that common case
 * r.Count() is a function, not a constant
 * .GroupBy() only takes a single attribute (for now)
 * There's a global SetDebug(bool) function to turn on printing of queries, rather than .run(debug=True)
-* Table() does not take a useOutdated boolean argument, instead call .UseOutdated(bool) on the table (or any expression, will apply to all tables already specified), e.g. Table("test").UseOutdated(true)
-* No errors are generated when creating queries, only when running them, so Table() returns only an Expression type, but sess.Run(query) returns (*Rows, error)
-* There's no r(attributeName) or row[attributeName] function call / item indexing to get attributes of the "current" row or a specific row respectively.  Instead, there is a .Attr() method on the global "Row" object (r.Row) and any row Expressions that can be used to access attributes.  Example:
+* No errors are generated when creating queries, only when running them, so Table() returns only an Expression instance, but sess.Run(query) returns (*Rows, error)
+* There's no r(attributeName) or row[attributeName] function call / item indexing to get attributes of the "current" row or a specific row respectively.  Instead, there is a .Attr() method on the global "Row" object (r.Row) and any row Expressions that can be used to access attributes.  Examples:
 
         r.Table("marvel").OuterJoin(r.Table("dc"),
             func(marvel, dc r.Expression) interface{} {
@@ -70,10 +67,16 @@ Differences from official RethinkDB drivers
 
         r.Table("marvel").Map(r.Row.Attr("strength").Mul(2))
 
+* Go does not have optional args, most optional args are either require or separate methods.
+    * A convenience method named ".GetById()" has been added for that common case
+    * .Atomic(bool) and .Overwrite(bool) are methods on write queries
+    * .UseOutdated(bool) is a method on any Table() or other Expression (will apply to all tables already specified)
+    * TableCreate() has a variant called TableCreateSpec(TableSpec) which takes a TableSpec instance specifying the parameters for the table
+
 Current limitations that will gradually be fixed
 ================================================
 
 * The overall API is fixed because it imitates RethinkDB's [other drivers](http://www.rethinkdb.com/api/), but some specifics of this implementation will change.
 * No pretty-printing of queries
-* No docs (besides this one!) or like actual tests
+* No docs (besides this one!)
 * Not goroutine safe, each goroutine needs its own connection.
