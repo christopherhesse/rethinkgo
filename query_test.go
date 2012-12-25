@@ -15,9 +15,9 @@ import (
 // Global expressions used in tests
 var arr = Expr(1, 2, 3, 4, 5, 6)
 var tobj = Expr(Map{"a": 1, "b": 2, "c": 3})
-var tab = Table("table1")
-var tab2 = Table("table2")
-var tbl = Table("table3")
+var tbl = Table("table1")
+var tbl2 = Table("table2")
+var tbl3 = Table("table3")
 var tbl4 = Table("table4")
 var gobj = Expr(List{
 	Map{"g1": 1, "g2": 1, "num": 0},
@@ -57,20 +57,20 @@ func resetDatabase(c *C) {
 	_, err = Db("test").TableCreate("table1").Run()
 	c.Assert(err, IsNil)
 
-	pair := ExpectPair{tab.Insert(Map{"id": 0, "num": 20}), Map{"inserted": 1, "errors": 0}}
+	pair := ExpectPair{tbl.Insert(Map{"id": 0, "num": 20}), Map{"inserted": 1, "errors": 0}}
 	runSimpleQuery(c, pair)
 
 	var others []Map
 	for i := 1; i < 10; i++ {
 		others = append(others, Map{"id": i, "num": 20 - i})
 	}
-	pair = ExpectPair{tab.Insert(others), Map{"inserted": 9, "errors": 0}}
+	pair = ExpectPair{tbl.Insert(others), Map{"inserted": 9, "errors": 0}}
 	runSimpleQuery(c, pair)
 
 	_, err = Db("test").TableCreate("table2").Run()
 	c.Assert(err, IsNil)
 
-	pair = ExpectPair{tab2.Insert(List{
+	pair = ExpectPair{tbl2.Insert(List{
 		Map{"id": 20, "name": "bob"},
 		Map{"id": 19, "name": "tom"},
 		Map{"id": 18, "name": "joe"},
@@ -87,7 +87,7 @@ func resetDatabase(c *C) {
 		docs = append(docs, Map{"id": doc_id})
 	}
 
-	tbl.Insert(docs).Run()
+	tbl3.Insert(docs).Run()
 
 	_, err = Db("test").TableCreate("table4").Run()
 	c.Assert(err, IsNil)
@@ -306,47 +306,47 @@ var testSimpleGroups = map[string][]ExpectPair{
 		{Let(Map{"a": Map{"b": 1}}, LetVar("a").Attr("b")), 1},
 	},
 	"orderby": {
-		{tab.OrderBy("num").Nth(2), Map{"id": 7, "num": 13}},
-		{tab.OrderBy("num").Nth(2).Pick("num"), Map{"num": 13}},
-		{tab.OrderBy(Asc("num")).Nth(2), Map{"id": 7, "num": 13}},
-		{tab.OrderBy(Asc("num")).Nth(2).Pick("num"), Map{"num": 13}},
-		{tab.OrderBy(Desc("num")).Nth(2), Map{"id": 2, "num": 18}},
-		{tab.OrderBy(Desc("num")).Nth(2).Pick("num"), Map{"num": 18}},
+		{tbl.OrderBy("num").Nth(2), Map{"id": 7, "num": 13}},
+		{tbl.OrderBy("num").Nth(2).Pick("num"), Map{"num": 13}},
+		{tbl.OrderBy(Asc("num")).Nth(2), Map{"id": 7, "num": 13}},
+		{tbl.OrderBy(Asc("num")).Nth(2).Pick("num"), Map{"num": 13}},
+		{tbl.OrderBy(Desc("num")).Nth(2), Map{"id": 2, "num": 18}},
+		{tbl.OrderBy(Desc("num")).Nth(2).Pick("num"), Map{"num": 18}},
 	},
 	"pluck": {
-		{tab.OrderBy("num").Pluck("num").Nth(0), Map{"num": 11}},
+		{tbl.OrderBy("num").Pluck("num").Nth(0), Map{"num": 11}},
 	},
 	"without": {
-		{tab.OrderBy("num").Without("num").Nth(0), Map{"id": 9}},
+		{tbl.OrderBy("num").Without("num").Nth(0), Map{"id": 9}},
 	},
 	"union": {
 		{Expr(1, 2, 3).Union(List{4, 5, 6}), List{1, 2, 3, 4, 5, 6}},
-		{tab.Union(tab).Count().Eq(tab.Count().Mul(2)), true},
+		{tbl.Union(tbl).Count().Eq(tbl.Count().Mul(2)), true},
 	},
 	"tablefilter": {
-		{tab.Filter(func(row Expression) Expression {
+		{tbl.Filter(func(row Expression) Expression {
 			return row.Attr("num").Gt(16)
 		}).Count(),
 			4,
 		},
-		{tab.Filter(Row.Attr("num").Gt(16)).Count(), 4},
-		{tab.Filter(Map{"num": 16}).Nth(0), Map{"id": 4, "num": 16}},
-		{tab.Filter(Map{"num": Expr(20).Sub(Row.Attr("id"))}).Count(), 10},
+		{tbl.Filter(Row.Attr("num").Gt(16)).Count(), 4},
+		{tbl.Filter(Map{"num": 16}).Nth(0), Map{"id": 4, "num": 16}},
+		{tbl.Filter(Map{"num": Expr(20).Sub(Row.Attr("id"))}).Count(), 10},
 	},
 	"tablemap": {
-		{tab.OrderBy("num").Map(Row.Attr("num")).Nth(2), 13},
+		{tbl.OrderBy("num").Map(Row.Attr("num")).Nth(2), 13},
 	},
 	"tablereduce": {
-		{tab.Map(Row.Attr("num")).Reduce(0, func(a, b Expression) Expression { return b.Add(a) }), 155},
+		{tbl.Map(Row.Attr("num")).Reduce(0, func(a, b Expression) Expression { return b.Add(a) }), 155},
 	},
 	"tablechain": {
-		{tab.Filter(func(row Expression) Expression {
+		{tbl.Filter(func(row Expression) Expression {
 			return Row.Attr("num").Gt(16)
 		}).Count(),
 			4,
 		},
 
-		{tab.Map(func(row Expression) Expression {
+		{tbl.Map(func(row Expression) Expression {
 			return Row.Attr("num").Add(2)
 		}).Filter(func(val Expression) Expression {
 			return val.Gt(16)
@@ -354,7 +354,7 @@ var testSimpleGroups = map[string][]ExpectPair{
 			6,
 		},
 
-		{tab.Filter(func(row Expression) Expression {
+		{tbl.Filter(func(row Expression) Expression {
 			return Row.Attr("num").Gt(16)
 		}).Map(func(row Expression) Expression {
 			return row.Attr("num").Mul(4)
@@ -365,11 +365,11 @@ var testSimpleGroups = map[string][]ExpectPair{
 		},
 	},
 	"between": {
-		{tab.BetweenIds(2, 3).Count(), 2},
-		{tab.Between("id", 2, 3).OrderBy("id").Nth(0), Map{"id": 2, "num": 18}},
+		{tbl.BetweenIds(2, 3).Count(), 2},
+		{tbl.Between("id", 2, 3).OrderBy("id").Nth(0), Map{"id": 2, "num": 18}},
 	},
 	"groupedmapreduce": {
-		{tab.GroupedMapReduce(
+		{tbl.GroupedMapReduce(
 			func(row Expression) Expression {
 				return Branch(row.Attr("id").Lt(5), 0, 1)
 			},
@@ -416,10 +416,10 @@ var testSimpleGroups = map[string][]ExpectPair{
 		// },
 	},
 	"concatmap": {
-		{tab.ConcatMap(List{1, 2}).Count(), 20},
+		{tbl.ConcatMap(List{1, 2}).Count(), 20},
 	},
 	"update": {
-		{tab.Filter(func(row Expression) Expression {
+		{tbl.Filter(func(row Expression) Expression {
 			return row.Attr("id").Ge(5)
 		}).Update(func(a Expression) Expression {
 			return a.Merge(Map{"updated": true})
@@ -430,7 +430,7 @@ var testSimpleGroups = map[string][]ExpectPair{
 				"updated": 5,
 			},
 		},
-		{tab.Filter(func(row Expression) Expression {
+		{tbl.Filter(func(row Expression) Expression {
 			return row.Attr("id").Lt(5)
 		}).Update(func(a Expression) Expression {
 			return a.Merge(Map{"updated": true})
@@ -441,12 +441,12 @@ var testSimpleGroups = map[string][]ExpectPair{
 				"updated": 5,
 			},
 		},
-		{tab.Filter(func(row Expression) Expression {
+		{tbl.Filter(func(row Expression) Expression {
 			return row.Attr("updated").Eq(true)
 		}).Count(), 10},
 	},
 	"pointupdate": {
-		{tab.GetById(0).Update(func(row Expression) Expression {
+		{tbl.GetById(0).Update(func(row Expression) Expression {
 			return row.Merge(Map{"pointupdated": true})
 		}),
 			Map{
@@ -455,10 +455,10 @@ var testSimpleGroups = map[string][]ExpectPair{
 				"updated": 1,
 			},
 		},
-		{tab.GetById(0).Attr("pointupdated"), true},
+		{tbl.GetById(0).Attr("pointupdated"), true},
 	},
 	"replace": {
-		{tab.Replace(func(row Expression) Expression {
+		{tbl.Replace(func(row Expression) Expression {
 			return row.Pick("id").Merge(Map{"mutated": true})
 		}),
 			Map{
@@ -468,14 +468,14 @@ var testSimpleGroups = map[string][]ExpectPair{
 				"modified": 10,
 			},
 		},
-		{tab.Filter(func(row Expression) Expression {
+		{tbl.Filter(func(row Expression) Expression {
 			return row.Attr("mutated").Eq(true)
 		}).Count(),
 			10,
 		},
 	},
 	"pointreplace": {
-		{tab.GetById(0).Replace(func(row Expression) Expression {
+		{tbl.GetById(0).Replace(func(row Expression) Expression {
 			return row.Pick("id").Merge(Map{"pointmutated": true})
 		}),
 			Map{
@@ -485,37 +485,37 @@ var testSimpleGroups = map[string][]ExpectPair{
 				"modified": 1,
 			},
 		},
-		{tab.GetById(0).Attr("pointmutated"), true},
+		{tbl.GetById(0).Attr("pointmutated"), true},
 	},
 	"det": {
-		{tbl.Update(func(row Expression) interface{} {
+		{tbl3.Update(func(row Expression) interface{} {
 			return Map{"count": JS(`0`)}
 		}),
 			MatchMap{"errors": 10},
 		},
-		{tbl.Update(func(row Expression) interface{} {
+		{tbl3.Update(func(row Expression) interface{} {
 			return Map{"count": 0}
 		}),
 			MatchMap{"updated": 10},
 		},
-		{tbl.Replace(func(row Expression) interface{} {
-			return tbl.GetById(row.Attr("id"))
+		{tbl3.Replace(func(row Expression) interface{} {
+			return tbl3.GetById(row.Attr("id"))
 		}),
 			MatchMap{"errors": 10},
 		},
-		{tbl.Replace(func(row Expression) interface{} {
+		{tbl3.Replace(func(row Expression) interface{} {
 			return row
 		}),
 			MatchMap{},
 		},
-		{tbl.Update(Map{"count": tbl.Map(func(x Expression) interface{} {
+		{tbl3.Update(Map{"count": tbl3.Map(func(x Expression) interface{} {
 			return x.Attr("count")
 		}).Reduce(0, func(a, b Expression) Expression {
 			return a.Add(b)
 		})}),
 			MatchMap{"errors": 10},
 		},
-		{tbl.Update(Map{"count": Expr(docs).Map(func(x Expression) interface{} {
+		{tbl3.Update(Map{"count": Expr(docs).Map(func(x Expression) interface{} {
 			return x.Attr("id")
 		}).Reduce(0, func(a, b Expression) Expression {
 			return a.Add(b)
@@ -524,114 +524,114 @@ var testSimpleGroups = map[string][]ExpectPair{
 		},
 	},
 	"nonatomic": {
-		{tbl.Update(func(row Expression) interface{} {
+		{tbl3.Update(func(row Expression) interface{} {
 			return Map{"count": 0}
 		}),
 			MatchMap{"updated": 10},
 		},
-		{tbl.Update(func(row Expression) interface{} {
+		{tbl3.Update(func(row Expression) interface{} {
 			return Map{"x": JS(`1`)}
 		}),
 			MatchMap{"errors": 10},
 		},
-		{tbl.Update(func(row Expression) interface{} {
+		{tbl3.Update(func(row Expression) interface{} {
 			return Map{"x": JS(`1`)}
 		}).Atomic(false),
 			MatchMap{"updated": 10},
 		},
-		{tbl.Map(func(row Expression) interface{} {
+		{tbl3.Map(func(row Expression) interface{} {
 			return row.Attr("x")
 		}).Reduce(0, func(a, b Expression) Expression {
 			return a.Add(b)
 		}),
 			10,
 		},
-		{tbl.GetById(0).Update(func(row Expression) interface{} {
+		{tbl3.GetById(0).Update(func(row Expression) interface{} {
 			return Map{"x": JS(`1`)}
 		}),
 			ErrorResponse{},
 		},
-		{tbl.GetById(0).Update(func(row Expression) interface{} {
+		{tbl3.GetById(0).Update(func(row Expression) interface{} {
 			return Map{"x": JS(`2`)}
 		}).Atomic(false),
 			MatchMap{"updated": 1},
 		},
-		{tbl.Map(func(a Expression) Expression {
+		{tbl3.Map(func(a Expression) Expression {
 			return a.Attr("x")
 		}).Reduce(0, func(a, b Expression) Expression {
 			return a.Add(b)
 		}),
 			11,
 		},
-		{tbl.Update(func(row Expression) interface{} {
+		{tbl3.Update(func(row Expression) interface{} {
 			return Map{"x": JS(`x`)}
 		}),
 			MatchMap{"errors": 10},
 		},
-		{tbl.Update(func(row Expression) interface{} {
+		{tbl3.Update(func(row Expression) interface{} {
 			return Map{"x": JS(`x`)}
 		}).Atomic(false),
 			MatchMap{"errors": 10},
 		},
-		{tbl.Map(func(a Expression) Expression {
+		{tbl3.Map(func(a Expression) Expression {
 			return a.Attr("x")
 		}).Reduce(0, func(a, b Expression) Expression {
 			return a.Add(b)
 		}),
 			11,
 		},
-		{tbl.GetById(0).Update(func(row Expression) interface{} {
+		{tbl3.GetById(0).Update(func(row Expression) interface{} {
 			return Map{"x": JS(`x`)}
 		}),
 			ErrorResponse{},
 		},
-		{tbl.GetById(0).Update(func(row Expression) interface{} {
+		{tbl3.GetById(0).Update(func(row Expression) interface{} {
 			return Map{"x": JS(`x`)}
 		}).Atomic(false),
 			ErrorResponse{},
 		},
-		{tbl.Map(func(a Expression) Expression {
+		{tbl3.Map(func(a Expression) Expression {
 			return a.Attr("x")
 		}).Reduce(0, func(a, b Expression) Expression {
 			return a.Add(b)
 		}),
 			11,
 		},
-		{tbl.Update(func(row Expression) interface{} {
+		{tbl3.Update(func(row Expression) interface{} {
 			return Branch(JS(`true`), nil, Map{"x": 0.1})
 		}),
 			MatchMap{"errors": 10},
 		},
-		{tbl.Update(func(row Expression) interface{} {
+		{tbl3.Update(func(row Expression) interface{} {
 			return Branch(JS(`true`), nil, Map{"x": 0.1})
 		}).Atomic(false),
 			MatchMap{"skipped": 10},
 		},
-		{tbl.Map(func(a Expression) Expression {
+		{tbl3.Map(func(a Expression) Expression {
 			return a.Attr("x")
 		}).Reduce(0, func(a, b Expression) Expression {
 			return a.Add(b)
 		}),
 			11,
 		},
-		{tbl.GetById(0).Replace(func(row Expression) interface{} {
+		{tbl3.GetById(0).Replace(func(row Expression) interface{} {
 			return Branch(JS(`true`), row, nil)
 		}),
 			ErrorResponse{},
 		},
-		{tbl.GetById(0).Replace(func(row Expression) interface{} {
+		{tbl3.GetById(0).Replace(func(row Expression) interface{} {
 			return Branch(JS(`true`), row, nil)
 		}).Atomic(false),
 			MatchMap{"modified": 1},
 		},
-		{tbl.Map(func(a Expression) Expression {
+		{tbl3.Map(func(a Expression) Expression {
 			return a.Attr("x")
 		}).Reduce(0, func(a, b Expression) Expression {
 			return a.Add(b)
 		}),
 			11,
 		},
-		{tbl.Replace(
+		{tbl3.Replace(
 			Fn("rowA", Branch(
 				JS("rowA.id == 1"),
 				LetVar("rowA").Merge(Map{"x": 2}),
@@ -639,7 +639,7 @@ var testSimpleGroups = map[string][]ExpectPair{
 			))),
 			MatchMap{"errors": 10},
 		},
-		{tbl.Replace(
+		{tbl3.Replace(
 			Fn("rowA", Branch(
 				JS("rowA.id == 1"),
 				LetVar("rowA").Merge(Map{"x": 2}),
@@ -647,48 +647,48 @@ var testSimpleGroups = map[string][]ExpectPair{
 			))).Atomic(false),
 			MatchMap{"modified": 10},
 		},
-		{tbl.Map(func(a Expression) Expression {
+		{tbl3.Map(func(a Expression) Expression {
 			return a.Attr("x")
 		}).Reduce(0, func(a, b Expression) Expression {
 			return a.Add(b)
 		}),
 			12,
 		},
-		{tbl.GetById(0).Replace(func(row Expression) interface{} {
+		{tbl3.GetById(0).Replace(func(row Expression) interface{} {
 			return Branch(JS(`x`), row, nil)
 		}),
 			ErrorResponse{},
 		},
-		{tbl.GetById(0).Replace(func(row Expression) interface{} {
+		{tbl3.GetById(0).Replace(func(row Expression) interface{} {
 			return Branch(JS(`x`), row, nil)
 		}).Atomic(false),
 			ErrorResponse{},
 		},
-		{tbl.Map(func(a Expression) Expression {
+		{tbl3.Map(func(a Expression) Expression {
 			return a.Attr("x")
 		}).Reduce(0, func(a, b Expression) Expression {
 			return a.Add(b)
 		}),
 			12,
 		},
-		{tbl.GetById(0).Replace(func(row Expression) interface{} {
+		{tbl3.GetById(0).Replace(func(row Expression) interface{} {
 			return Branch(JS(`true`), nil, row)
 		}),
 			ErrorResponse{},
 		},
-		{tbl.GetById(0).Replace(func(row Expression) interface{} {
+		{tbl3.GetById(0).Replace(func(row Expression) interface{} {
 			return Branch(JS(`true`), nil, row)
 		}).Atomic(false),
 			MatchMap{"deleted": 1},
 		},
-		{tbl.Map(func(a Expression) Expression {
+		{tbl3.Map(func(a Expression) Expression {
 			return a.Attr("x")
 		}).Reduce(0, func(a, b Expression) Expression {
 			return a.Add(b)
 		}),
 			10,
 		},
-		{tbl.Replace(
+		{tbl3.Replace(
 			Fn("rowA", Branch(
 				JS("rowA.id < 3"),
 				nil,
@@ -696,7 +696,7 @@ var testSimpleGroups = map[string][]ExpectPair{
 			))),
 			MatchMap{"errors": 9},
 		},
-		{tbl.Replace(
+		{tbl3.Replace(
 			Fn("rowA", Branch(
 				JS("rowA.id < 3"),
 				nil,
@@ -704,45 +704,45 @@ var testSimpleGroups = map[string][]ExpectPair{
 			))).Atomic(false),
 			MatchMap{"deleted": 2},
 		},
-		{tbl.Map(func(a Expression) Expression {
+		{tbl3.Map(func(a Expression) Expression {
 			return a.Attr("x")
 		}).Reduce(0, func(a, b Expression) Expression {
 			return a.Add(b)
 		}),
 			7,
 		},
-		{tbl.GetById(0).Replace(
+		{tbl3.GetById(0).Replace(
 			Map{
 				"id":    0,
-				"count": tbl.GetById(3).Attr("count"),
-				"x":     tbl.GetById(3).Attr("x"),
+				"count": tbl3.GetById(3).Attr("count"),
+				"x":     tbl3.GetById(3).Attr("x"),
 			}),
 			ErrorResponse{},
 		},
-		{tbl.GetById(0).Replace(
+		{tbl3.GetById(0).Replace(
 			Map{
 				"id":    0,
-				"count": tbl.GetById(3).Attr("count"),
-				"x":     tbl.GetById(3).Attr("x"),
+				"count": tbl3.GetById(3).Attr("count"),
+				"x":     tbl3.GetById(3).Attr("x"),
 			}).Atomic(false),
 			MatchMap{"inserted": 1},
 		},
-		{tbl.GetById(1).Replace(
-			tbl.GetById(3).Merge(Map{"id": 1}),
+		{tbl3.GetById(1).Replace(
+			tbl3.GetById(3).Merge(Map{"id": 1}),
 		),
 			ErrorResponse{},
 		},
-		{tbl.GetById(1).Replace(
-			tbl.GetById(3).Merge(Map{"id": 1}),
+		{tbl3.GetById(1).Replace(
+			tbl3.GetById(3).Merge(Map{"id": 1}),
 		).Atomic(false),
 			MatchMap{"inserted": 1},
 		},
-		{tbl.GetById(2).Replace(
-			tbl.GetById(1).Merge(Map{"id": 2}),
+		{tbl3.GetById(2).Replace(
+			tbl3.GetById(1).Merge(Map{"id": 2}),
 		).Atomic(false),
 			MatchMap{"inserted": 1},
 		},
-		{tbl.Map(func(a Expression) Expression {
+		{tbl3.Map(func(a Expression) Expression {
 			return a.Attr("x")
 		}).Reduce(0, func(a, b Expression) Expression {
 			return a.Add(b)
@@ -751,16 +751,16 @@ var testSimpleGroups = map[string][]ExpectPair{
 		},
 	},
 	"delete": {
-		{tab.GetById(0).Delete(),
+		{tbl.GetById(0).Delete(),
 			MatchMap{"deleted": 1},
 		},
-		{tab.Count(),
+		{tbl.Count(),
 			9,
 		},
-		{tab.Delete(),
+		{tbl.Delete(),
 			MatchMap{"deleted": 9},
 		},
-		{tab.Count(),
+		{tbl.Count(),
 			0,
 		},
 	},
@@ -903,7 +903,7 @@ func (s *RethinkSuite) TestGroups(c *C) {
 
 func (s *RethinkSuite) TestGet(c *C) {
 	for i := 0; i < 10; i++ {
-		pair := ExpectPair{tab.GetById(i), Map{"id": i, "num": 20 - i}}
+		pair := ExpectPair{tbl.GetById(i), Map{"id": i, "num": 20 - i}}
 		runSimpleQuery(c, pair)
 	}
 }
@@ -912,8 +912,8 @@ func (s *RethinkSuite) TestOrderBy(c *C) {
 	var results1 []Map
 	var results2 []Map
 
-	tab.OrderBy("num").RunCollect(&results1)
-	tab.OrderBy(Asc("num")).RunCollect(&results2)
+	tbl.OrderBy("num").RunCollect(&results1)
+	tbl.OrderBy(Asc("num")).RunCollect(&results2)
 
 	c.Assert(results1, JsonEquals, results2)
 }
