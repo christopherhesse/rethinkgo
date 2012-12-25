@@ -1,6 +1,0 @@
-how to compile query_language.go:
-
-    brew install mercurial
-    go get code.google.com/p/goprotobuf/{proto,protoc-gen-go}
-    brew install protobuf
-    protoc --go_out=. query_language.proto

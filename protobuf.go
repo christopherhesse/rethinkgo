@@ -136,10 +136,25 @@ func (ctx context) toTerm(o interface{}) *p.Term {
 	case groupByKind:
 		groupByArgs := value.(groupByArgs)
 
-		grouping := func(row Expression) interface{} {
-			return row.Attr(groupByArgs.attribute)
-		}
 		gmr := groupByArgs.groupedMapReduce
+
+		var grouping func(row Expression) interface{}
+
+		if attribute, ok := groupByArgs.attribute.(string); ok {
+			grouping = func(row Expression) interface{} {
+				return row.Attr(attribute)
+			}
+		} else if attributes, ok := groupByArgs.attribute.([]string); ok {
+			grouping = func(row Expression) interface{} {
+				result := []Expression{}
+				for _, attribute := range attributes {
+					result = append(result, row.Attr(attribute))
+				}
+				return result
+			}
+		} else {
+			panic("attribute is neither a string, nor []string")
+		}
 
 		result := groupByArgs.expression.GroupedMapReduce(
 			grouping,
@@ -409,8 +424,6 @@ func (ctx context) compileGoFunc(f interface{}, requiredArgs int) (params []stri
 		}
 	}
 
-	// TODO: make this support multiple return values as an array/slice
-	// check output types
 	if valueType.NumOut() != 1 {
 		panic("Function does not have a single return value")
 	}

@@ -3,8 +3,6 @@ package rethinkgo
 // Based off of RethinkDB's javascript test.js
 // https://github.com/rethinkdb/rethinkdb/blob/next/drivers/javascript/rethinkdb/test.js
 
-// TODO: make sure JS functions/exprs are tested
-
 import (
 	"encoding/json"
 	"fmt"
@@ -406,14 +404,13 @@ var testSimpleGroups = map[string][]ExpectPair{
 				Map{"group": 2, "reduction": 100},
 			},
 		},
-		// TODO: groupby with multiple keys?
-		// {gobj.GroupBy("g1", "g2", Avg("num")),
-		// 	List{
-		// 		Map{"group": List{1, 1}, "reduction": 0},
-		// 		Map{"group": List{1, 2}, "reduction": 7.5},
-		// 		Map{"group": List{2, 3}, "reduction": 50},
-		// 	},
-		// },
+		{gobj.GroupBy([]string{"g1", "g2"}, Avg("num")),
+			List{
+				Map{"group": List{1, 1}, "reduction": 0},
+				Map{"group": List{1, 2}, "reduction": 7.5},
+				Map{"group": List{2, 3}, "reduction": 50},
+			},
+		},
 	},
 	"concatmap": {
 		{tbl.ConcatMap(List{1, 2}).Count(), 20},
@@ -770,81 +767,16 @@ var testSimpleGroups = map[string][]ExpectPair{
 		}),
 			MatchMap{"inserted": 3},
 		},
+		{tbl4.ForEach(func(a Expression) Query {
+			return tbl4.GetById(a.Attr("id")).Update(Map{"fe": true})
+		}),
+			MatchMap{"updated": 3},
+		},
+		{tbl4.Filter(Map{"fe": true}).Count(),
+			3,
+		},
 	},
 }
-
-// function testForEach1() {
-//     r([1,2,3]).forEach(function(a) {return tab.insert({id:a, fe:true})}).run(objeq({
-//         inserted:3
-//     }));
-// }
-
-// function testForEach2() {
-//     tab.forEach(function(a) {return tab.get(a('id')).update(r({fe:true}))}).run(objeq({
-//         updated:3
-//     }));
-// }
-
-// function testForEach3() {
-//     wait();
-//     tab.run(function(row) {
-//         if (row === undefined) {
-//             done();
-//             return false;
-//         } else {
-//             assertEquals(row['fe'], true);
-//             return true;
-//         }
-//     });
-// }
-
-// function testClose() {
-//     tab.del().run(function() {
-//         conn.close();
-//     });
-// }
-
-// def test_unicode(self):
-//     self.clear_table()
-
-//     doc0 = {u"id": 100, u"text": u"グルメ"}
-//     doc1 = {"id": 100, u"text": u"グルメ"}
-
-//     doc2 = {u"id": 100, u"text": u"abc"}
-//     doc3 = {"id": 100, u"text": u"abc"}
-//     doc4 = {u"id": 100, "text": u"abc"}
-//     doc5 = {"id": 100, "text": u"abc"}
-
-//     self.do_insert(doc0, True)
-//     self.expect(self.table.get(100), doc0)
-//     self.expect(self.table.get(100), doc1)
-//     self.do_insert(doc1, True)
-//     self.expect(self.table.get(100), doc0)
-//     self.expect(self.table.get(100), doc1)
-
-//     self.do_insert(doc2, True)
-//     self.expect(self.table.get(100), doc2)
-//     self.expect(self.table.get(100), doc3)
-//     self.expect(self.table.get(100), doc4)
-//     self.expect(self.table.get(100), doc5)
-
-//     self.do_insert(doc3, True)
-//     self.expect(self.table.get(100), doc2)
-//     self.expect(self.table.get(100), doc3)
-//     self.expect(self.table.get(100), doc4)
-//     self.expect(self.table.get(100), doc5)
-
-//     self.do_insert(doc4, True)
-//     self.expect(self.table.get(100), doc2)
-//     self.expect(self.table.get(100), doc3)
-//     self.expect(self.table.get(100), doc4)
-//     self.expect(self.table.get(100), doc5)
-
-//     self.do_insert(doc5, True)
-//     self.expect(self.table.get(100), doc2)
-//     self.expect(self.table.get(100), doc3)
-//     self.expect(self.table.get(100), doc4)
-//     self.expect(self.table.get(100), doc5)
 
 var testStreamGroups = map[string][]ExpectPair{
 	"join": {
@@ -882,9 +814,6 @@ var testStreamGroups = map[string][]ExpectPair{
 
 func (s *RethinkSuite) TestGroups(c *C) {
 	for group, pairs := range testSimpleGroups {
-		if group != "foreach" {
-			continue
-		}
 		for index, pair := range pairs {
 			fmt.Println("group:", group, index)
 			runSimpleQuery(c, pair)
@@ -892,13 +821,13 @@ func (s *RethinkSuite) TestGroups(c *C) {
 		resetDatabase(c)
 	}
 
-	// for group, pairs := range testStreamGroups {
-	// 	for index, pair := range pairs {
-	// 		fmt.Println("group:", group, index)
-	// 		runStreamQuery(c, pair)
-	// 	}
-	// 	resetDatabase(c)
-	// }
+	for group, pairs := range testStreamGroups {
+		for index, pair := range pairs {
+			fmt.Println("group:", group, index)
+			runStreamQuery(c, pair)
+		}
+		resetDatabase(c)
+	}
 }
 
 func (s *RethinkSuite) TestGet(c *C) {

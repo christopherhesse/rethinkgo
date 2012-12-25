@@ -93,13 +93,19 @@ const (
 //
 // Example usage:
 //
-//  r.Table("just_twos").Map(func(row Expression) interface{} { return 1 })
+//  r.Table("just_twos").Map(func(row Expression) interface{} { return 1 }).Run()
 //
 // The func() object as well as the '1' constant could each be wrapped in an
 // Expr() call but that is done automatically by this library.
+//
+// Expressions can be used directly as queries, they are convered to read queries.
+//
+// Example usage:
+//
+//  r.Table("employees").Run()
 type Expression struct {
 	value interface{}
-	kind  expressionKind // TODO: can this be removed? just use types?
+	kind  expressionKind
 }
 
 // WriteQuery is the type returned by any method that writes to a table, this
@@ -288,7 +294,7 @@ func (e Expression) GetById(key interface{}) Expression {
 }
 
 type groupByArgs struct {
-	attribute        string
+	attribute        interface{}
 	groupedMapReduce GroupedMapReduce
 	expression       Expression
 }
@@ -307,7 +313,9 @@ type groupByArgs struct {
 //      Finalizer: nil,
 //  }
 //  r.Table("employees").GroupBy("awesomeness", gmr)
-func (e Expression) GroupBy(attribute string, groupedMapReduce GroupedMapReduce) Expression {
+//
+// attribute must be a single attribute (string) or a list of attributes ([]string)
+func (e Expression) GroupBy(attribute interface{}, groupedMapReduce GroupedMapReduce) Expression {
 	return Expression{
 		kind: groupByKind,
 		value: groupByArgs{

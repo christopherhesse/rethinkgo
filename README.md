@@ -55,7 +55,6 @@ Differences from official RethinkDB drivers
 ===========================================
 
 * r.Count() is a function, not a constant
-* .GroupBy() only takes a single attribute (for now)
 * There's a global SetDebug(bool) function to turn on printing of queries, rather than .run(debug=True)
 * No errors are generated when creating queries, only when running them, so Table() returns only an Expression instance, but sess.Run(query) returns (*Rows, error)
 * There's no r(attributeName) or row[attributeName] function call / item indexing to get attributes of the "current" row or a specific row respectively.  Instead, there is a .Attr() method on the global "Row" object (r.Row) and any row Expressions that can be used to access attributes.  Examples:
@@ -78,5 +77,5 @@ Current limitations that will gradually be fixed
 
 * The overall API is fixed because it imitates RethinkDB's [other drivers](http://www.rethinkdb.com/api/), but some specifics of this implementation will change.
 * No pretty-printing of queries
-* No docs (besides this one!)
+* Half-completed docs
 * Not goroutine safe, each goroutine needs its own connection.
