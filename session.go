@@ -15,8 +15,8 @@ var debugMode bool = false
 var LastSession *Session
 
 // Session represents a connection to a server, use it to run queries against a
-// database, with either sess.Run(query) or query.Run() which uses the most
-// recently-created session.
+// database, with either sess.Run(query) or query.Run() (uses the most
+// recently-created session.)
 type Session struct {
 	conn     net.Conn
 	token    int64
