@@ -12,6 +12,7 @@ type Error struct {
 	Err      error
 }
 
+// Error returns a string representation of the error.
 func (e Error) Error() string {
 	if e.Response == nil {
 		return fmt.Sprintf("rethinkdb: %v", e.Err)

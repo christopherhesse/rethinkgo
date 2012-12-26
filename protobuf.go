@@ -1,8 +1,8 @@
 package rethinkgo
 
-// Convert Expression trees and queries into protocol buffer form
-// Functions in this file will panic on failure, the caller is
-// expected to recover().
+// Convert Expression trees and queries into protocol buffer form.
+// Functions in this file will panic on failure, the caller is expected to
+// recover().
 
 import (
 	"code.google.com/p/goprotobuf/proto"
@@ -13,13 +13,15 @@ import (
 	"strings"
 )
 
-// Expressions contain some state that is required when converting them to
+// context stores some state that is required when converting Expressions to
 // protocol buffers, and has to be passed through.
 type context struct {
 	databaseName string
 	useOutdated  bool
 }
 
+// toTerm converts an arbitrary object to a Term, within the context that toTerm
+// was called on.
 func (ctx context) toTerm(o interface{}) *p.Term {
 	e := Expr(o)
 	value := e.value
@@ -97,25 +99,9 @@ func (ctx context) toTerm(o interface{}) *p.Term {
 	case groupByKind:
 		groupByArgs := value.(groupByArgs)
 
+		grouping := createGrouping(groupByArgs.attribute)
+
 		gmr := groupByArgs.groupedMapReduce
-
-		var grouping func(row Expression) interface{}
-
-		if attribute, ok := groupByArgs.attribute.(string); ok {
-			grouping = func(row Expression) interface{} {
-				return row.Attr(attribute)
-			}
-		} else if attributes, ok := groupByArgs.attribute.([]string); ok {
-			grouping = func(row Expression) interface{} {
-				result := []Expression{}
-				for _, attribute := range attributes {
-					result = append(result, row.Attr(attribute))
-				}
-				return result
-			}
-		} else {
-			panic("attribute is neither a string, nor []string")
-		}
 
 		result := groupByArgs.expression.GroupedMapReduce(
 			grouping,
@@ -147,6 +133,23 @@ func (ctx context) toTerm(o interface{}) *p.Term {
 			Args:    ctx.sliceToTerms(builtinArgs.args),
 		},
 	}
+}
+
+func createGrouping(attribute interface{}) func(row Expression) interface{} {
+	if attr, ok := attribute.(string); ok {
+		return func(row Expression) interface{} {
+			return row.Attr(attr)
+		}
+	} else if attrs, ok := attribute.([]string); ok {
+		return func(row Expression) interface{} {
+			result := []Expression{}
+			for _, attr := range attrs {
+				result = append(result, row.Attr(attr))
+			}
+			return result
+		}
+	}
+	panic("attribute is neither a string, nor []string")
 }
 
 func (ctx context) toBuiltin(kind expressionKind, operand interface{}) *p.Builtin {

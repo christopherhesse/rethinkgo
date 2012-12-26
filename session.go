@@ -143,7 +143,9 @@ func (s *Session) Reconnect() error {
 }
 
 // Use changes the default database for a connection.  This is the database that
-// will be used when a query is created without an explicit database.
+// will be used when a query is created without an explicit database.  This
+// should not be used if the session is shared between goroutines, confusion
+// would result.
 //
 //  sess.Use("dave")
 //  rows := r.Table("employees").Run() // uses database "dave"
@@ -273,11 +275,9 @@ func (s *Session) run(queryProto *p.Query, query Query) (result []string, status
 
 	status = r.GetStatusCode()
 	switch status {
-	case p.Response_SUCCESS_JSON, p.Response_SUCCESS_STREAM, p.Response_SUCCESS_PARTIAL:
+	case p.Response_SUCCESS_JSON, p.Response_SUCCESS_STREAM, p.Response_SUCCESS_PARTIAL, p.Response_SUCCESS_EMPTY:
+		// response is []string, and is empty in the case of SUCCESS_EMPTY
 		result = r.Response
-	case p.Response_SUCCESS_EMPTY:
-		// nothing to do here, what is the value of response in this case?
-		fmt.Println("response:", r.Response)
 	default:
 		// some sort of error
 		e := Error{Response: r, Query: query}
