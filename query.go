@@ -238,8 +238,9 @@ func LetVar(name string) Expression {
 	return Expression{kind: variableKind, value: name}
 }
 
-// Err tells the server to respond with a RuntimeError, useful for testing.
-func Err(message string) Expression {
+// RuntimeError tells the server to respond with a RuntimeError, useful for
+// testing.
+func RuntimeError(message string) Expression {
 	return Expression{kind: errorKind, value: message}
 }
 

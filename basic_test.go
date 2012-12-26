@@ -49,10 +49,10 @@ func (s *RethinkSuite) TearDownSuite(c *C) {
 func resetDatabase(c *C) {
 	// Drop the test database, then re-create it with some test data
 	DbDrop("test").Run()
-	_, err := DbCreate("test").Run()
+	err := DbCreate("test").Run().Err()
 	c.Assert(err, IsNil)
 
-	_, err = Db("test").TableCreate("table1").Run()
+	err = Db("test").TableCreate("table1").Run().Err()
 	c.Assert(err, IsNil)
 
 	pair := ExpectPair{tbl.Insert(Map{"id": 0, "num": 20}), Map{"inserted": 1, "errors": 0}}
@@ -65,7 +65,7 @@ func resetDatabase(c *C) {
 	pair = ExpectPair{tbl.Insert(others), Map{"inserted": 9, "errors": 0}}
 	runSimpleQuery(c, pair)
 
-	_, err = Db("test").TableCreate("table2").Run()
+	err = Db("test").TableCreate("table2").Run().Err()
 	c.Assert(err, IsNil)
 
 	pair = ExpectPair{tbl2.Insert(List{
@@ -76,7 +76,7 @@ func resetDatabase(c *C) {
 	runSimpleQuery(c, pair)
 
 	// det
-	_, err = Db("test").TableCreate("table3").Run()
+	err = Db("test").TableCreate("table3").Run().Err()
 	c.Assert(err, IsNil)
 
 	docs = []Map{}
@@ -85,9 +85,10 @@ func resetDatabase(c *C) {
 		docs = append(docs, Map{"id": doc_id})
 	}
 
-	tbl3.Insert(docs).Run()
+	err = tbl3.Insert(docs).Run().Err()
+	c.Assert(err, IsNil)
 
-	_, err = Db("test").TableCreate("table4").Run()
+	err = Db("test").TableCreate("table4").Run().Err()
 	c.Assert(err, IsNil)
 
 	// joins tables
@@ -155,7 +156,7 @@ type ErrorResponse struct{}
 func runSimpleQuery(c *C, pair ExpectPair) {
 	var result interface{}
 	fmt.Println("query:", pair.query)
-	err := pair.query.RunOne(&result)
+	err := pair.query.Run().One(&result)
 	fmt.Printf("result: %v %T\n", result, result)
 	_, ok := pair.expected.(ErrorResponse)
 	if ok {
@@ -195,7 +196,7 @@ func runSimpleQuery(c *C, pair ExpectPair) {
 func runStreamQuery(c *C, pair ExpectPair) {
 	var result []interface{}
 	fmt.Println("query:", pair.query)
-	err := pair.query.RunCollect(&result)
+	err := pair.query.Run().Collect(&result)
 	fmt.Printf("result: %v %T\n", result, result)
 	c.Assert(err, IsNil)
 	c.Assert(result, JsonEquals, pair.expected)
@@ -841,15 +842,15 @@ func (s *RethinkSuite) TestOrderBy(c *C) {
 	var results1 []Map
 	var results2 []Map
 
-	tbl.OrderBy("num").RunCollect(&results1)
-	tbl.OrderBy(Asc("num")).RunCollect(&results2)
+	tbl.OrderBy("num").Run().Collect(&results1)
+	tbl.OrderBy(Asc("num")).Run().Collect(&results2)
 
 	c.Assert(results1, JsonEquals, results2)
 }
 
 func (s *RethinkSuite) TestDropTable(c *C) {
-	_, err := Db("test").TableCreate("tablex").Run()
+	err := Db("test").TableCreate("tablex").Run().Err()
 	c.Assert(err, IsNil)
-	_, err = Db("test").TableDrop("tablex").Run()
+	err = Db("test").TableDrop("tablex").Run().Err()
 	c.Assert(err, IsNil)
 }

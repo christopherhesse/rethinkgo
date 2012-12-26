@@ -20,45 +20,6 @@ type context struct {
 	useOutdated  bool
 }
 
-// seems like there could be a better way to organize these so this isn't
-// necessary
-
-func (q MetaQuery) Run() (*Rows, error) {
-	return runLastSession(q)
-}
-
-func (q MetaQuery) RunOne(row interface{}) error {
-	return runOneLastSession(q, row)
-}
-
-func (q MetaQuery) RunCollect(rows interface{}) error {
-	return runCollectLastSession(q, rows)
-}
-
-func (q WriteQuery) Run() (*Rows, error) {
-	return runLastSession(q)
-}
-
-func (q WriteQuery) RunOne(row interface{}) error {
-	return runOneLastSession(q, row)
-}
-
-func (q WriteQuery) RunCollect(rows interface{}) error {
-	return runCollectLastSession(q, rows)
-}
-
-func (e Expression) Run() (*Rows, error) {
-	return runLastSession(e)
-}
-
-func (e Expression) RunOne(row interface{}) error {
-	return runOneLastSession(e, row)
-}
-
-func (q Expression) RunCollect(rows interface{}) error {
-	return runCollectLastSession(q, rows)
-}
-
 func (ctx context) toTerm(o interface{}) *p.Term {
 	e := Expr(o)
 	value := e.value

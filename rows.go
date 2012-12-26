@@ -10,9 +10,9 @@ import (
 	"reflect"
 )
 
-// An interator to move through the rows returned by the database, call
-// rows.Next() in a loop, and call rows.Scan(&dest) inside the loop to scan
-// a row into the variable `dest`
+// Rows is an interator to move through the rows returned by the database, call
+// rows.Next(&dest) in a loop to scan a row into the variable `dest`, returns
+// false when there is an error or no more rows left.
 type Rows struct {
 	session  *Session
 	closed   bool
@@ -24,8 +24,8 @@ type Rows struct {
 	query    Query
 }
 
+// continueQuery creates a query that will cause this query to continue
 func (rows *Rows) continueQuery() error {
-	// create a query that will cause this query to continue
 	querybuf := &p.Query{
 		Type:  p.Query_CONTINUE.Enum(),
 		Token: proto.Int64(rows.token),
@@ -49,16 +49,26 @@ func (rows *Rows) continueQuery() error {
 	return nil
 }
 
-// Start iterator or move it forward by one document, returns true if there
-// are more rows, false if there are no more rows or some sort of
-// error has occurred (use Err() to get the last error)
-func (rows *Rows) Next() bool {
+// Next moves the iterator forward by one document, false if there are no more
+// rows or some sort of error has occurred (use .Err() to get the last error)
+// `dest` must be passed by reference.
+//
+//  rows := r.Table("billiards").Run()
+//  var result interface{}
+//  for rows.Next(&result) {
+//      fmt.Println("result:", result)
+//  }
+//  if rows.Err() != nil {
+//      ...
+//  }
+func (rows *Rows) Next(dest interface{}) bool {
 	if rows.closed {
 		return false
 	}
 	if rows.lasterr != nil {
 		return false
 	}
+
 	if len(rows.buffer) == 0 {
 		// we're out of results, may need to fetch some more
 		if rows.complete {
@@ -69,37 +79,29 @@ func (rows *Rows) Next() bool {
 			err := rows.continueQuery()
 			if err != nil {
 				rows.lasterr = err
-				return false
 			}
 		}
-	} else {
+	}
+
+	if len(rows.buffer) > 0 {
 		rows.current = &rows.buffer[0]
 		rows.buffer = rows.buffer[1:len(rows.buffer)]
+		err := json.Unmarshal([]byte(*rows.current), dest)
+		if err != nil {
+			rows.lasterr = err
+		}
 	}
 
 	if rows.lasterr == io.EOF {
-		rows.Close()
+		rows.closed = true
 	}
 	return rows.lasterr == nil
 }
 
-// Take the current document in the result set and put it into the provided
-// structure. `dest` must be passed by reference, e.g. rows.Scan(&dest)
-func (rows *Rows) Scan(dest interface{}) error {
-	if rows.closed {
-		return errors.New("rethinkdb: Scan on closed Rows")
-	}
-	if rows.lasterr != nil {
-		return rows.lasterr
-	}
-	if rows.current == nil {
-		return errors.New("rethinkdb: Scan called without calling Next")
-	}
-	return json.Unmarshal([]byte(*rows.current), dest)
-}
-
-// Returns the last error encountered during iteration, for example, a network
-// error while contacting the database server
+// Err returns the last error encountered during iteration, for example, a network
+// error while contacting the database server.
+//
+//  err := r.Table("refectory").Run().Err()
 func (rows *Rows) Err() error {
 	if rows.lasterr == io.EOF {
 		// this represents a normal termination of the iterator, so it doesn't really
@@ -109,18 +111,17 @@ func (rows *Rows) Err() error {
 	return rows.lasterr
 }
 
-// Close the iterator, freeing any resources associated with it, iterators are
-// automatically closed when the end of the stream is reached
-func (rows *Rows) Close() error {
-	if rows.closed {
-		return nil
-	}
-	rows.closed = true
-	return nil
-}
-
-// Collect all results from the iterator into a reference to a slice
+// Collect gets all results from the iterator into a reference to a slice.  It
+// may perform multiple network requests to the server until it has retrieved
+// all results.
+//
+//  var result []interface{}
+//  err := r.Table("gateleg").Run().Collect(&result)
 func (rows *Rows) Collect(slice interface{}) error {
+	if rows.Err() != nil {
+		return rows.Err()
+	}
+
 	slicePointerValue := reflect.ValueOf(slice)
 	if slicePointerValue.Kind() != reflect.Ptr {
 		return errors.New("rethinkdb: `slice` should probably should be a pointer to a slice")
@@ -136,10 +137,9 @@ func (rows *Rows) Collect(slice interface{}) error {
 	// create a new element of the kind that the slice holds so we can scan
 	// into it
 	elemValue := reflect.New(sliceValue.Type().Elem())
-	for rows.Next() {
-		err := rows.Scan(elemValue.Interface())
-		if err != nil {
-			return err
+	for rows.Next(elemValue.Interface()) {
+		if rows.Err() != nil {
+			return rows.Err()
 		}
 		newSliceValue = reflect.Append(newSliceValue, elemValue.Elem())
 	}
@@ -150,4 +150,22 @@ func (rows *Rows) Collect(slice interface{}) error {
 
 	sliceValue.Set(newSliceValue)
 	return nil
+}
+
+// One gets the first result from a query response.
+//
+//  var result interface{}
+//  err := r.Table("trestle").GetById(0).Run().One(&result)
+func (rows *Rows) One(row interface{}) error {
+	if rows.Err() != nil {
+		return rows.Err()
+	}
+
+	if rows.lasterr == io.EOF {
+		return Error{Err: ErrNoRows}
+	}
+
+	rows.Next(row)
+
+	return rows.Err()
 }

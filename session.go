@@ -26,26 +26,23 @@ type Session struct {
 }
 
 // Query is the interface for queries that can be .Run(), this includes
-// Expression (run as a read query), MetaQuery, and WriteQuery
-// returned by any call that terminates a query (for instance,
-// .Insert()), and provides .Run() and .RunSingle() methods to run the Query on
-// the last created connection.  Methods that generate a query are generally
-// located on Expression objects.
+// Expression (run as a read query), MetaQuery, and WriteQuery. Methods that
+// generate a query are generally located on Expression objects.
 type Query interface {
 	toProtobuf(context) *p.Query // will panic on errors
-	Run() (*Rows, error)
-	RunOne(interface{}) error
-	RunCollect(interface{}) error
+	Run() *Rows
 }
 
 // SetDebug causes all queries send to the server and responses received to be
 // printed to stdout in raw form.
+//
+//  r.SetDebug(true)
 func SetDebug(debug bool) {
 	debugMode = debug
 }
 
 // writeMessage writes a byte array to the stream preceeded by the length in
-// bytes
+// bytes.
 func writeMessage(conn net.Conn, data []byte) error {
 	messageLength := uint32(len(data))
 	if err := binary.Write(conn, binary.LittleEndian, messageLength); err != nil {
@@ -56,7 +53,7 @@ func writeMessage(conn net.Conn, data []byte) error {
 	return err
 }
 
-// writeQuery writes a protobuf message to the stream
+// writeQuery writes a protobuf message to the connection.
 func writeQuery(conn net.Conn, protobuf *p.Query) error {
 	data, err := proto.Marshal(protobuf)
 	if err != nil {
@@ -66,8 +63,8 @@ func writeQuery(conn net.Conn, protobuf *p.Query) error {
 	return writeMessage(conn, data)
 }
 
-// readMessage reads a single message from the stream, which is a length then a
-// serialized protocol buffer
+// readMessage reads a single message from a connection.  A message is a length
+// followed by a serialized protocol buffer.
 func readMessage(conn net.Conn) ([]byte, error) {
 	var messageLength uint32
 	if err := binary.Read(conn, binary.LittleEndian, &messageLength); err != nil {
@@ -89,7 +86,7 @@ func readMessage(conn net.Conn) ([]byte, error) {
 	return result, nil
 }
 
-// Read a protobuf message from a stream
+// readResponse reads a protobuf message from a connection and parses it.
 func readResponse(conn net.Conn) (*p.Response, error) {
 	data, err := readMessage(conn)
 	if err != nil {
@@ -100,9 +97,9 @@ func readResponse(conn net.Conn) (*p.Response, error) {
 	return response, err
 }
 
-// Connect create a new connection to the database.
+// Connect creates a new database session.
 //
-//  Connect("localhost:28015", "test")
+//  sess, err := r.Connect("localhost:28015", "test")
 func Connect(address, database string) (*Session, error) {
 	s := &Session{address: address, database: database, closed: true}
 	err := s.Reconnect()
@@ -113,7 +110,9 @@ func Connect(address, database string) (*Session, error) {
 	return s, nil
 }
 
-// Close closes the database, freeing any associated resources.
+// Close closes the session, freeing any associated resources.
+//
+//  err := sess.Close()
 func (s *Session) Close() error {
 	if s.closed {
 		return nil
@@ -122,7 +121,9 @@ func (s *Session) Close() error {
 	return s.conn.Close()
 }
 
-// Reconnect closes and re-open a connection, canceling any outstanding requests
+// Reconnect closes and re-opens a session, canceling any outstanding requests.
+//
+//  err := sess.Reconnect()
 func (s *Session) Reconnect() error {
 	const clientHello uint32 = 0xaf61ba35
 
@@ -141,21 +142,25 @@ func (s *Session) Reconnect() error {
 	return nil
 }
 
-// Use switches to another database on the same server
+// Use changes the default database for a connection.  This is the database that
+// will be used when a query is created without an explicit database.
+//
+//  sess.Use("dave")
+//  rows := r.Table("employees").Run() // uses database "dave"
 func (s *Session) Use(database string) {
 	s.database = database
 }
 
 // getToken generates the next query token, used to number requests and match
-// responses with requests
+// responses with requests.
 func (s *Session) getToken() int64 {
 	token := s.token
 	s.token += 1
 	return token
 }
 
-// executeQuery sends a single query to the server and retrieves the raw
-// response
+// executeQuery sends a single query to the server and retrieves the parsed
+// response.
 func (s *Session) executeQuery(protobuf *p.Query) (responseProto *p.Response, err error) {
 	if err = writeQuery(s.conn, protobuf); err != nil {
 		return
@@ -176,29 +181,30 @@ func (s *Session) executeQuery(protobuf *p.Query) (responseProto *p.Response, er
 	return
 }
 
-// Run executes a query directly on a connection, returns an iterator that moves
-// through the resulting JSON rows with rows.Next() and rows.Scan(&dest).
+// Run executes a query directly on a specific session and returns an iterator
+// that moves through the resulting JSON rows with rows.Next() and
+// rows.Scan(&dest).
 //
-//  rows, err := db.Run(query)
-//  for rows.Next() {
-//      var row map[string]interface{}
-//      err = rows.Scan(&row)
+//  rows := session.Run(query)
+//  var row map[string]interface{}
+//  for rows.Next(&row) {
+//      fmt.Println("row:", row)
 //  }
 //  if rows.Err() {
 //      ...
 //  }
-func (s *Session) Run(query Query) (*Rows, error) {
+func (s *Session) Run(query Query) *Rows {
 	ctx := context{databaseName: s.database}
 	queryProto, err := buildProtobuf(ctx, query)
 	if err != nil {
-		return nil, err
+		return &Rows{lasterr: err}
 	}
 
 	queryProto.Token = proto.Int64(s.getToken())
 
 	buffer, status, err := s.run(queryProto, query)
 	if err != nil {
-		return nil, err
+		return &Rows{lasterr: err}
 	}
 
 	switch status {
@@ -208,7 +214,7 @@ func (s *Session) Run(query Query) (*Rows, error) {
 		return &Rows{
 			buffer:   buffer,
 			complete: true,
-		}, nil
+		}
 	case p.Response_SUCCESS_PARTIAL:
 		// beginning of stream of rows
 		return &Rows{
@@ -217,18 +223,20 @@ func (s *Session) Run(query Query) (*Rows, error) {
 			complete: false,
 			token:    queryProto.GetToken(),
 			query:    query,
-		}, nil
+		}
 	case p.Response_SUCCESS_STREAM:
 		// end of a stream of rows, since we got this on the initial query
 		// we can just return all the responses in one go
 		return &Rows{
 			buffer:   buffer,
 			complete: true,
-		}, nil
+		}
 	case p.Response_SUCCESS_EMPTY:
-		// nothing to do here
+		return &Rows{
+			lasterr: io.EOF,
+		}
 	}
-	return nil, nil
+	return &Rows{lasterr: fmt.Errorf("rethinkdb: Unexpected status code from server: %v", status)}
 }
 
 // buildProtobuf converts a query to a protobuf and catches any panics raised
@@ -247,45 +255,9 @@ func buildProtobuf(ctx context, query Query) (queryProto *p.Query, err error) {
 	return
 }
 
-// RunOne runs a query and scans the first result into the provided variable
-func (s *Session) RunOne(query Query, row interface{}) error {
-	rows, err := s.Run(query)
-	if err != nil {
-		return err
-	}
-
-	if rows == nil {
-		// empty response
-		return errors.New("rethinkdb: Attempted to read empty response into variable")
-	}
-
-	if rows.Next() {
-		err = rows.Scan(row)
-		if err != nil {
-			if err == io.EOF {
-				return Error{Err: ErrNoRows}
-			} else {
-				return err
-			}
-		}
-	}
-
-	return rows.Err()
-}
-
-// RunOne runs a query and scans the first result into the provided variable
-func (s *Session) RunCollect(query Query, result interface{}) error {
-	rows, err := s.Run(query)
-	if err != nil {
-		return err
-	}
-
-	return rows.Collect(result)
-}
-
-// Internal run function, shared by Rows iterator and normal Run() call
-// Runs a protocol buffer formatted query, returns a list of strings and
-// a status code.
+// run is an internal function, shared by Rows iterator and normal the Run()
+// call. Runs a protocol buffer formatted query, returns a list of strings and a
+// status code.
 func (s *Session) run(queryProto *p.Query, query Query) (result []string, status p.Response_StatusCode, err error) {
 	if debugMode {
 		fmt.Printf("rethinkdb: query:\n%v", protobufToString(queryProto, 1))
@@ -301,14 +273,11 @@ func (s *Session) run(queryProto *p.Query, query Query) (result []string, status
 
 	status = r.GetStatusCode()
 	switch status {
-	case p.Response_SUCCESS_JSON:
-		fallthrough
-	case p.Response_SUCCESS_STREAM:
-		fallthrough
-	case p.Response_SUCCESS_PARTIAL:
+	case p.Response_SUCCESS_JSON, p.Response_SUCCESS_STREAM, p.Response_SUCCESS_PARTIAL:
 		result = r.Response
 	case p.Response_SUCCESS_EMPTY:
-		// nothing to do here, we'll end up returning a nil result
+		// nothing to do here, what is the value of response in this case?
+		fmt.Println("response:", r.Response)
 	default:
 		// some sort of error
 		e := Error{Response: r, Query: query}
@@ -320,7 +289,7 @@ func (s *Session) run(queryProto *p.Query, query Query) (result []string, status
 		case p.Response_BROKEN_CLIENT:
 			e.Err = ErrBrokenClient
 		default:
-			e.Err = fmt.Errorf("rethinkdb: Unexpected status code from server: %v", r.StatusCode)
+			e.Err = fmt.Errorf("rethinkdb: Unexpected status code from server: %v", status)
 		}
 		err = e
 	}
@@ -335,23 +304,23 @@ func getBacktraceFrames(response *p.Response) []string {
 	return bt.Frame
 }
 
-func runLastSession(query Query) (*Rows, error) {
+func runLastSession(query Query) *Rows {
 	if LastSession == nil {
-		return nil, Error{Err: ErrNoDb}
+		return &Rows{lasterr: Error{Err: ErrNoSession}}
 	}
 	return LastSession.Run(query)
 }
 
-func runOneLastSession(query Query, row interface{}) error {
-	if LastSession == nil {
-		return Error{Err: ErrNoDb}
-	}
-	return LastSession.RunOne(query, row)
+// Run runs a query on the most recently created session, there is one Run()
+// method for each type of query.
+func (q MetaQuery) Run() *Rows {
+	return runLastSession(q)
 }
 
-func runCollectLastSession(query Query, rows interface{}) error {
-	if LastSession == nil {
-		return Error{Err: ErrNoDb}
-	}
-	return LastSession.RunCollect(query, rows)
+func (q WriteQuery) Run() *Rows {
+	return runLastSession(q)
+}
+
+func (e Expression) Run() *Rows {
+	return runLastSession(e)
 }

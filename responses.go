@@ -10,6 +10,3 @@ type WriteResponse struct {
 	GeneratedKeys []string `json:"generated_keys"`
 	FirstError    string   `json:"first_error"` // populated if Errors > 0
 }
-
-// Update: updated, skipped, errors, first_error
-// Replace: deleted, errors, inserted, modified, first_error

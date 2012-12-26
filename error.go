@@ -21,30 +21,30 @@ func (e Error) Error() string {
 
 var (
 	// ErrRuntime indicates that the server has encountered an error while
-	// trying to execute our query. Example:
+	// trying to execute our query.
 	//
-	//   r.Table("table_that_doesnt_exist")
+	//   err := r.Table("table_that_doesnt_exist").Run().Err()
 	ErrRuntime = errors.New("Server could not execute our query")
 
 	// ErrBadQuery indicates that the server has told us we have constructed an
-	// invalid query. Example:
+	// invalid query.
 	//
-	//   r.Table("employees").ArrayToStream().ArrayToStream()
+	//   err := r.Table("work").ArrayToStream().ArrayToStream().Run().Err()
 	ErrBadQuery = errors.New("Server could not make sense of our query")
 
-	// ErrNoDb indicates that we used the .Run() method on a query without first
-	// connecting to a database. Example:
+	// ErrNoSession indicates that we used the .Run() method on a query without first
+	// connecting to a server.
 	//
-	//   r.Table("employees").Run()
-	ErrNoDb = errors.New("No databases have been connected to yet, you must use r.Connect() to connect to a database before calling query.Run()")
+	//   err := r.Table("drum").Run().Err()
+	ErrNoSession = errors.New("No databases have been connected to yet, you must use r.Connect() to connect to a database before calling query.Run()")
 
 	// ErrBrokenClient means the server believes there's a bug in the client
 	// library, for instance a mal-formed protocol buffer or other message.
 	ErrBrokenClient = errors.New("Whoops, looks like there's a bug in this client library, please report it at https://github.com/christopherhesse/rethinkgo/issues/new")
 
 	// ErrNoRows is returned when there is an empty response from the server and
-	// RunSingle() is being used. Example:
+	// .One() is being used.
 	//
-	//  r.Table("employees").Get("totally_not_a_valid_id").RunSingle(&row)
+	//  err := r.Table("pembroke").Get("totally_not_a_valid_id").Run().One(&row)
 	ErrNoRows = errors.New("No rows returned")
 )
