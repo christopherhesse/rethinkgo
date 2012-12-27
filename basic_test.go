@@ -629,20 +629,22 @@ var testSimpleGroups = map[string][]ExpectPair{
 		}),
 			11,
 		},
-		{tbl3.Replace(
-			Fn("rowA", Branch(
-				Js("rowA.id == 1"),
-				LetVar("rowA").Merge(Map{"x": 2}),
-				LetVar("rowA"),
-			))),
+		{tbl3.Replace(func(rowA Expression) Expression {
+			return Branch(
+				Js(fmt.Sprintf("%v.id == 1", rowA)),
+				LetVar(rowA.String()).Merge(Map{"x": 2}),
+				LetVar(rowA.String()),
+			)
+		}),
 			MatchMap{"errors": 10},
 		},
-		{tbl3.Replace(
-			Fn("rowA", Branch(
-				Js("rowA.id == 1"),
-				LetVar("rowA").Merge(Map{"x": 2}),
-				LetVar("rowA"),
-			))).Atomic(false),
+		{tbl3.Replace(func(rowA Expression) Expression {
+			return Branch(
+				Js(fmt.Sprintf("%v.id == 1", rowA)),
+				LetVar(rowA.String()).Merge(Map{"x": 2}),
+				LetVar(rowA.String()),
+			)
+		}).Atomic(false),
 			MatchMap{"modified": 10},
 		},
 		{tbl3.Map(func(a Expression) Expression {
@@ -686,20 +688,22 @@ var testSimpleGroups = map[string][]ExpectPair{
 		}),
 			10,
 		},
-		{tbl3.Replace(
-			Fn("rowA", Branch(
-				Js("rowA.id < 3"),
+		{tbl3.Replace(func(rowA Expression) Expression {
+			return Branch(
+				Js(fmt.Sprintf("%v.id < 3", rowA)),
 				nil,
-				LetVar("rowA"),
-			))),
+				LetVar(rowA.String()),
+			)
+		}),
 			MatchMap{"errors": 9},
 		},
-		{tbl3.Replace(
-			Fn("rowA", Branch(
-				Js("rowA.id < 3"),
+		{tbl3.Replace(func(rowA Expression) Expression {
+			return Branch(
+				Js(fmt.Sprintf("%v.id < 3", rowA)),
 				nil,
-				LetVar("rowA"),
-			))).Atomic(false),
+				LetVar(rowA.String()),
+			)
+		}).Atomic(false),
 			MatchMap{"deleted": 2},
 		},
 		{tbl3.Map(func(a Expression) Expression {

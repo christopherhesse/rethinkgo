@@ -389,7 +389,7 @@ func Branch(test, trueBranch, falseBranch interface{}) Expression {
 }
 
 type getArgs struct {
-	table     interface{}
+	table     Expression
 	key       Expression
 	attribute string
 }
@@ -416,7 +416,7 @@ type getArgs struct {
 //    "id": "edc3a46b-95a0-4f64-9d1c-0dd7d83c4bcd"
 //  }
 func (e Expression) Get(key interface{}, attribute string) Expression {
-	value := getArgs{table: e.value, key: Expr(key), attribute: attribute}
+	value := getArgs{table: e, key: Expr(key), attribute: attribute}
 	return Expression{kind: getByKeyKind, value: value}
 }
 
@@ -447,7 +447,7 @@ func (e Expression) GetById(key interface{}) Expression {
 type groupByArgs struct {
 	attribute        interface{}
 	groupedMapReduce GroupedMapReduce
-	expression       Expression
+	expr             Expression
 }
 
 // GroupBy does a sort of grouped map reduce.  First the server groups all rows
@@ -496,7 +496,7 @@ func (e Expression) GroupBy(attribute interface{}, groupedMapReduce GroupedMapRe
 		value: groupByArgs{
 			attribute:        attribute,
 			groupedMapReduce: groupedMapReduce,
-			expression:       e,
+			expr:             e,
 		},
 	}
 }

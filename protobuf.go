@@ -70,7 +70,7 @@ func (ctx context) toTerm(o interface{}) *p.Term {
 		}
 	case getByKeyKind:
 		getArgs := value.(getArgs)
-		table, ok := getArgs.table.(tableInfo)
+		table, ok := getArgs.table.value.(tableInfo)
 		if !ok {
 			panic(".Get() used on something that's not a table")
 		}
@@ -103,7 +103,7 @@ func (ctx context) toTerm(o interface{}) *p.Term {
 
 		gmr := groupByArgs.groupedMapReduce
 
-		result := groupByArgs.expression.GroupedMapReduce(
+		result := groupByArgs.expr.GroupedMapReduce(
 			grouping,
 			gmr.Mapping,
 			gmr.Base,
