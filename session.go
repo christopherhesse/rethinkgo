@@ -16,7 +16,7 @@ var LastSession *Session
 
 // Session represents a connection to a server, use it to run queries against a
 // database, with either sess.Run(query) or query.Run() (uses the most
-// recently-created session.)
+// recently-created session).
 type Session struct {
 	conn     net.Conn
 	token    int64
@@ -35,6 +35,8 @@ type Query interface {
 
 // SetDebug causes all queries send to the server and responses received to be
 // printed to stdout in raw form.
+//
+// Example usage:
 //
 //  r.SetDebug(true)
 func SetDebug(debug bool) {
@@ -99,6 +101,8 @@ func readResponse(conn net.Conn) (*p.Response, error) {
 
 // Connect creates a new database session.
 //
+// Example usage:
+//
 //  sess, err := r.Connect("localhost:28015", "test")
 func Connect(address, database string) (*Session, error) {
 	s := &Session{address: address, database: database, closed: true}
@@ -112,6 +116,8 @@ func Connect(address, database string) (*Session, error) {
 
 // Close closes the session, freeing any associated resources.
 //
+// Example usage:
+//
 //  err := sess.Close()
 func (s *Session) Close() error {
 	if s.closed {
@@ -122,6 +128,8 @@ func (s *Session) Close() error {
 }
 
 // Reconnect closes and re-opens a session, canceling any outstanding requests.
+//
+// Example usage:
 //
 //  err := sess.Reconnect()
 func (s *Session) Reconnect() error {
@@ -146,6 +154,8 @@ func (s *Session) Reconnect() error {
 // will be used when a query is created without an explicit database.  This
 // should not be used if the session is shared between goroutines, confusion
 // would result.
+//
+// Example usage:
 //
 //  sess.Use("dave")
 //  rows := r.Table("employees").Run() // uses database "dave"
@@ -184,8 +194,10 @@ func (s *Session) executeQuery(protobuf *p.Query) (responseProto *p.Response, er
 }
 
 // Run executes a query directly on a specific session and returns an iterator
-// that moves through the resulting JSON rows with rows.Next() and
-// rows.Scan(&dest).
+// that moves through the resulting JSON rows with rows.Next(&dest). See the
+// documentation for the Rows object for other options.
+//
+// Example usage:
 //
 //  rows := session.Run(query)
 //  var row map[string]interface{}
@@ -195,6 +207,7 @@ func (s *Session) executeQuery(protobuf *p.Query) (responseProto *p.Response, er
 //  if rows.Err() {
 //      ...
 //  }
+
 func (s *Session) Run(query Query) *Rows {
 	ctx := context{databaseName: s.database}
 	queryProto, err := buildProtobuf(ctx, query)
@@ -216,6 +229,7 @@ func (s *Session) Run(query Query) *Rows {
 		return &Rows{
 			buffer:   buffer,
 			complete: true,
+			status:   status,
 		}
 	case p.Response_SUCCESS_PARTIAL:
 		// beginning of stream of rows
@@ -225,6 +239,7 @@ func (s *Session) Run(query Query) *Rows {
 			complete: false,
 			token:    queryProto.GetToken(),
 			query:    query,
+			status:   status,
 		}
 	case p.Response_SUCCESS_STREAM:
 		// end of a stream of rows, since we got this on the initial query
@@ -232,10 +247,13 @@ func (s *Session) Run(query Query) *Rows {
 		return &Rows{
 			buffer:   buffer,
 			complete: true,
+			status:   status,
 		}
 	case p.Response_SUCCESS_EMPTY:
 		return &Rows{
-			lasterr: io.EOF,
+			lasterr:  io.EOF,
+			complete: true,
+			status:   status,
 		}
 	}
 	return &Rows{lasterr: fmt.Errorf("rethinkdb: Unexpected status code from server: %v", status)}

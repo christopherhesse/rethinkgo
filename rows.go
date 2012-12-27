@@ -13,6 +13,30 @@ import (
 // Rows is an interator to move through the rows returned by the database, call
 // rows.Next(&dest) in a loop to scan a row into the variable `dest`, returns
 // false when there is an error or no more rows left.
+//
+// There are three methods on the rows object that can be used to avoid
+// iterating in this manner. These three methods correspond to the return types
+// of a query:
+//
+// .Exec() for an empty response:
+//
+//  err := r.Db("marvel").TableCreate("heroes").Exec()
+//
+// .One(&dest) for a response that always returns a single result:
+//
+//  var response string
+//  err := r.Table("heroes").Get("Omega Red", "name").Run().One(&response)
+//
+// .Collect(&dest) for a list of results:
+//
+//  var response []string
+//  err := r.Db("marvel").TableList().Run().Collect(&response)
+//
+// .Collect() may perform multiple network requests to get all of the results of
+// the query.  Use .Limit() if you only need a certain number.
+//
+// All three of these methods will return errors if used on a query response
+// that does not match the expected type (ErrWrongResponseType).
 type Rows struct {
 	session  *Session
 	closed   bool
@@ -22,6 +46,7 @@ type Rows struct {
 	lasterr  error
 	token    int64
 	query    Query
+	status   p.Response_StatusCode
 }
 
 // continueQuery creates a query that will cause this query to continue
@@ -49,14 +74,16 @@ func (rows *Rows) continueQuery() error {
 	return nil
 }
 
-// Next moves the iterator forward by one document, false if there are no more
-// rows or some sort of error has occurred (use .Err() to get the last error)
-// `dest` must be passed by reference.
+// Next moves the iterator forward by one document, returns false if there are
+// no more rows or some sort of error has occurred (use .Err() to get the last
+// error). `dest` must be passed by reference.
 //
-//  rows := r.Table("billiards").Run()
-//  var result interface{}
-//  for rows.Next(&result) {
-//      fmt.Println("result:", result)
+// Example usage:
+//
+//  rows := r.Table("heroes").Run()
+//  var hero interface{}
+//  for rows.Next(&hero) {
+//      fmt.Println("hero:", hero)
 //  }
 //  if rows.Err() != nil {
 //      ...
@@ -98,10 +125,12 @@ func (rows *Rows) Next(dest interface{}) bool {
 	return rows.lasterr == nil
 }
 
-// Err returns the last error encountered during iteration, for example, a network
-// error while contacting the database server.
+// Err returns the last error encountered, for example, a network error while
+// contacting the database server, or while parsing JSON.
 //
-//  err := r.Table("refectory").Run().Err()
+// Example usage:
+//
+//  err := r.Table("heroes").Run().Err()
 func (rows *Rows) Err() error {
 	if rows.lasterr == io.EOF {
 		// this represents a normal termination of the iterator, so it doesn't really
@@ -115,8 +144,10 @@ func (rows *Rows) Err() error {
 // may perform multiple network requests to the server until it has retrieved
 // all results.
 //
+// Example usage:
+//
 //  var result []interface{}
-//  err := r.Table("gateleg").Run().Collect(&result)
+//  err := r.Table("heroes").Run().Collect(&result)
 func (rows *Rows) Collect(slice interface{}) error {
 	if rows.Err() != nil {
 		return rows.Err()
@@ -130,6 +161,10 @@ func (rows *Rows) Collect(slice interface{}) error {
 	sliceValue := slicePointerValue.Elem()
 	if sliceValue.Kind() != reflect.Slice {
 		return errors.New("rethinkdb: A slice type must be provided")
+	}
+
+	if rows.status != p.Response_SUCCESS_PARTIAL && rows.status != p.Response_SUCCESS_STREAM {
+		return Error{Err: ErrWrongResponseType}
 	}
 
 	// create a new slice to hold the results
@@ -154,18 +189,41 @@ func (rows *Rows) Collect(slice interface{}) error {
 
 // One gets the first result from a query response.
 //
+// Example usage:
+//
 //  var result interface{}
-//  err := r.Table("trestle").GetById(0).Run().One(&result)
+//  err := r.Table("villains").Get("Galactus", "name").Run().One(&result)
 func (rows *Rows) One(row interface{}) error {
 	if rows.Err() != nil {
 		return rows.Err()
 	}
 
+	if rows.status != p.Response_SUCCESS_JSON {
+		return Error{Err: ErrWrongResponseType}
+	}
+
 	if rows.lasterr == io.EOF {
-		return Error{Err: ErrNoRows}
+		return Error{Err: ErrNoSuchRow}
 	}
 
 	rows.Next(row)
 
 	return rows.Err()
+}
+
+// Exec is for queries that return no result.  For instance, creating a table.
+//
+// Example usage:
+//
+//  err := r.Db("marvel").TableCreate("villains").Run().Exec()
+func (rows *Rows) Exec(row interface{}) error {
+	if rows.Err() != nil {
+		return rows.Err()
+	}
+
+	if rows.status != p.Response_SUCCESS_EMPTY {
+		return Error{Err: ErrWrongResponseType}
+	}
+
+	return nil
 }

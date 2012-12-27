@@ -83,9 +83,9 @@ const (
 	lessThanOrEqualKind
 )
 
-// Expression represents an RQL expression, such as .Filter(), which, when
-// called on another expression, filters the results of that expression when run
-// on the server.  It is used as the argument type of any functions used in RQL.
+// Expression represents an RQL expression, such as .Filter(), which, when called on
+// another expression, filters the results of that expression when run on the
+// server.  It is used as the argument type of any functions used in RQL.
 //
 // To create an expression from a native type, or user-defined type, or
 // function, use Expr().  In most cases, this is not necessary as conversion to
@@ -93,23 +93,48 @@ const (
 //
 // Example usage:
 //
-//  r.Table("just_twos").Map(func(row Expression) interface{} { return 1 }).Run()
+//  var response []interface{}
+//  err := r.Table("heroes").Map(func(row r.Expression) r.Expression {
+//      return row.Attr("intelligence")
+//  }).Run().Collect(&response)
 //
-// The func() object as well as the '1' constant could each be wrapped in an
-// Expr() call but that is done automatically by this library.
+// Example response:
 //
-// Expressions can be used directly as queries, they are convered to read queries.
+//  [7, 5, 4, 6, 2, 2, 6, 4, ...]
+//
+// Expressions can be used directly as queries, they are convered to read
+// queries that just return whatever rows have been selected.
 //
 // Example usage:
 //
-//  r.Table("employees").Run()
+//  var response []interface{}
+//  err := r.Table("heroes").Filter(r.Row.Attr("intelligence").Eq(7)).Run().Collect(&response)
+//
+// Example response:
+//
+//  [
+//    {
+//		"strength": 7,
+//		"name": "Jean Grey",
+//		"durability": 7,
+//		"intelligence": 7,
+//		"energy": 7,
+//		"fighting": 7,
+//		"real_name": "Jean Grey-Summers",
+//		"speed": 7,
+//		"id": "c073673f-8b33-4698-a2ec-62b18a3e8c4f"
+//	  },
+//    ...
+//  ]
 type Expression struct {
 	value interface{}
 	kind  expressionKind
 }
 
 // WriteQuery is the type returned by any method that writes to a table, this
-// includes .Insert(), .Update(), .Delete(), .ForEach(), and .Replace()
+// includes .Insert(), .Update(), .Delete(), .ForEach(), and .Replace().  The
+// message returned by the server for these queries can be read into the
+// r.WriteResponse struct.
 type WriteQuery struct {
 	query     interface{}
 	nonatomic bool
@@ -118,7 +143,8 @@ type WriteQuery struct {
 
 // MetaQuery is the type returned by methods that create/modify/delete
 // databases, this includes .TableCreate(), .TableList(), .TableDrop(),
-// .DbCreate(), .DbList(), and .DbDrop()
+// .DbCreate(), .DbList(), and .DbDrop().  These return empty responses, except
+// for .*List() which return []string.
 type MetaQuery struct {
 	query interface{}
 }
@@ -128,13 +154,19 @@ type MetaQuery struct {
 //
 // Example without Row:
 //
-//  r.Table("employees").Map(func(row Expression) interface{} {
-//      return row.Attr("awesomeness")
-//  })
+//  var response []interface{}
+//  err := r.Table("villains").Map(func(row r.Expression) r.Expression {
+//      return row.Attr("real_name")
+//  }).Run().Collect(&response)
 //
 // Example with Row:
 //
-//  r.Table("employees").Map(Row.Attr("awesomeness"))
+//  var response []interface{}
+//  err := r.Table("employees").Map(Row.Attr("real_name")).Run().Collect(&response)
+//
+// Example response:
+//
+//  ["En Sabah Nur", "Victor von Doom", ...]
 var Row = Expression{kind: implicitVariableKind}
 
 // Expr converts any value to an expression.  Internally it uses the `json`
@@ -142,9 +174,17 @@ var Row = Expression{kind: implicitVariableKind}
 // by that module can be used. If the value cannot be converted, an error is
 // returned at query .Run() time.
 //
+// If you want to call expression methods on an object that is not yet an
+// expression, this is the function you want.
+//
 // Example usage:
 //
-//  r.Expr(Map{"go": "awesome", "rethinkdb": "awesomer"})
+//  var response interface{}
+//  rows := r.Expr(r.Map{"go": "awesome", "rethinkdb": "awesomer"}).Run().One(&response)
+//
+// Example response:
+//
+//  {"go": "awesome", "rethinkdb": "awesomer"}
 func Expr(values ...interface{}) Expression {
 	switch len(values) {
 	case 0:
@@ -164,19 +204,82 @@ func Expr(values ...interface{}) Expression {
 // Terms //
 ///////////
 
-// JS creates an expression using Javascript code.  The code is executed
+// Js creates an expression using Javascript code.  The code is executed
 // on the server (using eval() https://developer.mozilla.org/en-US/docs/JavaScript/Reference/Global_Objects/eval)
 // and can be used in a couple of roles, as value or as a function.  When used
-// as a function, it received two named arguments, 'row' and/or 'acc' (used for
+// as a function, it receives two named arguments, 'row' and/or 'acc' (used for
 // reductions).
 //
 // The value of the 'this' object inside Javascript code is the current row.
 //
 // Example usage:
 //
-//  r.Table("employees").Map(r.Js(`this.first_name[0] + ' Fucking ' + this.last_name[0]`))
-//  r.Js(`[1,2,3]`) // (same effect as r.Expr(1,2,3))
-//  r.Js(`({name: 2})`) // Parens are required here, otherwise eval() thinks it's a block.
+//  r.Table("employees").Map(r.Js(`this.first_name[0] + ' Fucking ' + this.last_name[0]`)).Run()
+//  r.Js(`[1,2,3]`).Run() // (same effect as r.Expr(1,2,3))
+//  r.Js(`({name: 2})`).Run() // Parens are required here, otherwise eval() thinks it's a block.
+//
+// Example without Js:
+//
+//  var response []interface{}
+//  rows := r.Table("heroes").Map(func(row r.Expression) r.Expression {
+//      return row.Attr("strength").Add(row.Attr("durability"))
+//  }).Run().Collect(&response)
+//
+// Example with Js:
+//
+//  var response []interface{}
+//  rows := r.Table("heroes").Map(
+//      r.Js(`this.strength + this.durability`)
+//  ).Run().Collect(&response)
+//
+// Example response:
+//
+//  [11, 6, 9, 11, ...]
+//
+// When using a Js call inside of a function that is compiled into RQL, the
+// variable names inside the javascript are not the same as in Go.  To get
+// around this, you can convert the variable to a string and use that in the Js
+// code.
+//
+// Example inside a function:
+//
+//  var response []interface{}
+//  // Find each hero-villain pair with the same strength
+//  rows := r.Table("heroes").InnerJoin(r.Table("villains"), func(hero, villain r.Expression) r.Expression {
+//      return r.Js(fmt.Sprintf("%v.strength == %v.strength", hero, villain))
+//  }).Run().Collect(&response)
+//
+// Example response:
+//
+// [
+//   {
+//     "left":
+//     {
+//       "durability": 5,
+//       "energy": 7,
+//       "fighting": 7,
+//       "id": "f915d9a7-6cfa-4151-b5f6-6aded7da595f",
+//       "intelligence": 5,
+//       "name": "Nightcrawler",
+//       "real_name": "Kurt Wagner",
+//       "speed": 7,
+//       "strength": 4
+//     },
+//     "right":
+//     {
+//       "durability": 4,
+//       "energy": 1,
+//       "fighting": 7,
+//       "id": "12e58b11-93b3-4e89-987d-efb345001dfe",
+//       "intelligence": 2,
+//       "name": "Sabretooth",
+//       "real_name": "Victor Creed",
+//       "speed": 2,
+//       "strength": 4
+//     }
+//   },
+//   ...
+// ]
 func Js(body string) Expression {
 	return Expression{kind: javascriptKind, value: body}
 }
@@ -189,11 +292,21 @@ type fnArgs struct {
 // Fn creates a function expression that takes the specified args, this is
 // useful in some cases, for instance, if you want to create a function body
 // that uses Js().  Without this, automatic variable names are generated and
-// need to be interpolated into the javascript.
+// need to be interpolated into the javascript.  Variable names should be
+// separated with ", ".
 //
-// Example usage:
+// TODO: this example doesn't work because inner/outerjoin require actual functions
+// TODO: remove Fn? already have func and Row and %v
 //
-//  Fn("rowA, rowB", Js("rowA.awesomeness + rowB.awesomeness"))
+// Example without Fn:
+//
+//  rows := r.Table("heroes").InnerJoin(r.Table("villains"), func(hero, villain r.Expression) r.Expression {
+//      return r.Js(fmt.Sprintf("%v.strength == %v.strength", hero, villain))
+//  }).Run()
+//
+// Example with Fn:
+//
+//  rows := r.Table("heroes").InnerJoin(r.Table("villains"), r.Fn("hero, villain", r.Js(`hero.strength == villain.strength`))).Run()
 func Fn(args string, body interface{}) Expression {
 	value := fnArgs{
 		args: args,
@@ -209,23 +322,25 @@ type letArgs struct {
 
 // Let binds a variable name to a value, then evaluates the given expression
 // using the bindings it just made.  This is basically just assignment, but
-// expressed in a way that works with the RQL language.
+// expressed in a way that works with RQL.
 //
 // Say you want something like this pseudo-javascript:
 //
+// TODO: this example sucks
+//
 //  var results = [];
-//  for (row in r.table("employees")) {
+//  for (row in r.table("")) {
 //      var joey = r.table("employees").get("joey");
 //      results.push(row.awesomeness * joey.awesomeness);
 //  }
 //  return results;
 //
-// You can do the following RQL:
+// You can do that with the following RQL:
 //
-//  binds := map[string]interface{}{"joey": r.Table("employees").GetById("joey")}
+//  binds := r.Map{"joey": r.Table("employees").GetById("joey")}
 //  expr := r.Row.Attr("awesomeness").Mul(r.LetVar("joey").Attr("awesomeness"))
 //  r.Table("employees").Map(Let(binds, expr))
-func Let(binds map[string]interface{}, expr interface{}) Expression {
+func Let(binds Map, expr interface{}) Expression {
 	value := letArgs{
 		binds: binds,
 		expr:  expr,
@@ -233,13 +348,18 @@ func Let(binds map[string]interface{}, expr interface{}) Expression {
 	return Expression{kind: letKind, value: value}
 }
 
-// LetVar lets you reference a variable bound with Let.
+// LetVar lets you reference a variable bound in the current context (for
+// example, with Let()).  See the Let example for how to use LetVar.
 func LetVar(name string) Expression {
 	return Expression{kind: variableKind, value: name}
 }
 
 // RuntimeError tells the server to respond with a RuntimeError, useful for
 // testing.
+//
+// Example usage:
+//
+//  err := r.RuntimeError("hi there").Run().Err()
 func RuntimeError(message string) Expression {
 	return Expression{kind: errorKind, value: message}
 }
@@ -257,7 +377,7 @@ type ifArgs struct {
 //
 //  // RQL expression
 //  r.Branch(r.Row.Attr("first_name").Eq("Marc"), "is probably marc", "who cares")
-//  // Equivalent Javascript expression
+//  // Roughly equivalent Javascript expression
 //  r.Js(`this.first_name == "Marc" ? "is probably marc" : "who cares"`)
 func Branch(test, trueBranch, falseBranch interface{}) Expression {
 	value := ifArgs{
@@ -279,7 +399,22 @@ type getArgs struct {
 //
 // Example usage:
 //
-//  r.Table("employees").Get("joey", "name")
+//  var response map[string]interface{}
+//  err := r.Table("heroes").Get("Doctor Strange", "name").Run().One(&response)
+//
+// Example response:
+//
+//  {
+//    "strength": 3,
+//    "name": "Doctor Strange",
+//    "durability": 6,
+//    "intelligence": 4,
+//    "energy": 7,
+//    "fighting": 7,
+//    "real_name": "Stephen Vincent Strange",
+//    "speed": 5,
+//    "id": "edc3a46b-95a0-4f64-9d1c-0dd7d83c4bcd"
+//  }
 func (e Expression) Get(key interface{}, attribute string) Expression {
 	value := getArgs{table: e.value, key: Expr(key), attribute: attribute}
 	return Expression{kind: getByKeyKind, value: value}
@@ -289,7 +424,22 @@ func (e Expression) Get(key interface{}, attribute string) Expression {
 //
 // Example usage:
 //
-//  r.Table("employees").GetById("f001af8b-7d11-45a4-a268-a073ad4756ff", "id")
+//  var response map[string]interface{}
+//  err := r.Table("heroes").GetById("edc3a46b-95a0-4f64-9d1c-0dd7d83c4bcd").Run().One(&response)
+//
+// Example response:
+//
+//  {
+//    "strength": 3,
+//    "name": "Doctor Strange",
+//    "durability": 6,
+//    "intelligence": 4,
+//    "energy": 7,
+//    "fighting": 7,
+//    "real_name": "Stephen Vincent Strange",
+//    "speed": 5,
+//    "id": "edc3a46b-95a0-4f64-9d1c-0dd7d83c4bcd"
+//  }
 func (e Expression) GetById(key interface{}) Expression {
 	return e.Get(key, "id")
 }
@@ -301,21 +451,45 @@ type groupByArgs struct {
 }
 
 // GroupBy does a sort of grouped map reduce.  First the server groups all rows
-// that have the same value for "attribute", then it applys the map reduce to
-// each group.
+// that have the same value for `attribute`, then it applys the map reduce to
+// each group.  It takes a GroupedMapReduce object that specifies how to do the
+// map reduce.
 //
 // The GroupedMapReduce object can be one of the 3 supplied ones: r.Count(),
-// r.Avg(attribute), r.Sum(attribute) or a user-built object:
+// r.Avg(attribute), r.Sum(attribute) or a user-supplied object:
 //
+// Example usage:
+//
+//  // Find all heroes with the same strength, sum their intelligence
 //  gmr := r.GroupedMapReduce{
-//      Mapping: r.Js(`this.awesomeness`),
+//      Mapping: func(row r.Expression) r.Expression { return row.Attr("intelligence") },
 //      Base: 0,
-//      Reduction: r.Js(`acc + row`),
+//      Reduction: func(acc, val r.Expression) r.Expression { return acc.Add(val) },
 //      Finalizer: nil,
 //  }
-//  r.Table("employees").GroupBy("awesomeness", gmr)
+//  var response []interface{}
+//  err := r.Table("heroes").GroupBy("strength", gmr).Run().Collect(&response)
 //
-// attribute must be a single attribute (string) or a list of attributes ([]string)
+// Example response:
+//
+//  [
+//    {
+//      "group": 1, // this is the strength attribute for every member of this group
+//      "reduction": 2  // this is the sum of the intelligence attribute of all members of the group
+//    },
+//    {
+//      "group": 2,
+//      "reduction": 15
+//    },
+//    ...
+//  ]
+//
+// `attribute` must be a single attribute (string) or a list of attributes
+// ([]string)
+//
+// Example with multiple attributes:
+//
+//  rows := r.Table("heroes").GroupBy([]string{"strength", "speed"}, gmr).Run()
 func (e Expression) GroupBy(attribute interface{}, groupedMapReduce GroupedMapReduce) Expression {
 	return Expression{
 		kind: groupByKind,
@@ -333,12 +507,17 @@ type useOutdatedArgs struct {
 }
 
 // UseOutdated tells the server to use potentially out-of-date data from all
-// tables already specified in this query.  The advantage is that read queries may be faster if this is set.
+// tables already specified in this query. The advantage is that read queries
+// may be faster if this is set.
 //
-//  // Single table
-//  r.Table("employees").UseOutdated(true)
-//  // Entire query (all tables would be allowed to use outdated data)
-//  r.Table("employees").Filter(Row.Attr("first_name").Eq("Joe")).UseOutdated(true)
+// Example with single table:
+//
+//  rows := r.Table("heroes").UseOutdated(true).Run()
+//
+// Example with multiple tables (all tables would be allowed to use outdated data):
+//
+//  villain_strength := r.Table("villains").Get("Doctor Doom", "name").Attr("strength")
+//  rows := r.Table("heroes").Filter(r.Row.Attr("strength").Eq(villain_strength)).UseOutdated(true).Run()
 func (e Expression) UseOutdated(useOutdated bool) Expression {
 	value := useOutdatedArgs{expr: e, useOutdated: useOutdated}
 	return Expression{kind: useOutdatedKind, value: value}
@@ -360,101 +539,182 @@ func naryBuiltin(kind expressionKind, operand interface{}, args ...interface{}) 
 	}
 }
 
-// Attr gets the attribute from the current row.
+// Attr gets an attribute's value from the row.
 //
 // Example usage:
 //
-//  Row.Attr("first_name")
+//  r.Expr(r.Map{"key": "value"}).Attr("key") => "value"
 func (e Expression) Attr(name string) Expression {
 	return naryBuiltin(getAttributeKind, name, e)
 }
 
-// Add sums two numbers or concatenates two arrays
+// Add sums two numbers or concatenates two arrays.
 //
 // Example usage:
 //
-//  r.Expr(1,2,3).Add(r.Expr(4,5,6))
-//  r.Expr(2).Add(2)
+//  r.Expr(1,2,3).Add(r.Expr(4,5,6)) => [1,2,3,4,5,6]
+//  r.Expr(2).Add(2) => 4
 func (e Expression) Add(operand interface{}) Expression {
 	return naryBuiltin(addKind, nil, e, operand)
 }
 
-// Sub subtracts two numbers
+// Sub subtracts two numbers.
 //
 // Example usage:
 //
-//  r.Expr(2).Sub(2)
+//  r.Expr(2).Sub(2) => 0
 func (e Expression) Sub(operand interface{}) Expression {
 	return naryBuiltin(subtractKind, nil, e, operand)
 }
 
-// Mul multiplies two numbers
+// Mul multiplies two numbers.
 //
 // Example usage:
 //
-//  r.Expr(2).Mul(2)
+//  r.Expr(2).Mul(3) => 6
 func (e Expression) Mul(operand interface{}) Expression {
 	return naryBuiltin(multiplyKind, nil, e, operand)
 }
 
-// Div divides two numbers
+// Div divides two numbers.
 //
 // Example usage:
 //
-//  r.Expr(3).Div(2)
+//  r.Expr(3).Div(2) => 1.5
 func (e Expression) Div(operand interface{}) Expression {
 	return naryBuiltin(divideKind, nil, e, operand)
 }
 
-// Mod divides two numbers and returns the remainder
+// Mod divides two numbers and returns the remainder.
 //
 // Example usage:
 //
-//  r.Expr(23).Mod(10)
+//  r.Expr(23).Mod(10) => 3
 func (e Expression) Mod(operand interface{}) Expression {
 	return naryBuiltin(moduloKind, nil, e, operand)
 }
 
+// And performs a logical and on two values.
+//
+// Example usage:
+//
+//  r.Expr(true).And(true) => true
 func (e Expression) And(operand interface{}) Expression {
 	return naryBuiltin(logicalAndKind, nil, e, operand)
 }
 
+// Or performs a logical or on two values.
+//
+// Example usage:
+//
+//  r.Expr(true).Or(false) => true
 func (e Expression) Or(operand interface{}) Expression {
 	return naryBuiltin(logicalOrKind, nil, e, operand)
 }
 
+// Eq returns true if two values are equal.
+//
+// Example usage:
+//
+//  r.Expr(1).Eq(1) => true
 func (e Expression) Eq(operand interface{}) Expression {
 	return naryBuiltin(equalityKind, nil, e, operand)
 }
 
+// Ne returns true if two values are not equal.
+//
+// Example usage:
+//
+//  r.Expr(1).Ne(-1) => true
 func (e Expression) Ne(operand interface{}) Expression {
 	return naryBuiltin(inequalityKind, nil, e, operand)
 }
 
+// Gt returns true if the first value is greater than the second.
+//
+// Example usage:
+//
+//  r.Expr(2).Gt(1) => true
 func (e Expression) Gt(operand interface{}) Expression {
 	return naryBuiltin(greaterThanKind, nil, e, operand)
 }
 
+// Gt returns true if the first value is greater than or equal to the second.
+//
+// Example usage:
+//
+//  r.Expr(2).Gt(2) => true
 func (e Expression) Ge(operand interface{}) Expression {
 	return naryBuiltin(greaterThanOrEqualKind, nil, e, operand)
 }
 
+// Lt returns true if the first value is less than the second.
+//
+// Example usage:
+//
+//  r.Expr(1).Lt(2) => true
 func (e Expression) Lt(operand interface{}) Expression {
 	return naryBuiltin(lessThanKind, nil, e, operand)
 }
 
+// Le returns true if the first value is less than or equal to the second.
+//
+// Example usage:
+//
+//  r.Expr(2).Lt(2) => true
 func (e Expression) Le(operand interface{}) Expression {
 	return naryBuiltin(lessThanOrEqualKind, nil, e, operand)
 }
 
+// Not performs a logical not on a value.
+//
+// Example usage:
+//
+//  r.Expr(2).Lt(2) => true
 func (e Expression) Not() Expression {
 	return naryBuiltin(logicalNotKind, nil, e)
 }
 
+// ArrayToStream converts an array of objects to a stream.  Many operators work
+// on both streams and arrays. .Union() requires that both operands be the same
+// type.
+//
+// Example with array (note use of .One()):
+//
+//  var response []interface{}
+//  err := r.Expr(1,2,3).Run().One(&response) => [1, 2, 3]
+//
+// Example with stream (note use of .Collect()):
+//
+//  var response []interface{}
+//  err := r.Expr(1,2,3).ArrayToStream().Run().Collect(&response) => [1, 2, 3]
+//
+// Example with .Union():
+//
+//  var response []interface{}
+//  r.Expr(1,2,3,4).ArrayToStream().Union(r.Table("heroes")).Run().Collect(&response)
 func (e Expression) ArrayToStream() Expression {
 	return naryBuiltin(arrayToStreamKind, nil, e)
 }
 
+// StreamToArray converts an stream of objects into an array.  Many operators
+// work on both streams and arrays. .Union() requires that both operands be the
+// same type.
+//
+// Example with stream (note use of .Collect()):
+//
+//  var response []interface{}
+//  err := r.Table("heroes").Run().Collect(&response) => [{hero...}, {hero...}, ...]
+//
+// Example with array (note use of .One()):
+//
+//  var response []interface{}
+//  err := r.Table("heroes").StreamToArray().Run().One(&response) => [{hero...}, {hero...}, ...]
+//
+// Example with .Union():
+//
+//  var response []interface{}
+//  r.Expr(1,2,3,4).Union(r.Table("heroes").StreamToArray()).Run().One(&response)
 func (e Expression) StreamToArray() Expression {
 	return naryBuiltin(streamToArrayKind, nil, e)
 }
@@ -504,6 +764,7 @@ func (e Expression) Skip(start interface{}) Expression {
 	return e.Slice(start, nil)
 }
 
+// TODO: example with fetching by id
 func (e Expression) Map(operand interface{}) Expression {
 	return naryBuiltin(mapKind, operand, e)
 }

@@ -1,5 +1,11 @@
 package rethinkgo
 
+// WriteResponse is a type that can be used to read any responses to write queries, such as .Insert()
+//
+// Example usage:
+//
+//  var response r.WriteResponse
+//  err := r.Table("coffee").Insert(r.Map{"a":1}).Run().One(&response)
 type WriteResponse struct {
 	Inserted      int
 	Errors        int
