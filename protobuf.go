@@ -191,12 +191,10 @@ func (ctx context) toBuiltin(kind expressionKind, operand interface{}) *p.Builti
 	case sliceKind:
 		t = p.Builtin_SLICE
 
-	case getAttributeKind, implicitGetAttributeKind, hasAttributeKind:
+	case getAttributeKind, hasAttributeKind:
 		switch kind {
 		case getAttributeKind:
 			t = p.Builtin_GETATTR
-		case implicitGetAttributeKind:
-			t = p.Builtin_IMPLICIT_GETATTR
 		case hasAttributeKind:
 			t = p.Builtin_HASATTR
 		}

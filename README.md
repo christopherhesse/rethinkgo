@@ -40,7 +40,7 @@ Overview
 
 The Go driver is most similar to the [official Javascript driver](http://www.rethinkdb.com/api/#js).
 
-The important types are r.Expression, []interface{} (used for Arrays), and map[string]interface{} (used for Objects).
+The important types are r.Expression, []interface{} (used for Arrays, available as r.List), and map[string]interface{} (used for Objects, available as r.Map).
 
 Expr() can take arbitrary structs and uses the "json" module to serialize them.  This means that structs can use the json.Marshaler interface (define a method MarshalJSON on the struct).  Struct fields can also be annotated to specify their JSON equivalents:
 
@@ -54,9 +54,9 @@ See the [json docs](http://golang.org/pkg/encoding/json/) for more information.
 Differences from official RethinkDB drivers
 ===========================================
 
-* r.Count() is a function, not a constant
-* There's a global SetDebug(bool) function to turn on printing of queries, rather than .run(debug=True)
 * No errors are generated when creating queries, only when running them, so Table() returns only an Expression instance, but sess.Run(query) returns (*Rows, error)
+* There's a global SetDebug(bool) function to turn on printing of queries, rather than .run(debug=True)
+* r.Count() is a function, not a constant
 * There's no r(attributeName) or row[attributeName] function call / item indexing to get attributes of the "current" row or a specific row respectively.  Instead, there is a .Attr() method on the global "Row" object (r.Row) and any row Expressions that can be used to access attributes.  Examples:
 
         r.Table("marvel").OuterJoin(r.Table("dc"),
@@ -71,11 +71,15 @@ Differences from official RethinkDB drivers
     * .Atomic(bool) and .Overwrite(bool) are methods on write queries
     * .UseOutdated(bool) is a method on any Table() or other Expression (will apply to all tables already specified)
     * TableCreate() has a variant called TableCreateSpec(TableSpec) which takes a TableSpec instance specifying the parameters for the table
+* When running queries, getting results is a little different from the more dynamic languages.  .Run() returns a *Rows iterator object with the following methods that put the response into a variable `dest`, here's when you should use the different methods:
+        * The query returns an empty response: .Exec()
+        * The query always returns a single response: .One(&dest)
+        * The query returns a list of responses: .Collect(&dest)
+        * You want to iterate through the results of the query: .Next(&dest)
 
 Current limitations that will gradually be fixed
 ================================================
 
 * The overall API is fixed because it imitates RethinkDB's [other drivers](http://www.rethinkdb.com/api/), but some specifics of this implementation will change.
-* No pretty-printing of queries
 * Half-completed docs
 * Not goroutine safe, each goroutine needs its own connection.

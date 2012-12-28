@@ -43,7 +43,7 @@ const (
 	// these are all subtypes of the CALL term type
 	logicalNotKind
 	getAttributeKind
-	implicitGetAttributeKind
+	// implicitGetAttributeKind - appears to be unused
 	hasAttributeKind
 	// ImplictHasAttribute - appears to be unused
 	pickAttributesKind
@@ -1125,7 +1125,6 @@ func Table(name string) Expression {
 type insertQuery struct {
 	tableExpr Expression
 	rows      []interface{}
-	overwrite bool
 }
 
 func (e Expression) Insert(rows ...interface{}) WriteQuery {
@@ -1133,7 +1132,6 @@ func (e Expression) Insert(rows ...interface{}) WriteQuery {
 	return WriteQuery{query: insertQuery{
 		tableExpr: e,
 		rows:      rows,
-		overwrite: false,
 	}}
 }
 
