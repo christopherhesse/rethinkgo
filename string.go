@@ -2,15 +2,19 @@ package rethinkgo
 
 import (
 	"fmt"
+	"strings"
 )
 
 func (e Expression) String() string {
 	switch e.kind {
 	case literalKind:
+		if s, ok := e.value.(string); ok {
+			return fmt.Sprintf(`Expr("%v")`, s)
+		}
 		return fmt.Sprintf(`Expr(%v)`, e.value)
 	case groupByKind:
 		groupByArgs := e.value.(groupByArgs)
-		return fmt.Sprintf(`%v.GroupBy(%v, %v)`, groupByArgs.expr, groupByArgs.attribute, groupByArgs.groupedMapReduce)
+		return fmt.Sprintf(`%v.GroupBy(%v, %+v)`, groupByArgs.expr, groupByArgs.attribute, groupByArgs.groupedMapReduce)
 	case useOutdatedKind:
 		useOutdatedArgs := e.value.(useOutdatedArgs)
 		return fmt.Sprintf(`%v.UseOutdated("%v")`, useOutdatedArgs.expr, useOutdatedArgs.useOutdated)
@@ -59,11 +63,11 @@ func builtinArgsToString(e Expression) string {
 	case logicalNotKind:
 		s = `%v.Not()`
 	case getAttributeKind:
-		s = `%v.Attr(%v)`
+		return fmt.Sprintf(`%v.Attr(%v)`, b.args[0], b.operand)
 	case hasAttributeKind:
-		s = `%v.Contains(%v)`
+		return fmt.Sprintf(`%v.Contains(%v)`, b.args[0], b.operand)
 	case pickAttributesKind:
-		s = `%v.Pick(%v)`
+		return fmt.Sprintf(`%v.Pick(%v)`, b.args[0], b.operand)
 	case mapMergeKind:
 		s = `%v.Merge(%v)`
 	case arrayAppendKind:
@@ -75,16 +79,20 @@ func builtinArgsToString(e Expression) string {
 	case moduloKind:
 		s = `%v.Mod(%v)`
 	case filterKind:
-		s = `%v.Filter(%v)`
+		return fmt.Sprintf(`%v.Filter(%v)`, b.args[0], b.operand)
 	case mapKind:
-		s = `%v.Map(%v)`
+		return fmt.Sprintf(`%v.Map(%v)`, b.args[0], b.operand)
 	case concatMapKind:
-		s = `%v.ConcatMap(%v)`
+		return fmt.Sprintf(`%v.ConcatMap(%v)`, b.args[0], b.operand)
 	case orderByKind:
 		a := b.operand.(orderByArgs)
-		return fmt.Sprintf(`%v.OrderBy(%v)`, b.args[0], a.orderings)
+		orderings := []string{}
+		for ordering := range a.orderings {
+			orderings = append(orderings, fmt.Sprintf(`%+v`, ordering))
+		}
+		return fmt.Sprintf(`%v.OrderBy(%v)`, b.args[0], strings.Join(orderings, ", "))
 	case distinctKind:
-		s = `%v.Distinct(%v)`
+		return fmt.Sprintf(`%v.Distinct(%v)`, b.args[0], b.operand)
 	case lengthKind:
 		s = `%v.Count()`
 	case unionKind:
@@ -107,9 +115,11 @@ func builtinArgsToString(e Expression) string {
 		s = `%v.And(%v)`
 	case rangeKind:
 		a := b.operand.(rangeArgs)
-		return fmt.Sprintf(`%v.Between(%v, %v, %v)`, b.args[0], a.attrname, a.lowerbound, a.upperbound)
+		return fmt.Sprintf(`%v.Between("%v", %v, %v)`, b.args[0], a.attrname, a.lowerbound, a.upperbound)
 	case withoutKind:
+		attributes := b.operand.([]string)
 		s = `%v.Unpick(%v)`
+		return fmt.Sprintf(`%v.Unpick(%v)`, b.args[0], strings.Join(attributes, ", "))
 	case equalityKind:
 		s = `%v.Eq(%v)`
 	case inequalityKind:
@@ -161,7 +171,7 @@ func (q MetaQuery) String() string {
 	case listDatabasesQuery:
 		return `DbList()`
 	case tableCreateQuery:
-		return fmt.Sprintf(`Db("%v").TableCreate("%v")`, v.database.name, v.spec)
+		return fmt.Sprintf(`Db("%v").TableCreate(%+v)`, v.database.name, v.spec)
 	case tableListQuery:
 		return fmt.Sprintf(`Db("%v").TableList()`, v.database.name)
 	case tableDropQuery:

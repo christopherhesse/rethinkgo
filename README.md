@@ -23,13 +23,12 @@ Example
     )
 
     func main() {
-        rc, _ := r.Connect("localhost:28015", "test")
-        query := r.Expr([]int{1, 2, 3}).ArrayToStream().Map(r.Js(`row*2`))
-        rows, _ := rc.Run(query)
+        sess, _ := r.Connect("localhost:28015", "test")
+        query := r.Expr(r.List{1, 2, 3}).Map(r.Row.Mul(2))
+        rows := query.Run()
 
         var result int
-        for rows.Next() {
-            rows.Scan(&result)
+        for rows.Next(&result) {
             fmt.Println("result:", result)
         }
     }
@@ -81,5 +80,4 @@ Current limitations that will gradually be fixed
 ================================================
 
 * The overall API is fixed because it imitates RethinkDB's [other drivers](http://www.rethinkdb.com/api/), but some specifics of this implementation will change.
-* Half-completed docs
 * Not goroutine safe, each goroutine needs its own connection.

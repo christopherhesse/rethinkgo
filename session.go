@@ -280,7 +280,8 @@ func buildProtobuf(ctx context, query Query) (queryProto *p.Query, err error) {
 // status code.
 func (s *Session) run(queryProto *p.Query, query Query) (result []string, status p.Response_StatusCode, err error) {
 	if debugMode {
-		fmt.Printf("rethinkdb: query:\n%v", protobufToString(queryProto, 1))
+		fmt.Printf("rethinkdb: query: %v\n", query)
+		fmt.Printf("rethinkdb: queryProto:\n%v", protobufToString(queryProto, 1))
 	}
 
 	r, err := s.executeQuery(queryProto)
@@ -288,7 +289,7 @@ func (s *Session) run(queryProto *p.Query, query Query) (result []string, status
 		return
 	}
 	if debugMode {
-		fmt.Printf("rethinkdb: response:\n%v", protobufToString(r, 1))
+		fmt.Printf("rethinkdb: responseProto:\n%v", protobufToString(r, 1))
 	}
 
 	status = r.GetStatusCode()

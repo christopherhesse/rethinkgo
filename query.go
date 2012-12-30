@@ -13,7 +13,6 @@ type expressionKind int
 const (
 	// These I just made up
 	literalKind expressionKind = iota // converted to an Expression
-	functionKind
 	groupByKind
 	useOutdatedKind
 
@@ -284,37 +283,6 @@ func Js(body string) Expression {
 	return Expression{kind: javascriptKind, value: body}
 }
 
-type fnArgs struct {
-	args string
-	body interface{}
-}
-
-// Fn creates a function expression that takes the specified args, this is
-// useful in some cases, for instance, if you want to create a function body
-// that uses Js().  Without this, automatic variable names are generated and
-// need to be interpolated into the javascript.  Variable names should be
-// separated with ", ".
-//
-// TODO: this example doesn't work because inner/outerjoin require actual functions
-// TODO: remove Fn? already have func and Row and %v
-//
-// Example without Fn:
-//
-//  rows := r.Table("heroes").InnerJoin(r.Table("villains"), func(hero, villain r.Expression) r.Expression {
-//      return r.Js(fmt.Sprintf("%v.strength == %v.strength", hero, villain))
-//  }).Run()
-//
-// Example with Fn:
-//
-//  rows := r.Table("heroes").InnerJoin(r.Table("villains"), r.Fn("hero, villain", r.Js(`hero.strength == villain.strength`))).Run()
-func Fn(args string, body interface{}) Expression {
-	value := fnArgs{
-		args: args,
-		body: body,
-	}
-	return Expression{kind: functionKind, value: value}
-}
-
 type letArgs struct {
 	binds map[string]interface{}
 	expr  interface{}
@@ -326,20 +294,20 @@ type letArgs struct {
 //
 // Say you want something like this pseudo-javascript:
 //
-// TODO: this example sucks
-//
 //  var results = [];
-//  for (row in r.table("")) {
-//      var joey = r.table("employees").get("joey");
-//      results.push(row.awesomeness * joey.awesomeness);
+//  var havok = r.table("heroes").get("havok");
+//  for (villain in r.table("villains")) {
+//      results.push(villain.strength > havok.strength);
 //  }
 //  return results;
 //
 // You can do that with the following RQL:
 //
-//  binds := r.Map{"joey": r.Table("employees").GetById("joey")}
-//  expr := r.Row.Attr("awesomeness").Mul(r.LetVar("joey").Attr("awesomeness"))
-//  r.Table("employees").Map(Let(binds, expr))
+//  var response []bool
+//  binds := r.Map{"havok": r.Table("heroes").Get("Havok", "name")}
+//  expr := r.Row.Attr("strength").Gt(r.LetVar("havok").Attr("strength"))
+//  query := r.Table("villains").Map(r.Let(binds, expr))
+//  err := query.Run().Collect(&response)
 func Let(binds Map, expr interface{}) Expression {
 	value := letArgs{
 		binds: binds,
@@ -375,10 +343,10 @@ type ifArgs struct {
 //
 // Example usage:
 //
-//  // RQL expression
-//  r.Branch(r.Row.Attr("first_name").Eq("Marc"), "is probably marc", "who cares")
-//  // Roughly equivalent Javascript expression
+//  // Javascript expression
 //  r.Js(`this.first_name == "Marc" ? "is probably marc" : "who cares"`)
+//  // Roughly equivalent RQL expression
+//  r.Branch(r.Row.Attr("first_name").Eq("Marc"), "is probably marc", "who cares")
 func Branch(test, trueBranch, falseBranch interface{}) Expression {
 	value := ifArgs{
 		test:        test,
@@ -719,22 +687,36 @@ func (e Expression) StreamToArray() Expression {
 	return naryBuiltin(streamToArrayKind, nil, e)
 }
 
+// TODO:
 func (e Expression) Distinct() Expression {
 	return naryBuiltin(distinctKind, nil, e)
 }
 
+// Count returns the number of elements in the response.
+//
+// Example usage:
+//
+//  var response int
+//  err := r.Table("heroes").Count().Run().One(&response)
+//
+// Example response:
+//
+//  42
 func (e Expression) Count() Expression {
 	return naryBuiltin(lengthKind, nil, e)
 }
 
+// TODO:
 func (e Expression) Merge(operand interface{}) Expression {
 	return naryBuiltin(mapMergeKind, nil, e, operand)
 }
 
+// TODO:
 func (e Expression) Append(operand interface{}) Expression {
 	return naryBuiltin(arrayAppendKind, nil, e, operand)
 }
 
+// TODO:
 func (e Expression) Union(operands ...interface{}) Expression {
 	// elements of operands should be among the rest of the args to the UNION call,
 	// at the same level as the expression
@@ -748,18 +730,59 @@ func (e Expression) Union(operands ...interface{}) Expression {
 	return naryBuiltin(unionKind, nil, args...)
 }
 
+// Nth returns the nth element in sequence, zero-indexed.
+//
+// Example usage:
+//
+//  var response int
+//  err := r.Expr(4,3,2,1).Nth(1).Run().One(&response)
+//
+// Example response:
+//
+//  3
 func (e Expression) Nth(operand interface{}) Expression {
 	return naryBuiltin(nthKind, nil, e, operand)
 }
 
+// Slice returns a section of a sequence, with bounds [lower, upper), where
+// lower bound is inclusive and upper bound is exclusive.
+//
+// Example usage:
+//
+//  var response []int
+//  err := r.Expr(1,2,3,4,5).Slice(2,4).Run().One(&response)
+//
+// Example response:
+//
+//  [3, 4]
 func (e Expression) Slice(lower, upper interface{}) Expression {
 	return naryBuiltin(sliceKind, nil, e, lower, upper)
 }
 
+// Limit returns only the first `limit` results from the query.
+//
+// Example usage:
+//
+//  var response []int
+//  err := r.Expr(1,2,3,4,5).Limit(3).Run().One(&response)
+//
+// Example response:
+//
+//  [1, 2, 3]
 func (e Expression) Limit(limit interface{}) Expression {
 	return e.Slice(0, limit)
 }
 
+// Skip returns all results after the first `start` results.
+//
+// Example usage:
+//
+//  var response []int
+//  err := r.Expr(1,2,3,4,5).Skip(3).Run().One(&response)
+//
+// Example response:
+//
+//  [4, 5]
 func (e Expression) Skip(start interface{}) Expression {
 	return e.Slice(start, nil)
 }
@@ -769,14 +792,17 @@ func (e Expression) Map(operand interface{}) Expression {
 	return naryBuiltin(mapKind, operand, e)
 }
 
+// TODO:
 func (e Expression) ConcatMap(operand interface{}) Expression {
 	return naryBuiltin(concatMapKind, operand, e)
 }
 
+// TODO:
 func (e Expression) Filter(operand interface{}) Expression {
 	return naryBuiltin(filterKind, operand, e)
 }
 
+// TODO:
 func (e Expression) Contains(keys ...string) Expression {
 	expr := Expr(true)
 	for _, key := range keys {
@@ -785,10 +811,12 @@ func (e Expression) Contains(keys ...string) Expression {
 	return expr
 }
 
+// TODO:
 func (e Expression) Pick(attributes ...string) Expression {
 	return naryBuiltin(pickAttributesKind, attributes, e)
 }
 
+// TODO:
 func (e Expression) Unpick(attributes ...string) Expression {
 	return naryBuiltin(withoutKind, attributes, e)
 }
@@ -799,6 +827,7 @@ type rangeArgs struct {
 	upperbound interface{}
 }
 
+// TODO:
 func (e Expression) Between(attrname string, lowerbound, upperbound interface{}) Expression {
 	operand := rangeArgs{
 		attrname:   attrname,
@@ -809,6 +838,7 @@ func (e Expression) Between(attrname string, lowerbound, upperbound interface{})
 	return naryBuiltin(rangeKind, operand, e)
 }
 
+// TODO:
 func (e Expression) BetweenIds(lowerbound, upperbound interface{}) Expression {
 	return e.Between("id", lowerbound, upperbound)
 }
@@ -817,6 +847,7 @@ type orderByArgs struct {
 	orderings []interface{}
 }
 
+// TODO:
 func (e Expression) OrderBy(orderings ...interface{}) Expression {
 	// These are not required to be strings because they could also be
 	// orderByAttr structs which specify the direction of sorting
@@ -831,10 +862,12 @@ type orderByAttr struct {
 	ascending bool
 }
 
+// TODO:
 func Asc(attr string) orderByAttr {
 	return orderByAttr{attr, true}
 }
 
+// TODO:
 func Desc(attr string) orderByAttr {
 	return orderByAttr{attr, false}
 }
@@ -844,6 +877,7 @@ type reduceArgs struct {
 	reduction interface{}
 }
 
+// TODO:
 func (e Expression) Reduce(base, reduction interface{}) Expression {
 	operand := reduceArgs{
 		base:      base,
@@ -859,6 +893,7 @@ type groupedMapReduceArgs struct {
 	reduction interface{}
 }
 
+// TODO:
 func (e Expression) GroupedMapReduce(grouping, mapping, base, reduction interface{}) Expression {
 	operand := groupedMapReduceArgs{
 		grouping:  grouping,
@@ -873,14 +908,17 @@ func (e Expression) GroupedMapReduce(grouping, mapping, base, reduction interfac
 // Derived Methods //
 /////////////////////
 
+// TODO:
 func (e Expression) Pluck(attributes ...string) Expression {
 	return e.Map(Row.Pick(attributes...))
 }
 
+// TODO:
 func (e Expression) Without(attributes ...string) Expression {
 	return e.Map(Row.Unpick(attributes...))
 }
 
+// TODO:
 func (leftExpr Expression) InnerJoin(rightExpr Expression, predicate func(Expression, Expression) Expression) Expression {
 	return leftExpr.ConcatMap(func(left Expression) interface{} {
 		return rightExpr.ConcatMap(func(right Expression) interface{} {
@@ -892,6 +930,7 @@ func (leftExpr Expression) InnerJoin(rightExpr Expression, predicate func(Expres
 	})
 }
 
+// TODO:
 func (leftExpr Expression) OuterJoin(rightExpr Expression, predicate func(Expression, Expression) Expression) Expression {
 	// This is a left outer join
 	return leftExpr.ConcatMap(func(left Expression) interface{} {
@@ -910,6 +949,7 @@ func (leftExpr Expression) OuterJoin(rightExpr Expression, predicate func(Expres
 	})
 }
 
+// TODO:
 func (leftExpr Expression) EqJoin(leftAttribute string, rightExpr Expression, rightAttribute string) Expression {
 	return leftExpr.ConcatMap(func(left Expression) interface{} {
 		return Let(Map{"right": rightExpr.Get(left.Attr(leftAttribute), rightAttribute)},
@@ -920,6 +960,7 @@ func (leftExpr Expression) EqJoin(leftAttribute string, rightExpr Expression, ri
 	})
 }
 
+// TODO:
 func (e Expression) Zip() Expression {
 	return e.Map(func(row Expression) interface{} {
 		return Branch(
@@ -939,6 +980,7 @@ type GroupedMapReduce struct {
 	Finalizer interface{}
 }
 
+// TODO:
 func Count() GroupedMapReduce {
 	return GroupedMapReduce{
 		Mapping:   func(row Expression) interface{} { return 1 },
@@ -947,6 +989,7 @@ func Count() GroupedMapReduce {
 	}
 }
 
+// TODO:
 func Sum(attribute string) GroupedMapReduce {
 	return GroupedMapReduce{
 		Mapping:   func(row Expression) interface{} { return row.Attr(attribute) },
@@ -955,6 +998,7 @@ func Sum(attribute string) GroupedMapReduce {
 	}
 }
 
+// TODO:
 func Avg(attribute string) GroupedMapReduce {
 	return GroupedMapReduce{
 		Mapping: func(row Expression) interface{} {
@@ -980,15 +1024,11 @@ type createDatabaseQuery struct {
 	name string
 }
 
-// DbCreate create a database with the supplied name.
+// DbCreate creates a database with the supplied name.
 //
 // Example usage:
 //
-//  _, err := r.DbCreate("company").Run()
-//
-// Example response:
-//
-//  nil
+//  err := r.DbCreate("marvel").Run().Exec()
 func DbCreate(name string) MetaQuery {
 	return MetaQuery{query: createDatabaseQuery{name}}
 }
@@ -1001,11 +1041,7 @@ type dropDatabaseQuery struct {
 //
 // Example usage:
 //
-//  _, err := r.DbDrop("company").Run()
-//
-// Example response:
-//
-//  nil
+//  err := r.DbDrop("marvel").Run().Exec()
 func DbDrop(name string) MetaQuery {
 	return MetaQuery{query: dropDatabaseQuery{name}}
 }
@@ -1016,13 +1052,12 @@ type listDatabasesQuery struct{}
 //
 // Example usage:
 //
-//  rows, err := r.DbList().Run()
 //  var databases []string
-//  err = rows.Collect(&databases)
+//  err := r.DbList().Run().Collect(&databases)
 //
 // Example response:
 //
-//  []string{"test", "company"}
+//  ["test", "marvel"]
 func DbList() MetaQuery {
 	return MetaQuery{query: listDatabasesQuery{}}
 }
@@ -1032,8 +1067,16 @@ type database struct {
 }
 
 // Db lets you perform operations within a specific database (this will override
-// the database specified to the connection).  This can be used to access or
+// the database specified on the session).  This can be used to access or
 // create/list/delete tables within any database available on the server.
+//
+// Example usage:
+//
+//  var response []interface{}
+//  // this query will use the default database of the last created session
+//  r.Table("heroes").Run().Collect(&response)
+//  // this query will use database "marvel" regardless of what database the session has set
+//  r.Db("marvel").Table("heroes").Run().Collect(&response)
 func Db(name string) database {
 	return database{name}
 }
@@ -1044,7 +1087,7 @@ type tableCreateQuery struct {
 }
 
 // TableSpec lets you specify the various parameters for a table, then create it
-// with TableCreateSpec().
+// with TableCreateSpec().  See that function for documentation.
 type TableSpec struct {
 	Name              string
 	PrimaryKey        string
@@ -1056,11 +1099,7 @@ type TableSpec struct {
 //
 // Example usage:
 //
-//  _, err := r.Db("company").TableCreate("employees").Run()
-//
-// Example response:
-//
-//  nil
+//  err := r.Db("marvel").TableCreate("heroes").Run().Exec()
 func (db database) TableCreate(name string) MetaQuery {
 	spec := TableSpec{Name: name}
 	return MetaQuery{query: tableCreateQuery{spec: spec, database: db}}
@@ -1070,12 +1109,8 @@ func (db database) TableCreate(name string) MetaQuery {
 //
 // Example usage:
 //
-//  spec := TableSpec{Name: "employees", PrimaryKey: "userid"}
-//  _, err := r.Db("company").TableCreateSpec(spec).Run()
-//
-// Example response:
-//
-//  nil
+//  spec := TableSpec{Name: "heroes", PrimaryKey: "name"}
+//  err := Db("marvel").TableCreateSpec(spec).Run().Exec()
 func (db database) TableCreateSpec(spec TableSpec) MetaQuery {
 	return MetaQuery{query: tableCreateQuery{spec: spec, database: db}}
 }
@@ -1084,7 +1119,16 @@ type tableListQuery struct {
 	database database
 }
 
-// List all tables in this database
+// TableList lists all tables in the specified database.
+//
+// Example usage:
+//
+//  var tables []string
+//  err := r.Db("marvel").TableList().Run().Collect(&tables)
+//
+// Example response:
+//
+//  ["heroes", "villains"]
 func (db database) TableList() MetaQuery {
 	return MetaQuery{query: tableListQuery{db}}
 }
@@ -1093,6 +1137,7 @@ type tableDropQuery struct {
 	table tableInfo
 }
 
+// TODO:
 // Drop a table from a database
 func (db database) TableDrop(name string) MetaQuery {
 	table := tableInfo{
@@ -1107,6 +1152,7 @@ type tableInfo struct {
 	database database
 }
 
+// TODO:
 func (db database) Table(name string) Expression {
 	value := tableInfo{
 		name:     name,
@@ -1115,6 +1161,7 @@ func (db database) Table(name string) Expression {
 	return Expression{kind: tableKind, value: value}
 }
 
+// TODO:
 func Table(name string) Expression {
 	value := tableInfo{
 		name: name,
@@ -1127,6 +1174,7 @@ type insertQuery struct {
 	rows      []interface{}
 }
 
+// TODO:
 func (e Expression) Insert(rows ...interface{}) WriteQuery {
 	// Assume the expression is a table for now, we'll check later in buildProtobuf
 	return WriteQuery{query: insertQuery{
@@ -1135,11 +1183,13 @@ func (e Expression) Insert(rows ...interface{}) WriteQuery {
 	}}
 }
 
+// TODO:
 func (q WriteQuery) Overwrite(overwrite bool) WriteQuery {
 	q.overwrite = overwrite
 	return q
 }
 
+// TODO:
 func (q WriteQuery) Atomic(atomic bool) WriteQuery {
 	q.nonatomic = !atomic
 	return q
@@ -1150,6 +1200,7 @@ type updateQuery struct {
 	mapping interface{}
 }
 
+// TODO:
 func (e Expression) Update(mapping interface{}) WriteQuery {
 	return WriteQuery{query: updateQuery{
 		view:    e,
@@ -1162,6 +1213,7 @@ type replaceQuery struct {
 	mapping interface{}
 }
 
+// TODO:
 func (e Expression) Replace(mapping interface{}) WriteQuery {
 	return WriteQuery{query: replaceQuery{
 		view:    e,
@@ -1173,6 +1225,7 @@ type deleteQuery struct {
 	view Expression
 }
 
+// TODO:
 func (e Expression) Delete() WriteQuery {
 	return WriteQuery{query: deleteQuery{view: e}}
 }

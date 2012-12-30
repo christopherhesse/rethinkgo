@@ -27,7 +27,18 @@ var gobj = Expr(List{
 var j1 = Table("joins1")
 var j2 = Table("joins2")
 var j3 = Table("joins3")
-var docs []Map
+var docs = []Map{
+	Map{"id": 0},
+	Map{"id": 1},
+	Map{"id": 2},
+	Map{"id": 3},
+	Map{"id": 4},
+	Map{"id": 5},
+	Map{"id": 6},
+	Map{"id": 7},
+	Map{"id": 8},
+	Map{"id": 9},
+}
 
 // Hook up gocheck into the gotest runner.
 func Test(t *testing.T) { TestingT(t) }
@@ -78,12 +89,6 @@ func resetDatabase(c *C) {
 	// det
 	err = Db("test").TableCreate("table3").Run().Err()
 	c.Assert(err, IsNil)
-
-	docs = []Map{}
-	doc_ids := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
-	for _, doc_id := range doc_ids {
-		docs = append(docs, Map{"id": doc_id})
-	}
 
 	err = tbl3.Insert(docs).Run().Err()
 	c.Assert(err, IsNil)
@@ -195,7 +200,6 @@ func runSimpleQuery(c *C, pair ExpectPair) {
 
 func runStreamQuery(c *C, pair ExpectPair) {
 	var result []interface{}
-	fmt.Println("query:", pair.query)
 	err := pair.query.Run().Collect(&result)
 	fmt.Printf("result: %v %T\n", result, result)
 	c.Assert(err, IsNil)

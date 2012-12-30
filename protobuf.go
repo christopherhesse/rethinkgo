@@ -10,7 +10,6 @@ import (
 	"fmt"
 	p "github.com/christopherhesse/rethinkgo/query_language"
 	"reflect"
-	"strings"
 )
 
 // context stores some state that is required when converting Expressions to
@@ -417,12 +416,6 @@ func (ctx context) compileFunction(o interface{}, requiredArgs int) ([]string, *
 
 	if e.kind == literalKind && reflect.ValueOf(e.value).Kind() == reflect.Func {
 		return ctx.compileGoFunc(e.value, requiredArgs)
-	}
-
-	if e.kind == functionKind {
-		fnArgs := e.value.(fnArgs)
-		params := strings.Split(fnArgs.args, ", ")
-		return params, ctx.toTerm(fnArgs.body)
 	}
 
 	return ctx.compileExpressionFunc(e, requiredArgs)
