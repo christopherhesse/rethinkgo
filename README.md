@@ -76,10 +76,10 @@ Differences from official RethinkDB drivers
     * .UseOutdated(bool) is a method on any Table() or other Expression (will apply to all tables already specified)
     * TableCreate() has a variant called TableCreateSpec(TableSpec) which takes a TableSpec instance specifying the parameters for the table
 * When running queries, getting results is a little different from the more dynamic languages.  .Run() returns a *Rows iterator object with the following methods that put the response into a variable `dest`, here's when you should use the different methods:
-    * The query returns an empty response: .Exec()
     * The query always returns a single response: .One(&dest)
     * The query returns a list of responses: .Collect(&dest)
-    * You want to iterate through the results of the query: .Next(&dest)
+    * The query returns an empty response: .Exec()
+    * You want to iterate through the results of the query (an alternative to Collect): .Next(&dest)
 
 Current limitations that will gradually be fixed
 ================================================
