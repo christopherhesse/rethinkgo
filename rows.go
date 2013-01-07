@@ -216,7 +216,7 @@ func (rows *Rows) One(row interface{}) error {
 // Example usage:
 //
 //  err := r.Db("marvel").TableCreate("villains").Run().Exec()
-func (rows *Rows) Exec(row interface{}) error {
+func (rows *Rows) Exec() error {
 	if rows.Err() != nil {
 		return rows.Err()
 	}

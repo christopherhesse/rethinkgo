@@ -3,14 +3,16 @@ rethinkgo
 
 [Go language](http://golang.org/) driver for [RethinkDB](http://www.rethinkdb.com/) made by [Christopher Hesse](http://www.christopherhesse.com/)
 
-[API Documentation](http://godoc.org/github.com/christopherhesse/rethinkgo)
+[Offical Driver Documentation](http://www.rethinkdb.com/api/#js)
+
+[Go Driver Documentation](http://godoc.org/github.com/christopherhesse/rethinkgo)
 
 ****This is a work in progress and will undergo a number of changes.  Parity with existing RethinkDB drivers will be mostly done before the end of December 2012.****
 
 Installation
 ============
 
-    go get github.com/christopherhesse/rethinkgo
+    go get -u github.com/christopherhesse/rethinkgo
 
 Example
 ===================
@@ -23,16 +25,19 @@ Example
     )
 
     func main() {
-        sess, _ := r.Connect("localhost:28015", "test")
-        query := r.Expr(r.List{1, 2, 3}).Map(r.Row.Mul(2))
+        r.Connect("localhost:28015", "test")
+        query := r.Expr(1, 2, 3).ArrayToStream().Map(r.Row.Mul(2))
         rows := query.Run()
 
         var result int
         for rows.Next(&result) {
             fmt.Println("result:", result)
         }
-    }
 
+        if rows.Err() != nil {
+            fmt.Println("error:", rows.Err())
+        }
+    }
 
 Overview
 ========

@@ -244,7 +244,7 @@ func Expr(values ...interface{}) Expression {
 //
 //  var response []interface{}
 //  // Find each hero-villain pair with the same strength
-//  rows := r.Table("heroes").InnerJoin(r.Table("villains"), func(hero, villain r.Expression) r.Expression {
+//  err := r.Table("heroes").InnerJoin(r.Table("villains"), func(hero, villain r.Expression) r.Expression {
 //      return r.Js(fmt.Sprintf("%v.strength == %v.strength", hero, villain))
 //  }).Run().Collect(&response)
 //
@@ -437,6 +437,7 @@ type groupByArgs struct {
 //  }
 //  var response []interface{}
 //  err := r.Table("heroes").GroupBy("strength", gmr).Run().Collect(&response)
+// TODO: run this and check if .Collect() is correct here
 //
 // Example response:
 //
@@ -682,7 +683,7 @@ func (e Expression) ArrayToStream() Expression {
 // Example with .Union():
 //
 //  var response []interface{}
-//  r.Expr(1,2,3,4).Union(r.Table("heroes").StreamToArray()).Run().One(&response)
+//  err := r.Expr(1,2,3,4).Union(r.Table("heroes").StreamToArray()).Run().One(&response)
 func (e Expression) StreamToArray() Expression {
 	return naryBuiltin(streamToArrayKind, nil, e)
 }
@@ -867,7 +868,11 @@ func Asc(attr string) orderByAttr {
 	return orderByAttr{attr, true}
 }
 
-// TODO:
+// Desc tells OrderBy to sort a particular attribute in descending order.
+//
+// Example usage:
+//
+//
 func Desc(attr string) orderByAttr {
 	return orderByAttr{attr, false}
 }
@@ -908,12 +913,49 @@ func (e Expression) GroupedMapReduce(grouping, mapping, base, reduction interfac
 // Derived Methods //
 /////////////////////
 
-// TODO:
+// Pluck runs .Pick() for each row in the sequence, removing all but the
+// specified attributes from each row.
+//
+// Example usage:
+//
+//  var response []interface{}
+//  err := r.Table("heroes").Pluck("real_name", "id").Run().Collect(&response)
+//
+// Example response:
+//
+//  [
+//    {
+//      "real_name": "Peter Benjamin Parker",
+//      "id": "1227f639-38f0-4cbb-a7b1-9c49f13fe89d",
+//    },
+//    ...
+//  ]
 func (e Expression) Pluck(attributes ...string) Expression {
 	return e.Map(Row.Pick(attributes...))
 }
 
-// TODO:
+// Without runs .Unpick() for each row in the sequence, removing any specified
+// attributes from each individual row.
+//
+// Example usage:
+//
+//  var response []interface{}
+//  err := r.Table("heroes").Without("real_name", "id").Run().Collect(&response)
+//
+// Example response:
+//
+//  [
+//    {
+//      "durability": 4,
+//      "energy": 7,
+//      "fighting": 4,
+//      "intelligence": 7,
+//      "name": "Professor X",
+//      "speed": 2,
+//      "strength": 4
+//    },
+//    ...
+//  ]
 func (e Expression) Without(attributes ...string) Expression {
 	return e.Map(Row.Unpick(attributes...))
 }
@@ -949,7 +991,14 @@ func (leftExpr Expression) OuterJoin(rightExpr Expression, predicate func(Expres
 	})
 }
 
-// TODO:
+// EqJoin performs a join on two expressions, it is more efficient than
+// .InnerJoin() and .OuterJoin() because it looks up elements in the right table
+// by primary key.
+//
+// Example usage:
+//
+// TODO: need example
+//
 func (leftExpr Expression) EqJoin(leftAttribute string, rightExpr Expression, rightAttribute string) Expression {
 	return leftExpr.ConcatMap(func(left Expression) interface{} {
 		return Let(Map{"right": rightExpr.Get(left.Attr(leftAttribute), rightAttribute)},
@@ -960,7 +1009,74 @@ func (leftExpr Expression) EqJoin(leftAttribute string, rightExpr Expression, ri
 	})
 }
 
-// TODO:
+// Zip flattens the results of a join by merging the "left" and "right" fields
+// of each row together.  If any keys conflict, the "right" field takes
+// precedence.
+//
+// Example without .Zip():
+//
+//  var response []interface{}
+//  // Find each hero-villain pair with the same strength
+//  err := r.Table("heroes").InnerJoin(r.Table("villains"), func(hero, villain r.Expression) r.Expression {
+//      return hero.Attr("strength").Eq(villain.Attr("strength"))
+//  }).Run().Collect(&response)
+//
+// Example response:
+//
+//  [
+//    {
+//      "left":
+//      {
+//        "durability": 5,
+//        "energy": 7,
+//        "fighting": 7,
+//        "id": "f915d9a7-6cfa-4151-b5f6-6aded7da595f",
+//        "intelligence": 5,
+//        "name": "Nightcrawler",
+//        "real_name": "Kurt Wagner",
+//        "speed": 7,
+//        "strength": 4
+//      },
+//      "right":
+//      {
+//        "durability": 4,
+//        "energy": 1,
+//        "fighting": 7,
+//        "id": "12e58b11-93b3-4e89-987d-efb345001dfe",
+//        "intelligence": 2,
+//        "name": "Sabretooth",
+//        "real_name": "Victor Creed",
+//         "speed": 2,
+//       "strength": 4
+//      }
+//    },
+//    ...
+//  ]
+//
+// Example with .Zip():
+//
+//  var response []interface{}
+//  // Find each hero-villain pair with the same strength
+//  err := r.Table("heroes").InnerJoin(r.Table("villains"), func(hero, villain r.Expression) r.Expression {
+//      return hero.Attr("strength").Eq(villain.Attr("strength"))
+//  }).Zip().Run().Collect(&response)
+//
+// Example response:
+//
+//  [
+//    {
+//      "durability": 4,
+//      "energy": 1,
+//      "fighting": 7,
+//      "id": "12e58b11-93b3-4e89-987d-efb345001dfe",
+//      "intelligence": 2,
+//      "name": "Sabretooth",
+//      "real_name": "Victor Creed",
+//      "speed": 2,
+//      "strength": 4
+//    },
+//    ...
+//  ]
 func (e Expression) Zip() Expression {
 	return e.Map(func(row Expression) interface{} {
 		return Branch(
@@ -972,7 +1088,8 @@ func (e Expression) Zip() Expression {
 }
 
 // GroupedMapReduce stores all the expressions needed to perform a .GroupBy()
-// call, there are three pre-made ones: Count(), Sum(), and Avg().
+// call, there are three pre-made ones: Count(), Sum(), and Avg().  See the
+// documentation for .GroupBy() for more information.
 type GroupedMapReduce struct {
 	Mapping   interface{}
 	Base      interface{}
@@ -980,7 +1097,27 @@ type GroupedMapReduce struct {
 	Finalizer interface{}
 }
 
-// TODO:
+// Count counts the number of rows in a group, for use with the .GroupBy()
+// method.
+//
+// Example usage:
+//
+//  var response []interface{}
+//  err := r.Table("heroes").GroupBy("strength", r.Count()).Run().One(&response)
+//
+// Example response:
+//
+//  [
+//    {
+//      "group": 1, // this is the strength attribute for every member of this group
+//      "reduction": 2  // this is the number of members in this group
+//    },
+//    {
+//      "group": 2,
+//      "reduction": 5
+//    },
+//    ...
+//  ]
 func Count() GroupedMapReduce {
 	return GroupedMapReduce{
 		Mapping:   func(row Expression) interface{} { return 1 },
@@ -989,7 +1126,27 @@ func Count() GroupedMapReduce {
 	}
 }
 
-// TODO:
+// Sum computes the sum of an attribute for a group, for use with the .GroupBy()
+// method.
+//
+// Example usage:
+//
+//  var response []interface{}
+//  err := r.Table("heroes").GroupBy("strength", r.Sum("intelligence")).Run().One(&response)
+//
+// Example response:
+//
+//  [
+//    {
+//      "group": 1, // this is the strength attribute for every member of this group
+//      "reduction": 2  // this is the sum of the intelligence attribute of all members of the group
+//    },
+//    {
+//      "group": 2,
+//      "reduction": 15
+//    },
+//    ...
+//  ]
 func Sum(attribute string) GroupedMapReduce {
 	return GroupedMapReduce{
 		Mapping:   func(row Expression) interface{} { return row.Attr(attribute) },
@@ -998,7 +1155,27 @@ func Sum(attribute string) GroupedMapReduce {
 	}
 }
 
-// TODO:
+// Avg computes the average value of an attribute for a group, for use with the
+// .GroupBy() method.
+//
+// Example usage:
+//
+//  var response []interface{}
+//  err := r.Table("heroes").GroupBy("strength", r.Avg("intelligence")).Run().One(&response)
+//
+// Example response:
+//
+//  [
+//    {
+//      "group": 1, // this is the strength attribute for every member of this group
+//      "reduction": 1  // this is the average value of the intelligence attribute of all members of the group
+//    },
+//    {
+//      "group": 2,
+//      "reduction": 3
+//    },
+//    ...
+//  ]
 func Avg(attribute string) GroupedMapReduce {
 	return GroupedMapReduce{
 		Mapping: func(row Expression) interface{} {
@@ -1110,7 +1287,7 @@ func (db database) TableCreate(name string) MetaQuery {
 // Example usage:
 //
 //  spec := TableSpec{Name: "heroes", PrimaryKey: "name"}
-//  err := Db("marvel").TableCreateSpec(spec).Run().Exec()
+//  err := r.Db("marvel").TableCreateSpec(spec).Run().Exec()
 func (db database) TableCreateSpec(spec TableSpec) MetaQuery {
 	return MetaQuery{query: tableCreateQuery{spec: spec, database: db}}
 }
@@ -1137,8 +1314,11 @@ type tableDropQuery struct {
 	table tableInfo
 }
 
-// TODO:
-// Drop a table from a database
+// TableDrop removes a table from the database.
+//
+// Example usage:
+//
+//  err := r.Db("marvel").TableDrop("heroes").Run().Exec()
 func (db database) TableDrop(name string) MetaQuery {
 	table := tableInfo{
 		name:     name,
@@ -1152,7 +1332,30 @@ type tableInfo struct {
 	database database
 }
 
-// TODO:
+// Table references all rows in a specific table, using the database that this
+// method was called on.
+//
+// Example usage:
+//
+//  var response []map[string]interface{}
+//  err := r.Db("marvel").Table("heroes").Run().Collect(&response)
+//
+// Example response:
+//
+//  [
+//    {
+//      "strength": 3,
+//      "name": "Doctor Strange",
+//      "durability": 6,
+//      "intelligence": 4,
+//      "energy": 7,
+//      "fighting": 7,
+//      "real_name": "Stephen Vincent Strange",
+//      "speed": 5,
+//      "id": "edc3a46b-95a0-4f64-9d1c-0dd7d83c4bcd"
+//    },
+//    ...
+//  ]
 func (db database) Table(name string) Expression {
 	value := tableInfo{
 		name:     name,
@@ -1161,7 +1364,31 @@ func (db database) Table(name string) Expression {
 	return Expression{kind: tableKind, value: value}
 }
 
-// TODO:
+// Table references all rows in a specific table, using the default database
+// specified on the connection.  If you want to use another database, use
+// Db("<dbname>").Table().
+//
+// Example usage:
+//
+//  var response []map[string]interface{}
+//  err := r.Table("heroes").Run().Collect(&response)
+//
+// Example response:
+//
+//  [
+//    {
+//      "strength": 3,
+//      "name": "Doctor Strange",
+//      "durability": 6,
+//      "intelligence": 4,
+//      "energy": 7,
+//      "fighting": 7,
+//      "real_name": "Stephen Vincent Strange",
+//      "speed": 5,
+//      "id": "edc3a46b-95a0-4f64-9d1c-0dd7d83c4bcd"
+//    },
+//    ...
+//  ]
 func Table(name string) Expression {
 	value := tableInfo{
 		name: name,
@@ -1174,7 +1401,15 @@ type insertQuery struct {
 	rows      []interface{}
 }
 
-// TODO:
+// Insert inserts rows into the database.  If no value is specified for the
+// primary key (by default "id"), a value will be generated by the server, e.g.
+// "05679c96-9a05-4f42-a2f6-a9e47c45a5ae".
+//
+// Example usage:
+//
+//  var response r.WriteResponse
+//  row := r.Map{"name": "Thing"}
+//  err := r.Table("heroes").Insert(row).Run().One(&response)
 func (e Expression) Insert(rows ...interface{}) WriteQuery {
 	// Assume the expression is a table for now, we'll check later in buildProtobuf
 	return WriteQuery{query: insertQuery{
@@ -1183,13 +1418,32 @@ func (e Expression) Insert(rows ...interface{}) WriteQuery {
 	}}
 }
 
-// TODO:
+// Overwrite tells an Insert query to overwrite existing rows instead of
+// returning an error.
+//
+// Example usage:
+//
+//  var response r.WriteResponse
+//  row := r.Map{"name": "Thing"}
+//  err := r.Table("heroes").Insert(row).Overwrite(true).Run().One(&response)
 func (q WriteQuery) Overwrite(overwrite bool) WriteQuery {
 	q.overwrite = overwrite
 	return q
 }
 
-// TODO:
+// Atomic changes the required atomic-ness of a query.  By default queries will
+// only be run if they can be executed atomically, that is, all at once.  If a
+// query may not be executed atomically, the server will return an error.  To
+// disable the atomic requirement, use .Atomic(false).
+//
+// Example usage:
+//
+//  var response r.WriteResponse
+//  replacement := r.Map{"name": r.Js("Thing")}
+//  // The following will return an error
+//  err := r.Table("heroes").GetById("05679c96-9a05-4f42-a2f6-a9e47c45a5ae").Update(replacement).Run().One(&response)
+//  // This will work
+//  err := r.Table("heroes").GetById("05679c96-9a05-4f42-a2f6-a9e47c45a5ae").Update(replacement).Atomic(false).Run().One(&response)
 func (q WriteQuery) Atomic(atomic bool) WriteQuery {
 	q.nonatomic = !atomic
 	return q
@@ -1200,7 +1454,15 @@ type updateQuery struct {
 	mapping interface{}
 }
 
-// TODO:
+// Update updates rows in the database. Accepts a JSON document, a RQL
+// expression, or a combination of the two.
+//
+// Example usage:
+//
+//  var response r.WriteResponse
+//  replacement := r.Map{"name": "Thing"}
+//  err := r.Table("heroes").GetById("05679c96-9a05-4f42-a2f6-a9e47c45a5ae").Update(replacement).Run().One(&response)
+//  err := r.Table("heroes").Update(replacement).Run().One(&response)
 func (e Expression) Update(mapping interface{}) WriteQuery {
 	return WriteQuery{query: updateQuery{
 		view:    e,
@@ -1213,7 +1475,16 @@ type replaceQuery struct {
 	mapping interface{}
 }
 
-// TODO:
+// Replace replaces rows in the database. Accepts a JSON document or a RQL
+// expression, and replaces the original document with the new one. The new
+// row must have the same primary key as the original document.
+//
+// Example usage:
+//
+//  var response r.WriteResponse
+//  replacement := r.Map{"id": r.Row.Attr("id"), "name": "Thing"}
+//  err := r.Table("heroes").GetById("05679c96-9a05-4f42-a2f6-a9e47c45a5ae").Replace(replacement).Run().One(&response)
+//  err := r.Table("heroes").Replace(replacement).Run().One(&response)
 func (e Expression) Replace(mapping interface{}) WriteQuery {
 	return WriteQuery{query: replaceQuery{
 		view:    e,
@@ -1225,7 +1496,14 @@ type deleteQuery struct {
 	view Expression
 }
 
-// TODO:
+// Delete removes one or more rows from the database.
+//
+// Example usage:
+//
+//  var response r.WriteResponse
+//  err := r.Table("heroes").GetById("5d93edbb-2882-4594-8163-f64d8695e575").Delete().Run().One(&response)
+//  err := r.Table("heroes").Delete().Run().One(&response)
+//  err := r.Table("heroes").Filter(r.Map{"real_name": "Peter Benjamin Parker"}).Delete().Run().One(&response)
 func (e Expression) Delete() WriteQuery {
 	return WriteQuery{query: deleteQuery{view: e}}
 }
