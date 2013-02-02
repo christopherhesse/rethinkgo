@@ -437,22 +437,17 @@ type groupByArgs struct {
 // each group.  It takes a GroupedMapReduce object that specifies how to do the
 // map reduce.
 //
+// `attribute` must be a single attribute (string) or a list of attributes
+// ([]string)
+//
 // The GroupedMapReduce object can be one of the 3 supplied ones: r.Count(),
 // r.Avg(attribute), r.Sum(attribute) or a user-supplied object:
 //
 // Example usage:
 //
-//  TODO: better, useful sounding, example
-//  // Find all heroes with the same strength, sum their intelligence
-//  gmr := r.GroupedMapReduce{
-//      Mapping: func(row r.Expression) r.Expression { return row.Attr("intelligence") },
-//      Base: 0,
-//      Reduction: func(acc, val r.Expression) r.Expression { return acc.Add(val) },
-//      Finalizer: nil,
-//  }
 //  var response []interface{}
-//  err := r.Table("heroes").GroupBy("strength", gmr).Run().Collect(&response)
-// TODO: run this and check if .Collect() is correct here
+//  // Find all heroes with the same strength, sum their intelligence
+//  err := r.Table("heroes").GroupBy("strength", r.Sum("intelligence")).Run().One(&response)
 //
 // Example response:
 //
@@ -468,11 +463,20 @@ type groupByArgs struct {
 //    ...
 //  ]
 //
-// `attribute` must be a single attribute (string) or a list of attributes
-// ([]string)
+// Example with user-supplied object:
+//
+//  // Find all heroes with the same strength, sum their intelligence
+//  gmr := r.GroupedMapReduce{
+//      Mapping: func(row r.Expression) r.Expression { return row.Attr("intelligence") },
+//      Base: 0,
+//      Reduction: func(acc, val r.Expression) r.Expression { return acc.Add(val) },
+//      Finalizer: nil,
+//  }
+//  err := r.Table("heroes").GroupBy("strength", gmr).Run().One(&response)
 //
 // Example with multiple attributes:
 //
+//  // Find all heroes with the same strength and speed, sum their intelligence
 //  rows := r.Table("heroes").GroupBy([]string{"strength", "speed"}, gmr).Run()
 func (e Expression) GroupBy(attribute interface{}, groupedMapReduce GroupedMapReduce) Expression {
 	return Expression{
@@ -660,8 +664,8 @@ func (e Expression) Not() Expression {
 }
 
 // ArrayToStream converts an array of objects to a stream.  Many operators work
-// on both streams and arrays. .Union() requires that both operands be the same
-// type.
+// on both streams and arrays, but some (such as .Union()) require that both
+// operands be the same type.
 //
 // Example with array (note use of .One()):
 //
@@ -703,7 +707,17 @@ func (e Expression) StreamToArray() Expression {
 	return naryBuiltin(streamToArrayKind, nil, e)
 }
 
-// TODO:
+// Distinct removes duplicate elements from a sequence.
+//
+// Example usage:
+//
+//  var response []interface{}
+//  // Get a list of all possible strength values for our heroes
+//  err := r.Table("heroes").Map(r.Row.Attr("strength")).Distinct().Run().Collect(&response)
+//
+// Example response:
+//
+//  [7, 1, 6, 4, 2, 5, 3]
 func (e Expression) Distinct() Expression {
 	return naryBuiltin(distinctKind, nil, e)
 }
@@ -727,20 +741,37 @@ func (e Expression) Merge(operand interface{}) Expression {
 	return naryBuiltin(mapMergeKind, nil, e, operand)
 }
 
+// Append appends a value to an array.
 // TODO:
 func (e Expression) Append(operand interface{}) Expression {
 	return naryBuiltin(arrayAppendKind, nil, e, operand)
 }
 
-// TODO:
+// Union concatenates two sequences.
+//
+// Example usage:
+//
+//  var response []interface{}
+//  // Retrieve all heroes and villains
+//  r.Table("heroes").Union(r.Table("villains")).Run().Collect(&response)
+//
+// Example response:
+//
+//  [
+//    {
+//      "durability": 6,
+//      "energy": 6,
+//      "fighting": 3,
+//      "id": "1a760d0b-57ef-42a8-9fec-c3a1f34930aa",
+//      "intelligence": 6,
+//      "name": "Iron Man",
+//      "real_name": "Anthony Edward \"Tony\" Stark",
+//      "speed": 5,
+//      "strength": 6
+//    },
+//    ...
+//  ]
 func (e Expression) Union(operands ...interface{}) Expression {
-	// elements of operands should be among the rest of the args to the UNION call,
-	// at the same level as the expression
-	// table.Union(table) needs to end up being
-	// UNION Args: [table, table]
-	// instead of
-	// UNION Args: [table, [table]]
-	// so flatten the list of operands
 	args := []interface{}{e}
 	args = append(args, operands...)
 	return naryBuiltin(unionKind, nil, args...)
@@ -751,6 +782,7 @@ func (e Expression) Union(operands ...interface{}) Expression {
 // Example usage:
 //
 //  var response int
+//  // Get the second element of an array
 //  err := r.Expr(4,3,2,1).Nth(1).Run().One(&response)
 //
 // Example response:
@@ -1061,11 +1093,6 @@ func (e Expression) Without(attributes ...string) Expression {
 	return e.Map(Row.Unpick(attributes...))
 }
 
-// EqJoin performs a join on two expressions, it is more efficient than
-// .InnerJoin() and .OuterJoin() because it looks up elements in the right table
-// by primary key.
-//
-// Example usage:
 // TODO:
 func (leftExpr Expression) InnerJoin(rightExpr Expression, predicate func(Expression, Expression) Expression) Expression {
 	return leftExpr.ConcatMap(func(left Expression) interface{} {
@@ -1112,29 +1139,24 @@ func (leftExpr Expression) OuterJoin(rightExpr Expression, predicate func(Expres
 //
 //  [
 //    {
-//      "durability": 6,
-//      "energy": 7,
-//      "fighting": 4,
-//      "intelligence": 7,
-//      "name": "Magneto",
-//      "speed": 2,
-//      "strength": 2
+//      "left": {
+//        "durability": 6,
+//        "energy": 6,
+//        "fighting": 3,
+//        "id": "c0d1b94f-b07e-40c3-a1db-448e645daedc",
+//        "intelligence": 6,
+//        "name": "Magneto",
+//        "real_name": "Max Eisenhardt",
+//        "speed": 4,
+//        "strength": 2
+//      },
+//      "right": {
+//        "lair": "Asteroid M",
+//        "villain_id": "c0d1b94f-b07e-40c3-a1db-448e645daedc"
+//      }
 //    },
 //    ...
 //  ]
-
-// {
-// "strength": 2,
-// "name": "Magneto",
-// "durability": 6,
-// "intelligence": 6,
-// "energy": 6,
-// "fighting": 3,
-// "real_name": "Max Eisenhardt",
-// "speed": 4,
-// "id": "53013d0b-3c60-4bbd-b07d-c1ae86fd1c0c"
-// } ,
-// response: "{\"right\":{\"lair\":\"Asteroid M\",\"villain_id\":\"c6e67856-8c98-4dbc-8bda-944fbd3ef563\"},\"left\":{\"strength\":2,\"name\":\"Magneto\",\"durability\":6,\"intelligence\":6,\"energy\":6,\"fighting\":3,\"real_name\":\"Max Eisenhardt\",\"speed\":4,\"id\":\"c6e67856-8c98-4dbc-8bda-944fbd3ef563\"}}"
 func (leftExpr Expression) EqJoin(leftAttribute string, rightExpr Expression, rightAttribute string) Expression {
 	return leftExpr.ConcatMap(func(left Expression) interface{} {
 		return Let(Map{"right": rightExpr.Get(left.Attr(leftAttribute), rightAttribute)},
@@ -1389,7 +1411,7 @@ type database struct {
 //
 //  var response []interface{}
 //  // this query will use the default database of the last created session
-//  r.Table("heroes").Run().Collect(&response)
+//  r.Table("test").Run().Collect(&response)
 //  // this query will use database "marvel" regardless of what database the session has set
 //  r.Db("marvel").Table("heroes").Run().Collect(&response)
 func Db(name string) database {
