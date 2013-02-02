@@ -93,6 +93,7 @@ const (
 // Example usage:
 //
 //  var response []interface{}
+//  // Get the intelligence rating for each of our heroes
 //  err := r.Table("heroes").Map(func(row r.Expression) r.Expression {
 //      return row.Attr("intelligence")
 //  }).Run().Collect(&response)
@@ -107,6 +108,7 @@ const (
 // Example usage:
 //
 //  var response []interface{}
+//  // Get all heroes with an intelligence rating of 7
 //  err := r.Table("heroes").Filter(r.Row.Attr("intelligence").Eq(7)).Run().Collect(&response)
 //
 // Example response:
@@ -154,6 +156,7 @@ type MetaQuery struct {
 // Example without Row:
 //
 //  var response []interface{}
+//  // Get the real names of all the villains
 //  err := r.Table("villains").Map(func(row r.Expression) r.Expression {
 //      return row.Attr("real_name")
 //  }).Run().Collect(&response)
@@ -161,6 +164,7 @@ type MetaQuery struct {
 // Example with Row:
 //
 //  var response []interface{}
+//  // Get the real names of all the villains
 //  err := r.Table("employees").Map(Row.Attr("real_name")).Run().Collect(&response)
 //
 // Example response:
@@ -211,15 +215,19 @@ func Expr(values ...interface{}) Expression {
 //
 // The value of the 'this' object inside Javascript code is the current row.
 //
-// Example usage:
+// Example usages:
 //
+//  // (same effect as r.Expr(1,2,3))
+//  r.Js(`[1,2,3]`).Run()
+//  // Parens are required here, otherwise eval() thinks it's a block.
+//  r.Js(`({name: 2})`).Run()
+//  // String concatenation is possible using r.Js
 //  r.Table("employees").Map(r.Js(`this.first_name[0] + ' Fucking ' + this.last_name[0]`)).Run()
-//  r.Js(`[1,2,3]`).Run() // (same effect as r.Expr(1,2,3))
-//  r.Js(`({name: 2})`).Run() // Parens are required here, otherwise eval() thinks it's a block.
 //
 // Example without Js:
 //
 //  var response []interface{}
+//  // Combine each hero's strength and durability
 //  rows := r.Table("heroes").Map(func(row r.Expression) r.Expression {
 //      return row.Attr("strength").Add(row.Attr("durability"))
 //  }).Run().Collect(&response)
@@ -227,6 +235,7 @@ func Expr(values ...interface{}) Expression {
 // Example with Js:
 //
 //  var response []interface{}
+//  // Combine each hero's strength and durability
 //  rows := r.Table("heroes").Map(
 //      r.Js(`this.strength + this.durability`)
 //  ).Run().Collect(&response)
@@ -295,7 +304,7 @@ type letArgs struct {
 // Say you want something like this pseudo-javascript:
 //
 //  var results = [];
-//  var havok = r.table("heroes").get("havok");
+//  var havok = r.table("heroes").get("havok", "name");
 //  for (villain in r.table("villains")) {
 //      results.push(villain.strength > havok.strength);
 //  }
@@ -304,10 +313,15 @@ type letArgs struct {
 // You can do that with the following RQL:
 //
 //  var response []bool
+//  // For each villain, check if that villain is stronger than Havok
 //  binds := r.Map{"havok": r.Table("heroes").Get("Havok", "name")}
 //  expr := r.Row.Attr("strength").Gt(r.LetVar("havok").Attr("strength"))
 //  query := r.Table("villains").Map(r.Let(binds, expr))
 //  err := query.Run().Collect(&response)
+//
+// Example response:
+//
+//  [true, true, true, false, false, ...]
 func Let(binds Map, expr interface{}) Expression {
 	value := letArgs{
 		binds: binds,
@@ -428,6 +442,7 @@ type groupByArgs struct {
 //
 // Example usage:
 //
+//  TODO: better, useful sounding, example
 //  // Find all heroes with the same strength, sum their intelligence
 //  gmr := r.GroupedMapReduce{
 //      Mapping: func(row r.Expression) r.Expression { return row.Attr("intelligence") },
@@ -823,15 +838,35 @@ func (e Expression) Unpick(attributes ...string) Expression {
 }
 
 type rangeArgs struct {
-	attrname   string
+	attribute  string
 	lowerbound interface{}
 	upperbound interface{}
 }
 
-// TODO:
-func (e Expression) Between(attrname string, lowerbound, upperbound interface{}) Expression {
+// Between gets all rows where the given primary key attribute's value falls
+// between the lowerbound and upperbound (inclusive).
+//
+// Example usage:
+//
+//   var response []interface{}
+//   // Retrieve all heroes with names between "E" and "F"
+//   err := r.Table("heroes").Between("name", "E", "F").Run().Collect(&response)
+//
+// Example response:
+//
+//  {
+//    "strength": 4,
+//    "name": "Elektra",
+//    "durability": 2,
+//    "intelligence": 4,
+//    "energy": 3,
+//    "fighting": 7,
+//    "real_name": "Elektra Natchios",
+//    "speed": 6,
+//  }
+func (e Expression) Between(attribute string, lowerbound, upperbound interface{}) Expression {
 	operand := rangeArgs{
-		attrname:   attrname,
+		attribute:  attribute,
 		lowerbound: lowerbound,
 		upperbound: upperbound,
 	}
@@ -839,7 +874,14 @@ func (e Expression) Between(attrname string, lowerbound, upperbound interface{})
 	return naryBuiltin(rangeKind, operand, e)
 }
 
-// TODO:
+// BetweenIds is the same as .Between() with the primary key attribute name set
+// to "id".
+//
+// Example usage:
+//
+//   var response []interface{}
+//   // Retrieve all heroes with names between "a" and "b"
+//   err := r.Table("heroes").Between("name", "a", "b").Run().Collect(&response)
 func (e Expression) BetweenIds(lowerbound, upperbound interface{}) Expression {
 	return e.Between("id", lowerbound, upperbound)
 }
@@ -848,7 +890,17 @@ type orderByArgs struct {
 	orderings []interface{}
 }
 
-// TODO:
+// OrderBy sort the sequence by the values of the given key(s) in each row. The
+// default sort is increasing.
+//
+// Example usage:
+//
+//   var response []interface{}
+//   // Retrieve villains in order of increasing strength
+//   err := r.Table("villains").OrderBy("strength").Run().Collect(&response)
+//
+//   // Retrieve villains in order of decreasing strength, then increasing intelligence
+//   err := r.Table("villains").OrderBy(r.Desc("strength"), "intelligence").Run().Collect(&response)
 func (e Expression) OrderBy(orderings ...interface{}) Expression {
 	// These are not required to be strings because they could also be
 	// orderByAttr structs which specify the direction of sorting
@@ -863,7 +915,14 @@ type orderByAttr struct {
 	ascending bool
 }
 
-// TODO:
+// Asc tells OrderBy to sort a particular attribute in ascending order.  This is
+// the default sort.
+//
+// Example usage:
+//
+//   var response []interface{}
+//   // Retrieve villains in order of increasing fighting ability (worst fighters first)
+//   err := r.Table("villains").OrderBy(r.Asc("fighting")).Run().Collect(&response)
 func Asc(attr string) orderByAttr {
 	return orderByAttr{attr, true}
 }
@@ -872,7 +931,9 @@ func Asc(attr string) orderByAttr {
 //
 // Example usage:
 //
-//
+//   var response []interface{}
+//   // Retrieve villains in order of decreasing speed (fastest villains first)
+//   err := r.Table("villains").OrderBy(r.Desc("speed")).Run().Collect(&response)
 func Desc(attr string) orderByAttr {
 	return orderByAttr{attr, false}
 }
@@ -882,7 +943,38 @@ type reduceArgs struct {
 	reduction interface{}
 }
 
-// TODO:
+// Reduce iterates over a sequence, starting with a base value and applying a
+// reduction function to the value so far and the next row of the sequence.
+//
+// Currently, the reduction function must satisfy the constraint:
+//
+//  reduction(base, value) == value
+//
+// This restriction may be removed in a future version of RethinkDB.
+//
+// Example usage:
+//
+//  var response int
+//  // Add the numbers 1-4 together
+//  reduction := func(acc, val r.Expression) r.Expression { return acc.Add(val) }
+//  err := r.Expr(1,2,3,4).Reduce(0, reduction).Run().One(&response)
+//
+// Example response:
+//
+//  10
+//
+// Example usage:
+//
+//  var response int
+//  // Compute the total speed for all heroes, the types of acc and val should
+//  // be the same, so we extract the speed first with a .Map()
+//  mapping := func(row r.Expression) r.Expression { return row.Attr("speed") }
+//  reduction := func(acc, val r.Expression) r.Expression { return acc.Add(val) }
+//  err := r.Table("heroes").Map(mapping).Reduce(0, reduction).Run().One(&response)
+//
+// Example response:
+//
+//  232
 func (e Expression) Reduce(base, reduction interface{}) Expression {
 	operand := reduceArgs{
 		base:      base,
@@ -898,7 +990,16 @@ type groupedMapReduceArgs struct {
 	reduction interface{}
 }
 
-// TODO:
+// GroupedMapReduce partitions a sequence into groups, then performs a map and a
+// reduction on each group.  See also .Map() and .GroupBy().
+//
+// Example usage:
+//
+//  TODO:
+//  grouping := func (row r.Expression) r.Expression { return row.Attr("speed") }
+//  mapping :=
+//  base :=
+//  reduction :=
 func (e Expression) GroupedMapReduce(grouping, mapping, base, reduction interface{}) Expression {
 	operand := groupedMapReduceArgs{
 		grouping:  grouping,
@@ -960,6 +1061,11 @@ func (e Expression) Without(attributes ...string) Expression {
 	return e.Map(Row.Unpick(attributes...))
 }
 
+// EqJoin performs a join on two expressions, it is more efficient than
+// .InnerJoin() and .OuterJoin() because it looks up elements in the right table
+// by primary key.
+//
+// Example usage:
 // TODO:
 func (leftExpr Expression) InnerJoin(rightExpr Expression, predicate func(Expression, Expression) Expression) Expression {
 	return leftExpr.ConcatMap(func(left Expression) interface{} {
@@ -997,8 +1103,38 @@ func (leftExpr Expression) OuterJoin(rightExpr Expression, predicate func(Expres
 //
 // Example usage:
 //
-// TODO: need example
+//  var response []interface{}
+//  // Get each hero and their associated lair, in this case, "villain_id" is
+//  // the primary key for the "lairs" table
+//  err := r.Table("villains").EqJoin("id", r.Table("lairs"), "villain_id").Run().Collect(&response)
 //
+// Example response:
+//
+//  [
+//    {
+//      "durability": 6,
+//      "energy": 7,
+//      "fighting": 4,
+//      "intelligence": 7,
+//      "name": "Magneto",
+//      "speed": 2,
+//      "strength": 2
+//    },
+//    ...
+//  ]
+
+// {
+// "strength": 2,
+// "name": "Magneto",
+// "durability": 6,
+// "intelligence": 6,
+// "energy": 6,
+// "fighting": 3,
+// "real_name": "Max Eisenhardt",
+// "speed": 4,
+// "id": "53013d0b-3c60-4bbd-b07d-c1ae86fd1c0c"
+// } ,
+// response: "{\"right\":{\"lair\":\"Asteroid M\",\"villain_id\":\"c6e67856-8c98-4dbc-8bda-944fbd3ef563\"},\"left\":{\"strength\":2,\"name\":\"Magneto\",\"durability\":6,\"intelligence\":6,\"energy\":6,\"fighting\":3,\"real_name\":\"Max Eisenhardt\",\"speed\":4,\"id\":\"c6e67856-8c98-4dbc-8bda-944fbd3ef563\"}}"
 func (leftExpr Expression) EqJoin(leftAttribute string, rightExpr Expression, rightAttribute string) Expression {
 	return leftExpr.ConcatMap(func(left Expression) interface{} {
 		return Let(Map{"right": rightExpr.Get(left.Attr(leftAttribute), rightAttribute)},
@@ -1046,8 +1182,8 @@ func (leftExpr Expression) EqJoin(leftAttribute string, rightExpr Expression, ri
 //        "intelligence": 2,
 //        "name": "Sabretooth",
 //        "real_name": "Victor Creed",
-//         "speed": 2,
-//       "strength": 4
+//        "speed": 2,
+//        "strength": 4
 //      }
 //    },
 //    ...
@@ -1103,18 +1239,19 @@ type GroupedMapReduce struct {
 // Example usage:
 //
 //  var response []interface{}
-//  err := r.Table("heroes").GroupBy("strength", r.Count()).Run().One(&response)
+//  // Count all heroes in each superhero group
+//  err := r.Table("heroes").GroupBy("affiliation", r.Count()).Run().One(&response)
 //
 // Example response:
 //
 //  [
 //    {
-//      "group": 1, // this is the strength attribute for every member of this group
-//      "reduction": 2  // this is the number of members in this group
+//      "group": "Avengers", // this is the affiliation attribute for every member of this group
+//      "reduction": 9  // this is the number of members in this group
 //    },
 //    {
-//      "group": 2,
-//      "reduction": 5
+//      "group": "X-Men",
+//      "reduction": 12
 //    },
 //    ...
 //  ]
@@ -1132,6 +1269,7 @@ func Count() GroupedMapReduce {
 // Example usage:
 //
 //  var response []interface{}
+//  // Get the total intelligence of all heroes who have the same strength
 //  err := r.Table("heroes").GroupBy("strength", r.Sum("intelligence")).Run().One(&response)
 //
 // Example response:

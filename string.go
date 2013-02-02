@@ -115,7 +115,7 @@ func builtinArgsToString(e Expression) string {
 		s = `%v.And(%v)`
 	case rangeKind:
 		a := b.operand.(rangeArgs)
-		return fmt.Sprintf(`%v.Between("%v", %v, %v)`, b.args[0], a.attrname, a.lowerbound, a.upperbound)
+		return fmt.Sprintf(`%v.Between("%v", %v, %v)`, b.args[0], a.attribute, a.lowerbound, a.upperbound)
 	case withoutKind:
 		attributes := b.operand.([]string)
 		s = `%v.Unpick(%v)`

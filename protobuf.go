@@ -312,7 +312,7 @@ func (ctx context) toBuiltin(kind expressionKind, operand interface{}) *p.Builti
 		return &p.Builtin{
 			Type: p.Builtin_RANGE.Enum(),
 			Range: &p.Builtin_Range{
-				Attrname:   proto.String(rangeArgs.attrname),
+				Attrname:   proto.String(rangeArgs.attribute),
 				Lowerbound: ctx.toTerm(rangeArgs.lowerbound),
 				Upperbound: ctx.toTerm(rangeArgs.upperbound),
 			},
