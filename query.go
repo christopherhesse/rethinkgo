@@ -85,52 +85,45 @@ const (
 	lessThanOrEqualKind
 )
 
-// Expression represents an RQL expression, such as .Filter(), which, when called on
-// another expression, filters the results of that expression when run on the
-// server.  It is used as the argument type of any functions used in RQL.
+// Expression represents an RQL expression, such as the return value of
+// r.Expr(). Expression has all the RQL methods on it, such as .Add(), .Attr(),
+// .Filter() etc.
 //
-// To create an expression from a native type, or user-defined type, or
-// function, use Expr().  In most cases, this is not necessary as conversion to
-// an expression will be done automatically.
+// To create an Expression from a native type, or user-defined type, or
+// function, use r.Expr().
+//
+// Example usage:
+//
+//  r.Expr(2).Mul(2) => 4
+//
+// Expression is the type used for the arguments to any functions that are used
+// in RQL.
 //
 // Example usage:
 //
 //  var response []interface{}
 //  // Get the intelligence rating for each of our heroes
-//  err := r.Table("heroes").Map(func(row r.Expression) r.Expression {
+//  getIntelligence := func(row r.Expression) r.Expression {
 //      return row.Attr("intelligence")
-//  }).Run().Collect(&response)
+//  }
+//  err := r.Table("heroes").Map(getIntelligence).Run().Collect(&response)
 //
 // Example response:
 //
 //  [7, 5, 4, 6, 2, 2, 6, 4, ...]
 //
-// Expressions can be used directly as queries, they are convered to read
-// queries that just return whatever rows have been selected.
-// TODO: this example doesn't make sense with the text here
+// Literal Expressions can be used directly for queries.
 //
 // Example usage:
 //
-//  var response []interface{}
-//  // Get all heroes with an intelligence rating of 7
-//  err := r.Table("heroes").Filter(r.Row.Attr("intelligence").Eq(7)).Run().Collect(&response)
+//  var squares []int
+//  // Square a series of numbers
+//  square := func(row r.Expression) r.Expression { return row.Mul(row) }
+//  err := r.Expr(1,2,3).Map(square).Run().One(&squares)
 //
 // Example response:
 //
-//  [
-//    {
-//		"strength": 7,
-//		"name": "Jean Grey",
-//		"durability": 7,
-//		"intelligence": 7,
-//		"energy": 7,
-//		"fighting": 7,
-//		"real_name": "Jean Grey-Summers",
-//		"speed": 7,
-//		"id": "c073673f-8b33-4698-a2ec-62b18a3e8c4f"
-//	  },
-//    ...
-//  ]
+//  [1, 2, 3]
 type Expression struct {
 	value interface{}
 	kind  expressionKind
@@ -450,19 +443,20 @@ type groupByArgs struct {
 // Example usage:
 //
 //  var response []interface{}
-//  // Find all heroes with the same strength, sum their intelligence
-//  err := r.Table("heroes").GroupBy("strength", r.Sum("intelligence")).Run().One(&response)
+//  // Find all heroes with the same durability, calculate their average speed
+//  // to see if more durable heroes are slower.
+//  err := r.Table("heroes").GroupBy("durability", r.Avg("speed")).Run().One(&response)
 //
 // Example response:
 //
 //  [
 //    {
-//      "group": 1, // this is the strength attribute for every member of this group
-//      "reduction": 2  // this is the sum of the intelligence attribute of all members of the group
+//      "group": 1,  // this is the strength attribute for every member of this group
+//      "reduction": 1.5  // this is the sum of the intelligence attribute of all members of the group
 //    },
 //    {
 //      "group": 2,
-//      "reduction": 15
+//      "reduction": 3.5
 //    },
 //    ...
 //  ]
@@ -740,13 +734,37 @@ func (e Expression) Count() Expression {
 	return naryBuiltin(lengthKind, nil, e)
 }
 
-// TODO:
+// Merge combines an object with another object, overwriting properties from
+// the first with properties from the second.
+//
+// Example usage:
+//
+//  var response interface{}
+//  firstMap := r.Map{"name": "HAL9000", "role": "Support System"}
+//  secondMap := r.Map{"color": "Red", "role": "Betrayal System"}
+//  err := r.Expr(firstMap).Merge(secondMap).Run().One(&response)
+//
+// Example response:
+//
+//  {
+//    "color": "Red",
+//    "name": "HAL9000",
+//    "role": "Betrayal System"
+//  }
 func (e Expression) Merge(operand interface{}) Expression {
 	return naryBuiltin(mapMergeKind, nil, e, operand)
 }
 
 // Append appends a value to an array.
-// TODO:
+//
+// Example usage:
+//
+//  var response []interface{}
+//  err := r.Expr(r.List{1, 2, 3, 4}).Append(5).Run().One(&response)
+//
+// Example response:
+//
+//  [1, 2, 3, 4, 5]
 func (e Expression) Append(operand interface{}) Expression {
 	return naryBuiltin(arrayAppendKind, nil, e, operand)
 }
@@ -840,22 +858,120 @@ func (e Expression) Skip(start interface{}) Expression {
 	return e.Slice(start, nil)
 }
 
-// TODO: example with fetching by list of ids
+// Map transforms a sequence by applying the given function to each row.
+//
+// Example usage:
+//
+//  var squares []int
+//  // Square a series of numbers
+//  square := func(row r.Expression) r.Expression { return row.Mul(row) }
+//  err := r.Expr(1,2,3).Map(square).Run().One(&squares)
+//
+// Example response:
+//
+//  [1, 2, 3]
+//
+// Example usage:
+//
+//  var heroes []interface{}
+//  // Fetch multiple rows by primary key
+//  heroNames := []string{"Iron Man", "Colossus"}
+//  getHero := func (name r.Expression) r.Expression { return r.Table("heroes").Get(name, "name") }
+//  err := r.Expr(heroNames).Map(getHero).Run().One(&heroes)
+//
+// Example response:
+//
+//  [
+//    {
+//      "durability": 6,
+//      "energy": 6,
+//      "fighting": 3,
+//      "intelligence": 6,
+//      "name": "Iron Man",
+//      "real_name": "Anthony Edward \"Tony\" Stark",
+//      "speed": 5,
+//      "strength": 6
+//    },
+//    ...
+//  ]
 func (e Expression) Map(operand interface{}) Expression {
 	return naryBuiltin(mapKind, operand, e)
 }
 
-// TODO:
+// ConcatMap constructs a sequence by running the provided function on each row,
+// then concatenating all the results.
+//
+// Example usage:
+//
+//  var flattened []int
+//  // Flatten some nested lists
+//  flatten := func(row r.Expression) r.Expression { return row }
+//  err := r.Expr(r.List{1,2}, r.List{3,4}).ConcatMap(flatten).Run().One(&flattened)
+//
+// Example response:
+//
+//  [1, 2, 3, 4]
+//
+// Example usage:
+//
+//  var names []string
+//  // Get all hero real names and aliases in a list
+//  getNames := func(row r.Expression) interface{} { return r.List{row.Attr("name"), row.Attr("real_name")} }
+//  err := r.Table("heroes").ConcatMap(getNames).Run().Collect(&names)
+//
+// Example response:
+//
+//  ["Captain Britain", "Brian Braddock", "Iceman", "Robert \"Bobby\" Louis Drake", ...]
 func (e Expression) ConcatMap(operand interface{}) Expression {
 	return naryBuiltin(concatMapKind, operand, e)
 }
 
-// TODO:
+// Filter removes all objects from a sequence that do not match the given
+// condition.  The condition can be an RQL expression, an r.Map, or a function
+// that returns true or false.
+//
+// Example with an RQL expression:
+//
+//   var response []interface{}
+//   // Get all heroes with durability 6
+//   err := r.Table("heroes").Filter(r.Row.Attr("durability").Eq(6)).Run().Collect(&response)
+//
+// Example with r.Map:
+//
+//   err := r.Table("heroes").Filter(r.Map{"durability": 6}).Run().Collect(&response)
+//
+// Example with function:
+//
+//   filterFunc := func (row r.Expression) r.Expression { return row.Attr("durability").Eq(6) }
+//   err := r.Table("heroes").Filter(filterFunc).Run().Collect(&response)
+//
+// Example response:
+//
+//  [
+//    {
+//      "durability": 6,
+//      "energy": 6,
+//      "fighting": 3,
+//      "id": "1a760d0b-57ef-42a8-9fec-c3a1f34930aa",
+//      "intelligence": 6,
+//      "name": "Iron Man",
+//      "real_name": "Anthony Edward \"Tony\" Stark",
+//      "speed": 5,
+//      "strength": 6
+//    }
+//    ...
+//  ]
 func (e Expression) Filter(operand interface{}) Expression {
 	return naryBuiltin(filterKind, operand, e)
 }
 
-// TODO:
+// Contains returns true if an object has all the given attributes.
+//
+// Example usage:
+//
+//  hero := r.Map{"name": "Iron Man", "energy": 6, "speed": 5}
+//  r.Expr(hero).Contains("energy", "speed") => true
+//  r.Expr(hero).Contains("energy", "guns") => false
 func (e Expression) Contains(keys ...string) Expression {
 	expr := Expr(true)
 	for _, key := range keys {
@@ -864,12 +980,36 @@ func (e Expression) Contains(keys ...string) Expression {
 	return expr
 }
 
-// TODO:
+// Pick takes only the given attributes from an object, discarding all other
+// attributes. See also .Unpick()
+//
+// Example usage:
+//
+//  hero := r.Map{"name": "Iron Man", "energy": 6, "speed": 5}
+//  err := r.Expr(hero).Pick("name", "energy").Run().One(&response)
+//
+// Example response:
+//
+//    {
+//      "energy": 6,
+//      "name": "Iron Man"
+//    }
 func (e Expression) Pick(attributes ...string) Expression {
 	return naryBuiltin(pickAttributesKind, attributes, e)
 }
 
-// TODO:
+// Unpick removes the given attributes from an object.  See also .Pick()
+//
+// Example usage:
+//
+//  hero := r.Map{"name": "Iron Man", "energy": 6, "speed": 5}
+//  err := r.Expr(hero).Unpick("name", "energy").Run().One(&response)
+//
+// Example response:
+//
+//    {
+//      "speed": 5,
+//    }
 func (e Expression) Unpick(attributes ...string) Expression {
 	return naryBuiltin(withoutKind, attributes, e)
 }
@@ -1032,11 +1172,62 @@ type groupedMapReduceArgs struct {
 //
 // Example usage:
 //
-//  TODO:
-//  grouping := func (row r.Expression) r.Expression { return row.Attr("speed") }
-//  mapping :=
-//  base :=
-//  reduction :=
+//  // Find the sum of the even and odd numbers separately
+//  grouping := func(row r.Expression) r.Expression { return r.Branch(row.Mod(2).Eq(0), "even", "odd") }
+//  mapping := func(row r.Expression) r.Expression { return row }
+//  base := 0
+//  reduction := func(acc, row r.Expression) r.Expression {
+//  	return acc.Add(row)
+//  }
+//
+//  var response []interface{}
+//  err := r.Expr(1,2,3,4,5).GroupedMapReduce(grouping, mapping, base, reduction).Run().One(&response)
+//
+// Example response:
+//
+//  [
+//    {
+//      "group": "even",
+//      "reduction": 6
+//    },
+//    {
+//      "group": "odd",
+//      "reduction": 9
+//    }
+//  ]
+//
+// Example usage:
+//
+//  // Group all heroes by intelligence, then find the most fastest one in each group
+//  grouping := func(row r.Expression) r.Expression { return row.Attr("intelligence") }
+//  mapping := func(row r.Expression) r.Expression { return row.Pick("name", "speed") }
+//  base := r.Map{"name": nil, "speed": 0}
+//  reduction := func(acc, row r.Expression) r.Expression {
+//  	return r.Branch(acc.Attr("speed").Lt(row.Attr("speed")), row, acc)
+//  }
+//
+//  var response []interface{}
+//  err := r.Table("heroes").GroupedMapReduce(grouping, mapping, base, reduction).Run().One(&response)
+//
+// Example response:
+//
+//  [
+//    {
+//      "group": 1,
+//      "reduction": {
+//        "name": "Northstar",
+//        "speed": 2
+//      }
+//    },
+//    {
+//      "group": 2,
+//      "reduction": {
+//        "name": "Thor",
+//        "speed": 6
+//      }
+//    },
+//    ...
+//  ]
 func (e Expression) GroupedMapReduce(grouping, mapping, base, reduction interface{}) Expression {
 	operand := groupedMapReduceArgs{
 		grouping:  grouping,
@@ -1056,8 +1247,8 @@ func (e Expression) GroupedMapReduce(grouping, mapping, base, reduction interfac
 //
 // Example usage:
 //
-//  var response []interface{}
-//  err := r.Table("heroes").Pluck("real_name", "id").Run().Collect(&response)
+//  var heroes []interface{}
+//  err := r.Table("heroes").Pluck("real_name", "id").Run().Collect(&heroes)
 //
 // Example response:
 //
@@ -1077,8 +1268,8 @@ func (e Expression) Pluck(attributes ...string) Expression {
 //
 // Example usage:
 //
-//  var response []interface{}
-//  err := r.Table("heroes").Without("real_name", "id").Run().Collect(&response)
+//  var heroes []interface{}
+//  err := r.Table("heroes").Without("real_name", "id").Run().Collect(&heroes)
 //
 // Example response:
 //
@@ -1098,7 +1289,43 @@ func (e Expression) Without(attributes ...string) Expression {
 	return e.Map(Row.Unpick(attributes...))
 }
 
-// TODO:
+// InnerJoin performs an inner join on two sequences, using the provided
+// function to compare the rows from each sequence. See also .EqJoin() and
+// .OuterJoin().
+//
+// Each row from the left sequence is compared to every row from the right
+// sequence using the provided predicate function.  If the function returns
+// true for a pair of rows, that pair will appear in the resulting sequence.
+//
+// Example usage:
+//
+//  var response []interface{}
+//  // Get each hero and their associated lair, in this case, "villain_id" is
+//  // the primary key for the "lairs" table
+//  compareRows := func (left, right r.Expression) r.Expression { return left.Attr("id").Eq(right.Attr("villain_id")) }
+//  err := r.Table("villains").InnerJoin(r.Table("lairs"), compareRows).Run().Collect(&response)
+//
+// Example response:
+//
+//  [
+//    {
+//      "left": {
+//        "durability": 6,
+//        "energy": 6,
+//        "fighting": 3,
+//        "id": "c0d1b94f-b07e-40c3-a1db-448e645daedc",
+//        "intelligence": 6,
+//        "name": "Magneto",
+//        "real_name": "Max Eisenhardt",
+//        "speed": 4,
+//        "strength": 2
+//      },
+//      "right": {
+//        "lair": "Asteroid M",
+//        "villain_id": "c0d1b94f-b07e-40c3-a1db-448e645daedc"
+//      }
+//    }
+//  ]
 func (leftExpr Expression) InnerJoin(rightExpr Expression, predicate func(Expression, Expression) Expression) Expression {
 	return leftExpr.ConcatMap(func(left Expression) interface{} {
 		return rightExpr.ConcatMap(func(right Expression) interface{} {
@@ -1110,9 +1337,61 @@ func (leftExpr Expression) InnerJoin(rightExpr Expression, predicate func(Expres
 	})
 }
 
-// TODO:
+// OuterJoin performs a left outer join on two sequences, using the provided
+// function to compare the rows from each sequence. See also .EqJoin() and
+// .InnerJoin().
+//
+// Each row from the left sequence is compared to every row from the right
+// sequence using the provided predicate function.  If the function returns
+// true for a pair of rows, that pair will appear in the resulting sequence.
+//
+// If the predicate is false for every pairing for a specific left row, the left
+// row will appear in the sequence with no right row present.
+//
+// Example usage:
+//
+//  var response []interface{}
+//  // Get each hero and their associated lair, in this case, "villain_id" is
+//  // the primary key for the "lairs" table
+//  compareRows := func (left, right r.Expression) r.Expression { return left.Attr("id").Eq(right.Attr("villain_id")) }
+//  err := r.Table("villains").OuterJoin(r.Table("lairs"), compareRows).Run().Collect(&response)
+//
+// Example response:
+//
+//  [
+//    {
+//      "left": {
+//        "durability": 6,
+//        "energy": 6,
+//        "fighting": 3,
+//        "id": "c0d1b94f-b07e-40c3-a1db-448e645daedc",
+//        "intelligence": 6,
+//        "name": "Magneto",
+//        "real_name": "Max Eisenhardt",
+//        "speed": 4,
+//        "strength": 2
+//      },
+//      "right": {
+//        "lair": "Asteroid M",
+//        "villain_id": "c0d1b94f-b07e-40c3-a1db-448e645daedc"
+//      }
+//    },
+//    {
+//      "left": {
+//        "durability": 4,
+//        "energy": 1,
+//        "fighting": 7,
+//        "id": "ab140a9c-63d1-455e-862e-045ad7f57ae3",
+//        "intelligence": 2,
+//        "name": "Sabretooth",
+//        "real_name": "Victor Creed",
+//        "speed": 2,
+//        "strength": 4
+//      }
+//    }
+//    ...
+//  ]
 func (leftExpr Expression) OuterJoin(rightExpr Expression, predicate func(Expression, Expression) Expression) Expression {
-	// This is a left outer join
 	return leftExpr.ConcatMap(func(left Expression) interface{} {
 		return Let(Map{"matches": rightExpr.ConcatMap(func(right Expression) Expression {
 			return Branch(
@@ -1131,7 +1410,7 @@ func (leftExpr Expression) OuterJoin(rightExpr Expression, predicate func(Expres
 
 // EqJoin performs a join on two expressions, it is more efficient than
 // .InnerJoin() and .OuterJoin() because it looks up elements in the right table
-// by primary key.
+// by primary key. See also .InnerJoin() and .OuterJoin().
 //
 // Example usage:
 //
@@ -1692,7 +1971,23 @@ type forEachQuery struct {
 	queryFunc func(Expression) Query
 }
 
-// TODO:
+// ForEach runs a given write query for each row of a sequence.
+//
+// Example usage:
+//
+//  // Delete all rows with the given ids
+//
+//  var response r.WriteResponse
+//  // Delete multiple rows by primary key
+//  heroNames := []string{"Iron Man", "Colossus"}
+//  deleteHero := func (name r.Expression) r.Query { return r.Table("heroes").Get(name, "name").Delete() }
+//  err := r.Expr(heroNames).ForEach(deleteHero).Run().One(&response)
+//
+// Example response:
+//
+//  {
+//    "deleted": 2
+//  }
 func (e Expression) ForEach(queryFunc (func(Expression) Query)) WriteQuery {
 	return WriteQuery{query: forEachQuery{stream: e, queryFunc: queryFunc}}
 }

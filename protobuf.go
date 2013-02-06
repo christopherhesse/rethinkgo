@@ -13,7 +13,7 @@ import (
 )
 
 // context stores some state that is required when converting Expressions to
-// protocol buffers, and has to be passed through.
+// protocol buffers, and has to be passed by value throughout.
 type context struct {
 	databaseName string
 	useOutdated  bool
