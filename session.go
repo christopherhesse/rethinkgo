@@ -12,7 +12,6 @@ import (
 )
 
 var debugMode bool = false
-var LastSession *Session
 
 // Session represents a connection to a server, use it to run queries against a
 // database, with either sess.Run(query) or query.Run() (uses the most
@@ -30,7 +29,7 @@ type Session struct {
 // generate a query are generally located on Expression objects.
 type Query interface {
 	toProtobuf(context) *p.Query // will panic on errors
-	Run() *Rows
+	Run(*Session) *Rows
 }
 
 // SetDebug causes all queries sent to the server and responses received to be
@@ -110,7 +109,6 @@ func Connect(address, database string) (*Session, error) {
 	if err != nil {
 		return nil, err
 	}
-	LastSession = s
 	return s, nil
 }
 
@@ -323,23 +321,16 @@ func getBacktraceFrames(response *p.Response) []string {
 	return bt.Frame
 }
 
-func runLastSession(query Query) *Rows {
-	if LastSession == nil {
-		return &Rows{lasterr: Error{Err: ErrNoSession}}
-	}
-	return LastSession.Run(query)
-}
-
-// Run runs a query on the most recently created session, there is one Run()
+// Run runs a query using the given session, there is one Run()
 // method for each type of query.
-func (q MetaQuery) Run() *Rows {
-	return runLastSession(q)
+func (q MetaQuery) Run(session *Session) *Rows {
+	return session.Run(q)
 }
 
-func (q WriteQuery) Run() *Rows {
-	return runLastSession(q)
+func (q WriteQuery) Run(session *Session) *Rows {
+	return session.Run(q)
 }
 
-func (e Expression) Run() *Rows {
-	return runLastSession(e)
+func (e Expression) Run(session *Session) *Rows {
+	return session.Run(e)
 }

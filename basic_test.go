@@ -39,6 +39,7 @@ var docs = []Map{
 	Map{"id": 8},
 	Map{"id": 9},
 }
+var session *Session
 
 // Hook up gocheck into the gotest runner.
 func Test(t *testing.T) { TestingT(t) }
@@ -47,23 +48,24 @@ type RethinkSuite struct{}
 
 func (s *RethinkSuite) SetUpSuite(c *C) {
 	SetDebug(true)
-	_, err := Connect("localhost:28015", "test")
+	var err error
+	session, err = Connect("localhost:28015", "test")
 	c.Assert(err, IsNil)
 
 	resetDatabase(c)
 }
 
 func (s *RethinkSuite) TearDownSuite(c *C) {
-	LastSession.Close()
+	session.Close()
 }
 
 func resetDatabase(c *C) {
 	// Drop the test database, then re-create it with some test data
-	DbDrop("test").Run()
-	err := DbCreate("test").Run().Err()
+	DbDrop("test").Run(session)
+	err := DbCreate("test").Run(session).Err()
 	c.Assert(err, IsNil)
 
-	err = Db("test").TableCreate("table1").Run().Err()
+	err = Db("test").TableCreate("table1").Run(session).Err()
 	c.Assert(err, IsNil)
 
 	pair := ExpectPair{tbl.Insert(Map{"id": 0, "num": 20}), Map{"inserted": 1, "errors": 0}}
@@ -76,7 +78,7 @@ func resetDatabase(c *C) {
 	pair = ExpectPair{tbl.Insert(others), Map{"inserted": 9, "errors": 0}}
 	runSimpleQuery(c, pair)
 
-	err = Db("test").TableCreate("table2").Run().Err()
+	err = Db("test").TableCreate("table2").Run(session).Err()
 	c.Assert(err, IsNil)
 
 	pair = ExpectPair{tbl2.Insert(List{
@@ -87,13 +89,13 @@ func resetDatabase(c *C) {
 	runSimpleQuery(c, pair)
 
 	// det
-	err = Db("test").TableCreate("table3").Run().Err()
+	err = Db("test").TableCreate("table3").Run(session).Err()
 	c.Assert(err, IsNil)
 
-	err = tbl3.Insert(docs).Run().Err()
+	err = tbl3.Insert(docs).Run(session).Err()
 	c.Assert(err, IsNil)
 
-	err = Db("test").TableCreate("table4").Run().Err()
+	err = Db("test").TableCreate("table4").Run(session).Err()
 	c.Assert(err, IsNil)
 
 	// joins tables
@@ -111,13 +113,13 @@ func resetDatabase(c *C) {
 		Map{"it": 2, "title": "lmoe"},
 	}
 
-	Db("test").TableCreate("joins1").Run()
-	j1.Insert(s1).Run()
-	Db("test").TableCreate("joins2").Run()
-	j2.Insert(s2).Run()
+	Db("test").TableCreate("joins1").Run(session)
+	j1.Insert(s1).Run(session)
+	Db("test").TableCreate("joins2").Run(session)
+	j2.Insert(s2).Run(session)
 	spec := TableSpec{Name: "joins3", PrimaryKey: "it"}
-	Db("test").TableCreateSpec(spec).Run()
-	j3.Insert(s3).Run()
+	Db("test").TableCreateSpec(spec).Run(session)
+	j3.Insert(s3).Run(session)
 }
 
 var _ = Suite(&RethinkSuite{})
@@ -161,7 +163,7 @@ type ErrorResponse struct{}
 func runSimpleQuery(c *C, pair ExpectPair) {
 	var result interface{}
 	fmt.Println("query:", pair.query)
-	err := pair.query.Run().One(&result)
+	err := pair.query.Run(session).One(&result)
 	fmt.Printf("result: %v %T\n", result, result)
 	_, ok := pair.expected.(ErrorResponse)
 	if ok {
@@ -200,7 +202,7 @@ func runSimpleQuery(c *C, pair ExpectPair) {
 
 func runStreamQuery(c *C, pair ExpectPair) {
 	var result []interface{}
-	err := pair.query.Run().Collect(&result)
+	err := pair.query.Run(session).Collect(&result)
 	fmt.Printf("result: %v %T\n", result, result)
 	c.Assert(err, IsNil)
 	c.Assert(result, JsonEquals, pair.expected)
@@ -850,15 +852,15 @@ func (s *RethinkSuite) TestOrderBy(c *C) {
 	var results1 []Map
 	var results2 []Map
 
-	tbl.OrderBy("num").Run().Collect(&results1)
-	tbl.OrderBy(Asc("num")).Run().Collect(&results2)
+	tbl.OrderBy("num").Run(session).Collect(&results1)
+	tbl.OrderBy(Asc("num")).Run(session).Collect(&results2)
 
 	c.Assert(results1, JsonEquals, results2)
 }
 
 func (s *RethinkSuite) TestDropTable(c *C) {
-	err := Db("test").TableCreate("tablex").Run().Err()
+	err := Db("test").TableCreate("tablex").Run(session).Err()
 	c.Assert(err, IsNil)
-	err = Db("test").TableDrop("tablex").Run().Err()
+	err = Db("test").TableDrop("tablex").Run(session).Err()
 	c.Assert(err, IsNil)
 }

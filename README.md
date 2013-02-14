@@ -25,9 +25,8 @@ Example
     )
 
     func main() {
-        r.Connect("localhost:28015", "test")
-        query := r.Expr(1, 2, 3).ArrayToStream().Map(r.Row.Mul(2))
-        rows := query.Run()
+        session, _ = r.Connect("localhost:28015", "test")
+        rows := r.Expr(1, 2, 3).ArrayToStream().Map(r.Row.Mul(2)).Run(session)
 
         var result int
         for rows.Next(&result) {
@@ -58,6 +57,7 @@ See the [json docs](http://golang.org/pkg/encoding/json/) for more information.
 Differences from official RethinkDB drivers
 ===========================================
 
+* There is no global implicit connection that stores the last connected server, instead .Run() requires a session as its only argument.
 * No errors are generated when creating queries, only when running them, so Table() returns only an Expression instance, but sess.Run(query) returns (*Rows, error)
 * There's a global SetDebug(bool) function to turn on printing of queries, rather than .run(debug=True)
 * r.Count() is a function, not a constant

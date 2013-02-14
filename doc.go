@@ -23,14 +23,14 @@
 //
 //  func main() {
 //      // To access a RethinkDB database, you connect to it with the Connect function
-//      sess, err := r.Connect("localhost:28015", "<database name>")
+//      session, err := r.Connect("localhost:28015", "<database name>")
 //
 //      // This creates a database session 'sess' that may be used to run
 //      // queries on the server.  Queries let you read, insert, update, and
 //      // delete JSON objects ("rows") on the server, as well as manage tables.
 //
 //      query := r.Table("employees")
-//      rows := query.Run()
+//      rows := query.Run(session)
 //
 //      // 'rows' is an iterator that can be used to iterate over the
 //      // results.  If there was an error, it is available in rows.Err()
