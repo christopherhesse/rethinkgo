@@ -33,7 +33,7 @@ type Query interface {
 	Run() *Rows
 }
 
-// SetDebug causes all queries send to the server and responses received to be
+// SetDebug causes all queries sent to the server and responses received to be
 // printed to stdout in raw form.
 //
 // Example usage:
@@ -127,7 +127,7 @@ func (s *Session) Close() error {
 	return s.conn.Close()
 }
 
-// Reconnect closes and re-opens a session, canceling any outstanding requests.
+// Reconnect closes and re-opens a session, cancelling any outstanding requests.
 //
 // Example usage:
 //

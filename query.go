@@ -256,35 +256,35 @@ func Expr(values ...interface{}) Expression {
 //
 // Example response:
 //
-// [
-//   {
-//     "left":
-//     {
-//       "durability": 5,
-//       "energy": 7,
-//       "fighting": 7,
-//       "id": "f915d9a7-6cfa-4151-b5f6-6aded7da595f",
-//       "intelligence": 5,
-//       "name": "Nightcrawler",
-//       "real_name": "Kurt Wagner",
-//       "speed": 7,
-//       "strength": 4
-//     },
-//     "right":
-//     {
-//       "durability": 4,
-//       "energy": 1,
-//       "fighting": 7,
-//       "id": "12e58b11-93b3-4e89-987d-efb345001dfe",
-//       "intelligence": 2,
-//       "name": "Sabretooth",
-//       "real_name": "Victor Creed",
-//       "speed": 2,
-//       "strength": 4
-//     }
-//   },
-//   ...
-// ]
+//  [
+//    {
+//      "left":
+//      {
+//        "durability": 5,
+//        "energy": 7,
+//        "fighting": 7,
+//        "id": "f915d9a7-6cfa-4151-b5f6-6aded7da595f",
+//        "intelligence": 5,
+//        "name": "Nightcrawler",
+//        "real_name": "Kurt Wagner",
+//        "speed": 7,
+//        "strength": 4
+//      },
+//      "right":
+//      {
+//        "durability": 4,
+//        "energy": 1,
+//        "fighting": 7,
+//        "id": "12e58b11-93b3-4e89-987d-efb345001dfe",
+//        "intelligence": 2,
+//        "name": "Sabretooth",
+//        "real_name": "Victor Creed",
+//        "speed": 2,
+//        "strength": 4
+//      }
+//    },
+//    ...
+//   ]
 func Js(body string) Expression {
 	return Expression{kind: javascriptKind, value: body}
 }
@@ -1131,10 +1131,10 @@ type reduceArgs struct {
 //
 // Example usage:
 //
-//  var response int
+//  var sum int
 //  // Add the numbers 1-4 together
 //  reduction := func(acc, val r.Expression) r.Expression { return acc.Add(val) }
-//  err := r.Expr(1,2,3,4).Reduce(0, reduction).Run().One(&response)
+//  err := r.Expr(1,2,3,4).Reduce(0, reduction).Run().One(&sum)
 //
 // Example response:
 //
@@ -1142,12 +1142,12 @@ type reduceArgs struct {
 //
 // Example usage:
 //
-//  var response int
+//  var totalSpeed int
 //  // Compute the total speed for all heroes, the types of acc and val should
 //  // be the same, so we extract the speed first with a .Map()
 //  mapping := func(row r.Expression) r.Expression { return row.Attr("speed") }
 //  reduction := func(acc, val r.Expression) r.Expression { return acc.Add(val) }
-//  err := r.Table("heroes").Map(mapping).Reduce(0, reduction).Run().One(&response)
+//  err := r.Table("heroes").Map(mapping).Reduce(0, reduction).Run().One(&totalSpeed)
 //
 // Example response:
 //
@@ -1243,7 +1243,7 @@ func (e Expression) GroupedMapReduce(grouping, mapping, base, reduction interfac
 /////////////////////
 
 // Pluck runs .Pick() for each row in the sequence, removing all but the
-// specified attributes from each row.
+// specified attributes from each row. See also .Without().
 //
 // Example usage:
 //
@@ -1264,7 +1264,7 @@ func (e Expression) Pluck(attributes ...string) Expression {
 }
 
 // Without runs .Unpick() for each row in the sequence, removing any specified
-// attributes from each individual row.
+// attributes from each individual row.  See also .Pluck().
 //
 // Example usage:
 //
@@ -1934,10 +1934,12 @@ type replaceQuery struct {
 // Example usage:
 //
 //  var response r.WriteResponse
-//  replacement := r.Map{"id": r.Row.Attr("id"), "name": "Thing"}
+//
 //  // Replace a single row by id
 //  id := "05679c96-9a05-4f42-a2f6-a9e47c45a5ae"
+//  replacement := r.Map{"id": r.Row.Attr("id"), "name": "Thing"}
 //  err := r.Table("heroes").GetById(id).Replace(replacement).Run().One(&response)
+//
 //  // Replace all rows in a table
 //  err := r.Table("heroes").Replace(replacement).Run().One(&response)
 func (e Expression) Replace(mapping interface{}) WriteQuery {
@@ -1956,10 +1958,13 @@ type deleteQuery struct {
 // Example usage:
 //
 //  var response r.WriteResponse
+//
 //  // Delete a single row by id
 //  err := r.Table("heroes").GetById("5d93edbb-2882-4594-8163-f64d8695e575").Delete().Run().One(&response)
+//
 //  // Delete all rows in a table
 //  err := r.Table("heroes").Delete().Run().One(&response)
+//
 //  // Find a row, then delete it
 //  err := r.Table("heroes").Filter(r.Map{"real_name": "Peter Benjamin Parker"}).Delete().Run().One(&response)
 func (e Expression) Delete() WriteQuery {
