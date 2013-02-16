@@ -27,6 +27,7 @@ Example
     func main() {
         session, _ = r.Connect("localhost:28015", "test")
         rows := r.Expr(1, 2, 3).ArrayToStream().Map(r.Row.Mul(2)).Run(session)
+        defer rows.Close()
 
         var result int
         for rows.Next(&result) {

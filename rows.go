@@ -7,6 +7,7 @@ import (
 	"fmt"
 	p "github.com/christopherhesse/rethinkgo/query_language"
 	"io"
+	"net"
 	"reflect"
 )
 
@@ -39,6 +40,7 @@ import (
 // that does not match the expected type (ErrWrongResponseType).
 type Rows struct {
 	session  *Session
+	conn     *net.Conn
 	closed   bool
 	buffer   []string
 	current  *string
@@ -55,7 +57,7 @@ func (rows *Rows) continueQuery() error {
 		Type:  p.Query_CONTINUE.Enum(),
 		Token: proto.Int64(rows.token),
 	}
-	buffer, status, err := rows.session.run(querybuf, rows.query)
+	buffer, status, err := rows.session.run(*rows.conn, querybuf, rows.query)
 	if err != nil {
 		return err
 	}
@@ -68,6 +70,9 @@ func (rows *Rows) continueQuery() error {
 		// end of a stream of rows, there's no more after this
 		rows.buffer = buffer
 		rows.complete = true
+		// since we won't be needing this connection anymore, we can close the
+		// iterator, if the user closes it again, it won't hurt it
+		rows.Close()
 	default:
 		return fmt.Errorf("rethinkdb: Unexpected status code: %v", status)
 	}
@@ -208,6 +213,8 @@ func (rows *Rows) One(row interface{}) error {
 
 	rows.Next(row)
 
+	rows.Close()
+
 	return rows.Err()
 }
 
@@ -221,9 +228,35 @@ func (rows *Rows) Exec() error {
 		return rows.Err()
 	}
 
+	rows.Close()
+
 	if rows.status != p.Response_SUCCESS_EMPTY {
 		return Error{Err: ErrWrongResponseType}
 	}
 
 	return nil
+}
+
+// Close frees up the connection associated with this iterator, if any.  Just
+// use defer rows.Close() after retrieving a Rows iterator.  Not required with
+// .Exec(), .One(), or .Collect().
+//
+// Only stream responses will have an associated connection.
+//
+// Example usage:
+//
+//  rows := r.Table("villains").Run()
+//  defer rows.Close()
+//
+//  var result interface{}
+//  for rows.Next(&result) {
+//      fmt.Println("result:", result)
+//  }
+func (rows *Rows) Close() {
+	if !rows.closed {
+		if rows.conn != nil {
+			rows.session.putConn(*rows.conn)
+		}
+		rows.closed = true
+	}
 }

@@ -9,19 +9,32 @@ import (
 	"io"
 	"net"
 	"runtime"
+	"sync"
+	"sync/atomic"
 )
 
 var debugMode bool = false
+var maxIdleConnections int = 2
+
+const clientHello uint32 = 0xaf61ba35
+
+// TODO: create rethinkConn to wrap net.Conn, move query execution stuff to there, conn.go
 
 // Session represents a connection to a server, use it to run queries against a
 // database, with either sess.Run(query) or query.Run() (uses the most
 // recently-created session).
 type Session struct {
-	conn     net.Conn
-	token    int64
-	address  string
+	// current query identifier, just needs to be unique for each query, so we
+	// can match queries with responses, e.g. 4782371
+	token int64
+	// address of server, e.g. "localhost:28015"
+	address string
+	// database to use if no database is specified in query, e.g. "test"
 	database string
-	closed   bool
+
+	mutex     sync.Mutex // protects idleConns and closed
+	idleConns []net.Conn
+	closed    bool
 }
 
 // Query is the interface for queries that can be .Run(), this includes
@@ -29,7 +42,7 @@ type Session struct {
 // generate a query are generally located on Expression objects.
 type Query interface {
 	toProtobuf(context) *p.Query // will panic on errors
-	Run(*Session) *Rows
+	Run(*Session) *Rows          // TODO: should this be in the interface?
 }
 
 // SetDebug causes all queries sent to the server and responses received to be
@@ -104,11 +117,17 @@ func readResponse(conn net.Conn) (*p.Response, error) {
 //
 //  sess, err := r.Connect("localhost:28015", "test")
 func Connect(address, database string) (*Session, error) {
-	s := &Session{address: address, database: database, closed: true}
-	err := s.Reconnect()
+	s := &Session{address: address, database: database, closed: false}
+
+	// create a connection to make sure the server works, then immediately put it
+	// in the idle connection pool
+	conn, err := s.getConn()
 	if err != nil {
 		return nil, err
 	}
+
+	s.putConn(conn)
+
 	return s, nil
 }
 
@@ -118,34 +137,80 @@ func Connect(address, database string) (*Session, error) {
 //
 //  err := sess.Close()
 func (s *Session) Close() error {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
 	if s.closed {
 		return nil
 	}
+
+	var lastError error
+	for _, conn := range s.idleConns {
+		err := conn.Close()
+		if err != nil {
+			lastError = err
+		}
+	}
+	s.idleConns = nil
 	s.closed = true
-	return s.conn.Close()
+
+	return lastError
 }
 
-// Reconnect closes and re-opens a session, cancelling any outstanding requests.
+// Reconnect closes and re-opens a session.
 //
 // Example usage:
 //
 //  err := sess.Reconnect()
 func (s *Session) Reconnect() error {
-	const clientHello uint32 = 0xaf61ba35
-
 	if err := s.Close(); err != nil {
 		return err
 	}
+	s.mutex.Lock()
+	s.closed = false
+	s.mutex.Unlock()
+	return nil
+}
+
+// return a connection from the free connections list if available, otherwise,
+// create a new connection
+func (s *Session) getConn() (net.Conn, error) {
+	s.mutex.Lock()
+	if s.closed {
+		s.mutex.Unlock()
+		return nil, errors.New("rethinkdb: session is closed")
+	}
+	if len(s.idleConns) > 0 {
+		conn := s.idleConns[0]
+		s.idleConns = s.idleConns[1:]
+		s.mutex.Unlock()
+		return conn, nil
+	}
+	s.mutex.Unlock()
+
 	conn, err := net.Dial("tcp", s.address)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	s.conn = conn
-	s.closed = false
+
 	if err := binary.Write(conn, binary.LittleEndian, clientHello); err != nil {
-		return err
+		return nil, err
 	}
-	return nil
+
+	return conn, nil
+}
+
+// return a connection to the free list, or close it if we already have enough
+func (s *Session) putConn(conn net.Conn) {
+	s.mutex.Lock()
+	if len(s.idleConns) < maxIdleConnections {
+		s.idleConns = append(s.idleConns, conn)
+		s.mutex.Unlock()
+		return
+	}
+	s.mutex.Unlock()
+
+	conn.Close()
 }
 
 // Use changes the default database for a connection.  This is the database that
@@ -164,20 +229,18 @@ func (s *Session) Use(database string) {
 // getToken generates the next query token, used to number requests and match
 // responses with requests.
 func (s *Session) getToken() int64 {
-	token := s.token
-	s.token += 1
-	return token
+	return atomic.AddInt64(&s.token, 1)
 }
 
 // executeQuery sends a single query to the server and retrieves the parsed
 // response.
-func (s *Session) executeQuery(protobuf *p.Query) (responseProto *p.Response, err error) {
-	if err = writeQuery(s.conn, protobuf); err != nil {
+func executeQuery(conn net.Conn, protobuf *p.Query) (responseProto *p.Response, err error) {
+	if err = writeQuery(conn, protobuf); err != nil {
 		return
 	}
 
 	for {
-		responseProto, err = readResponse(s.conn)
+		responseProto, err = readResponse(conn)
 		if err != nil {
 			return
 		}
@@ -205,7 +268,6 @@ func (s *Session) executeQuery(protobuf *p.Query) (responseProto *p.Response, er
 //  if rows.Err() {
 //      ...
 //  }
-
 func (s *Session) Run(query Query) *Rows {
 	ctx := context{databaseName: s.database}
 	queryProto, err := buildProtobuf(ctx, query)
@@ -215,9 +277,21 @@ func (s *Session) Run(query Query) *Rows {
 
 	queryProto.Token = proto.Int64(s.getToken())
 
-	buffer, status, err := s.run(queryProto, query)
+	conn, err := s.getConn()
 	if err != nil {
 		return &Rows{lasterr: err}
+	}
+
+	buffer, status, err := s.run(conn, queryProto, query)
+	if err != nil {
+		return &Rows{lasterr: err}
+	}
+
+	if status != p.Response_SUCCESS_PARTIAL {
+		// if we have a success stream response, the connection needs to be tied to
+		// the iterator, since the iterator can only get more results from the same
+		// connection it was originally started on
+		s.putConn(conn)
 	}
 
 	switch status {
@@ -230,9 +304,12 @@ func (s *Session) Run(query Query) *Rows {
 			status:   status,
 		}
 	case p.Response_SUCCESS_PARTIAL:
-		// beginning of stream of rows
+		// beginning of stream of rows, there are more results available from the
+		// server than the ones we just received, so save the connection we used in
+		// case the user wants more
 		return &Rows{
 			session:  s,
+			conn:     &conn,
 			buffer:   buffer,
 			complete: false,
 			token:    queryProto.GetToken(),
@@ -240,8 +317,10 @@ func (s *Session) Run(query Query) *Rows {
 			status:   status,
 		}
 	case p.Response_SUCCESS_STREAM:
-		// end of a stream of rows, since we got this on the initial query
-		// we can just return all the responses in one go
+		// end of a stream of rows, since we got this on the initial query this means
+		// that we got a stream response, but the number of results was less than the
+		// number required to break the response into chunks. we can just return all
+		// the results in one go, as this is the only response
 		return &Rows{
 			buffer:   buffer,
 			complete: true,
@@ -276,13 +355,13 @@ func buildProtobuf(ctx context, query Query) (queryProto *p.Query, err error) {
 // run is an internal function, shared by Rows iterator and normal the Run()
 // call. Runs a protocol buffer formatted query, returns a list of strings and a
 // status code.
-func (s *Session) run(queryProto *p.Query, query Query) (result []string, status p.Response_StatusCode, err error) {
+func (s *Session) run(conn net.Conn, queryProto *p.Query, query Query) (result []string, status p.Response_StatusCode, err error) {
 	if debugMode {
 		fmt.Printf("rethinkdb: query: %v\n", query)
 		fmt.Printf("rethinkdb: queryProto:\n%v", protobufToString(queryProto, 1))
 	}
 
-	r, err := s.executeQuery(queryProto)
+	r, err := executeQuery(conn, queryProto)
 	if err != nil {
 		return
 	}
