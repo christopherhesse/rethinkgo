@@ -284,6 +284,7 @@ func (s *Session) Run(query Query) *Rows {
 
 	buffer, status, err := s.run(conn, queryProto, query)
 	if err != nil {
+		s.putConn(conn)
 		return &Rows{lasterr: err}
 	}
 
