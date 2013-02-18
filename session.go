@@ -18,8 +18,6 @@ var maxIdleConnections int = 2
 
 const clientHello uint32 = 0xaf61ba35
 
-// TODO: create rethinkConn to wrap net.Conn, move query execution stuff to there, conn.go
-
 // Session represents a connection to a server, use it to run queries against a
 // database, with either sess.Run(query) or query.Run() (uses the most
 // recently-created session).
