@@ -34,6 +34,7 @@ type Session struct {
 // generate a query are generally located on Expression objects.
 type Query interface {
 	toProtobuf(context) *p.Query // will panic on errors
+	Check(*Session) error
 	Run(*Session) *Rows
 }
 
@@ -177,8 +178,7 @@ func (s *Session) getToken() int64 {
 //      ...
 //  }
 func (s *Session) Run(query Query) *Rows {
-	ctx := context{databaseName: s.database}
-	queryProto, err := ctx.buildProtobuf(query)
+	queryProto, err := s.getContext().buildProtobuf(query)
 	if err != nil {
 		return &Rows{lasterr: err}
 	}
@@ -245,16 +245,20 @@ func (s *Session) Run(query Query) *Rows {
 	return &Rows{lasterr: fmt.Errorf("rethinkdb: Unexpected status code from server: %v", status)}
 }
 
+func (s *Session) getContext() context {
+	return context{databaseName: s.database}
+}
+
 // Run runs a query using the given session, there is one Run()
 // method for each type of query.
+func (e Expression) Run(session *Session) *Rows {
+	return session.Run(e)
+}
+
 func (q MetaQuery) Run(session *Session) *Rows {
 	return session.Run(q)
 }
 
 func (q WriteQuery) Run(session *Session) *Rows {
 	return session.Run(q)
-}
-
-func (e Expression) Run(session *Session) *Rows {
-	return session.Run(e)
 }

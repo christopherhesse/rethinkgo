@@ -748,7 +748,7 @@ func (q WriteQuery) toProtobuf(ctx context) *p.Query {
 }
 
 // buildProtobuf converts a query to a protobuf and catches any panics raised
-// by the protobuf functions.
+// by the toProtobuf() functions.
 func (ctx context) buildProtobuf(query Query) (queryProto *p.Query, err error) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -761,4 +761,21 @@ func (ctx context) buildProtobuf(query Query) (queryProto *p.Query, err error) {
 
 	queryProto = query.toProtobuf(ctx)
 	return
+}
+
+// Check compiles a query for sending to the server, but does not send it.
+// There is one .Check() method for each query type.
+func (e Expression) Check(s *Session) error {
+	_, err := s.getContext().buildProtobuf(e)
+	return err
+}
+
+func (q MetaQuery) Check(s *Session) error {
+	_, err := s.getContext().buildProtobuf(q)
+	return err
+}
+
+func (q WriteQuery) Check(s *Session) error {
+	_, err := s.getContext().buildProtobuf(q)
+	return err
 }
