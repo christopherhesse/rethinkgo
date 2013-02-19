@@ -14,7 +14,7 @@ var maxIdleConnections int = 2
 
 // Session represents a connection to a server, use it to run queries against a
 // database, with either sess.Run(query) or query.Run() (uses the most
-// recently-created session).
+// recently-created session).  It is safe to use from multiple goroutines.
 type Session struct {
 	// current query identifier, just needs to be unique for each query, so we
 	// can match queries with responses, e.g. 4782371
@@ -43,18 +43,41 @@ type Query interface {
 //
 //  sess, err := r.Connect("localhost:28015", "test")
 func Connect(address, database string) (*Session, error) {
-	s := &Session{address: address, database: database, closed: false}
+	s := &Session{address: address, database: database, closed: true}
+
+	err := s.Reconnect()
+
+	if err != nil {
+		return nil, err
+	}
+
+	return s, nil
+}
+
+// Reconnect closes and re-opens a session.
+//
+// Example usage:
+//
+//  err := sess.Reconnect()
+func (s *Session) Reconnect() error {
+	if err := s.Close(); err != nil {
+		return err
+	}
+
+	s.mutex.Lock()
+	s.closed = false
+	s.mutex.Unlock()
 
 	// create a connection to make sure the server works, then immediately put it
 	// in the idle connection pool
 	conn, err := s.getConn()
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	s.putConn(conn)
 
-	return s, nil
+	return nil
 }
 
 // Close closes the session, freeing any associated resources.
@@ -83,21 +106,6 @@ func (s *Session) Close() error {
 	return lastError
 }
 
-// Reconnect closes and re-opens a session.
-//
-// Example usage:
-//
-//  err := sess.Reconnect()
-func (s *Session) Reconnect() error {
-	if err := s.Close(); err != nil {
-		return err
-	}
-	s.mutex.Lock()
-	s.closed = false
-	s.mutex.Unlock()
-	return nil
-}
-
 // return a connection from the free connections list if available, otherwise,
 // create a new connection
 func (s *Session) getConn() (*connection, error) {
@@ -110,7 +118,7 @@ func (s *Session) getConn() (*connection, error) {
 		conn := s.idleConns[0]
 		s.idleConns = s.idleConns[1:]
 		s.mutex.Unlock()
-		return &connection{conn}, nil
+		return conn, nil
 	}
 	s.mutex.Unlock()
 
@@ -119,7 +127,7 @@ func (s *Session) getConn() (*connection, error) {
 		return nil, err
 	}
 
-	return &connection{conn}, nil
+	return conn, nil
 }
 
 // return a connection to the free list, or close it if we already have enough

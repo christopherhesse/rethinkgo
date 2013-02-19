@@ -13,22 +13,30 @@
 //
 // Example usage:
 //
-//  import r "github.com/christopherhesse/rethinkgo"
+//  package main
+//
+//  import (
+//      "fmt"
+//      r "github.com/christopherhesse/rethinkgo"
+//  )
 //
 //  type Employee struct {
 //      FirstName string
-//      LastName string
-//      Job string
+//      LastName  string
+//      Job       string
 //  }
 //
 //  func main() {
 //      // To access a RethinkDB database, you connect to it with the Connect function
-//      session, err := r.Connect("localhost:28015", "<database name>")
+//      session, err := r.Connect("localhost:28015", "company_info")
+//      if err != nil {
+//          fmt.Println("error connecting:", err)
+//          return
+//      }
 //
 //      // This creates a database session 'sess' that may be used to run
 //      // queries on the server.  Queries let you read, insert, update, and
 //      // delete JSON objects ("rows") on the server, as well as manage tables.
-//
 //      query := r.Table("employees")
 //      rows := query.Run(session)
 //
