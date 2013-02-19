@@ -2,21 +2,15 @@ package rethinkgo
 
 import (
 	"code.google.com/p/goprotobuf/proto"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	p "github.com/christopherhesse/rethinkgo/query_language"
 	"io"
-	"net"
-	"runtime"
 	"sync"
 	"sync/atomic"
 )
 
-var debugMode bool = false
 var maxIdleConnections int = 2
-
-const clientHello uint32 = 0xaf61ba35
 
 // Session represents a connection to a server, use it to run queries against a
 // database, with either sess.Run(query) or query.Run() (uses the most
@@ -31,7 +25,7 @@ type Session struct {
 	database string
 
 	mutex     sync.Mutex // protects idleConns and closed
-	idleConns []net.Conn
+	idleConns []*connection
 	closed    bool
 }
 
@@ -40,73 +34,7 @@ type Session struct {
 // generate a query are generally located on Expression objects.
 type Query interface {
 	toProtobuf(context) *p.Query // will panic on errors
-	Run(*Session) *Rows          // TODO: should this be in the interface?
-}
-
-// SetDebug causes all queries sent to the server and responses received to be
-// printed to stdout in raw form.
-//
-// Example usage:
-//
-//  r.SetDebug(true)
-func SetDebug(debug bool) {
-	debugMode = debug
-}
-
-// writeMessage writes a byte array to the stream preceeded by the length in
-// bytes.
-func writeMessage(conn net.Conn, data []byte) error {
-	messageLength := uint32(len(data))
-	if err := binary.Write(conn, binary.LittleEndian, messageLength); err != nil {
-		return err
-	}
-
-	_, err := conn.Write(data)
-	return err
-}
-
-// writeQuery writes a protobuf message to the connection.
-func writeQuery(conn net.Conn, protobuf *p.Query) error {
-	data, err := proto.Marshal(protobuf)
-	if err != nil {
-		return fmt.Errorf("rethinkdb: Could not marshal protocol buffer: %v, %v", protobuf, err)
-	}
-
-	return writeMessage(conn, data)
-}
-
-// readMessage reads a single message from a connection.  A message is a length
-// followed by a serialized protocol buffer.
-func readMessage(conn net.Conn) ([]byte, error) {
-	var messageLength uint32
-	if err := binary.Read(conn, binary.LittleEndian, &messageLength); err != nil {
-		return nil, err
-	}
-
-	var result []byte
-	buf := make([]byte, messageLength)
-	for {
-		n, err := conn.Read(buf[0:])
-		if err != nil {
-			return nil, err
-		}
-		result = append(result, buf[0:n]...)
-		if len(result) == int(messageLength) {
-			break
-		}
-	}
-	return result, nil
-}
-
-// readResponse reads a protobuf message from a connection and parses it.
-func readResponse(conn net.Conn) (*p.Response, error) {
-	data, err := readMessage(conn)
-	if err != nil {
-		return nil, err
-	}
-	response := &p.Response{}
-	err = proto.Unmarshal(data, response)
-	return response, err
+	Run(*Session) *Rows
 }
 
 // Connect creates a new database session.
@@ -172,7 +100,7 @@ func (s *Session) Reconnect() error {
 
 // return a connection from the free connections list if available, otherwise,
 // create a new connection
-func (s *Session) getConn() (net.Conn, error) {
+func (s *Session) getConn() (*connection, error) {
 	s.mutex.Lock()
 	if s.closed {
 		s.mutex.Unlock()
@@ -182,24 +110,20 @@ func (s *Session) getConn() (net.Conn, error) {
 		conn := s.idleConns[0]
 		s.idleConns = s.idleConns[1:]
 		s.mutex.Unlock()
-		return conn, nil
+		return &connection{conn}, nil
 	}
 	s.mutex.Unlock()
 
-	conn, err := net.Dial("tcp", s.address)
+	conn, err := serverConnect(s.address)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := binary.Write(conn, binary.LittleEndian, clientHello); err != nil {
-		return nil, err
-	}
-
-	return conn, nil
+	return &connection{conn}, nil
 }
 
 // return a connection to the free list, or close it if we already have enough
-func (s *Session) putConn(conn net.Conn) {
+func (s *Session) putConn(conn *connection) {
 	s.mutex.Lock()
 	if len(s.idleConns) < maxIdleConnections {
 		s.idleConns = append(s.idleConns, conn)
@@ -230,28 +154,6 @@ func (s *Session) getToken() int64 {
 	return atomic.AddInt64(&s.token, 1)
 }
 
-// executeQuery sends a single query to the server and retrieves the parsed
-// response.
-func executeQuery(conn net.Conn, protobuf *p.Query) (responseProto *p.Response, err error) {
-	if err = writeQuery(conn, protobuf); err != nil {
-		return
-	}
-
-	for {
-		responseProto, err = readResponse(conn)
-		if err != nil {
-			return
-		}
-
-		if responseProto.GetToken() == protobuf.GetToken() {
-			break
-		} else if responseProto.GetToken() > protobuf.GetToken() {
-			return nil, errors.New("rethinkdb: The server returned a response for a protobuf that was not submitted by us")
-		}
-	}
-	return
-}
-
 // Run executes a query directly on a specific session and returns an iterator
 // that moves through the resulting JSON rows with rows.Next(&dest). See the
 // documentation for the Rows object for other options.
@@ -268,7 +170,7 @@ func executeQuery(conn net.Conn, protobuf *p.Query) (responseProto *p.Response, 
 //  }
 func (s *Session) Run(query Query) *Rows {
 	ctx := context{databaseName: s.database}
-	queryProto, err := buildProtobuf(ctx, query)
+	queryProto, err := ctx.buildProtobuf(query)
 	if err != nil {
 		return &Rows{lasterr: err}
 	}
@@ -280,7 +182,7 @@ func (s *Session) Run(query Query) *Rows {
 		return &Rows{lasterr: err}
 	}
 
-	buffer, status, err := s.run(conn, queryProto, query)
+	buffer, status, err := conn.executeQuery(queryProto, query)
 	if err != nil {
 		s.putConn(conn)
 		return &Rows{lasterr: err}
@@ -308,7 +210,7 @@ func (s *Session) Run(query Query) *Rows {
 		// case the user wants more
 		return &Rows{
 			session:  s,
-			conn:     &conn,
+			conn:     conn,
 			buffer:   buffer,
 			complete: false,
 			token:    queryProto.GetToken(),
@@ -333,70 +235,6 @@ func (s *Session) Run(query Query) *Rows {
 		}
 	}
 	return &Rows{lasterr: fmt.Errorf("rethinkdb: Unexpected status code from server: %v", status)}
-}
-
-// buildProtobuf converts a query to a protobuf and catches any panics raised
-// by the protobuf functions.
-func buildProtobuf(ctx context, query Query) (queryProto *p.Query, err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			if _, ok := r.(runtime.Error); ok {
-				panic(r)
-			}
-			err = fmt.Errorf("rethinkdb: %v", r)
-		}
-	}()
-
-	queryProto = query.toProtobuf(ctx)
-	return
-}
-
-// run is an internal function, shared by Rows iterator and normal the Run()
-// call. Runs a protocol buffer formatted query, returns a list of strings and a
-// status code.
-func (s *Session) run(conn net.Conn, queryProto *p.Query, query Query) (result []string, status p.Response_StatusCode, err error) {
-	if debugMode {
-		fmt.Printf("rethinkdb: query: %v\n", query)
-		fmt.Printf("rethinkdb: queryProto:\n%v", protobufToString(queryProto, 1))
-	}
-
-	r, err := executeQuery(conn, queryProto)
-	if err != nil {
-		return
-	}
-	if debugMode {
-		fmt.Printf("rethinkdb: responseProto:\n%v", protobufToString(r, 1))
-	}
-
-	status = r.GetStatusCode()
-	switch status {
-	case p.Response_SUCCESS_JSON, p.Response_SUCCESS_STREAM, p.Response_SUCCESS_PARTIAL, p.Response_SUCCESS_EMPTY:
-		// response is []string, and is empty in the case of SUCCESS_EMPTY
-		result = r.Response
-	default:
-		// some sort of error
-		e := Error{Response: r, Query: query}
-		switch status {
-		case p.Response_RUNTIME_ERROR:
-			e.Err = ErrRuntime
-		case p.Response_BAD_QUERY:
-			e.Err = ErrBadQuery
-		case p.Response_BROKEN_CLIENT:
-			e.Err = ErrBrokenClient
-		default:
-			e.Err = fmt.Errorf("rethinkdb: Unexpected status code from server: %v", status)
-		}
-		err = e
-	}
-	return
-}
-
-func getBacktraceFrames(response *p.Response) []string {
-	bt := response.GetBacktrace()
-	if bt == nil {
-		return nil
-	}
-	return bt.Frame
 }
 
 // Run runs a query using the given session, there is one Run()

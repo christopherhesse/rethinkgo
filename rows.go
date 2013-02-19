@@ -7,7 +7,6 @@ import (
 	"fmt"
 	p "github.com/christopherhesse/rethinkgo/query_language"
 	"io"
-	"net"
 	"reflect"
 )
 
@@ -40,7 +39,7 @@ import (
 // that does not match the expected type (ErrWrongResponseType).
 type Rows struct {
 	session  *Session
-	conn     *net.Conn
+	conn     *connection
 	closed   bool
 	buffer   []string
 	current  *string
@@ -57,7 +56,7 @@ func (rows *Rows) continueQuery() error {
 		Type:  p.Query_CONTINUE.Enum(),
 		Token: proto.Int64(rows.token),
 	}
-	buffer, status, err := rows.session.run(*rows.conn, querybuf, rows.query)
+	buffer, status, err := rows.conn.executeQuery(querybuf, rows.query)
 	if err != nil {
 		return err
 	}
@@ -255,7 +254,8 @@ func (rows *Rows) Exec() error {
 func (rows *Rows) Close() {
 	if !rows.closed {
 		if rows.conn != nil {
-			rows.session.putConn(*rows.conn)
+			// return this connection to the pool
+			rows.session.putConn(rows.conn)
 		}
 		rows.closed = true
 	}

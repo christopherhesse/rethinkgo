@@ -20,6 +20,14 @@ func (e Error) Error() string {
 	return fmt.Sprintf("rethinkdb: %v: %v %v %v", e.Err, e.Response.GetErrorMessage(), getBacktraceFrames(e.Response), e.Query)
 }
 
+func getBacktraceFrames(response *p.Response) []string {
+	bt := response.GetBacktrace()
+	if bt == nil {
+		return nil
+	}
+	return bt.Frame
+}
+
 var (
 	// ErrRuntime indicates that the server has encountered an error while
 	// trying to execute our query.

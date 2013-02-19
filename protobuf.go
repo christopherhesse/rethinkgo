@@ -10,6 +10,7 @@ import (
 	"fmt"
 	p "github.com/christopherhesse/rethinkgo/query_language"
 	"reflect"
+	"runtime"
 )
 
 // context stores some state that is required when converting Expressions to
@@ -744,4 +745,20 @@ func (q WriteQuery) toProtobuf(ctx context) *p.Query {
 		Type:       p.Query_WRITE.Enum(),
 		WriteQuery: writeQueryProto,
 	}
+}
+
+// buildProtobuf converts a query to a protobuf and catches any panics raised
+// by the protobuf functions.
+func (ctx context) buildProtobuf(query Query) (queryProto *p.Query, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			if _, ok := r.(runtime.Error); ok {
+				panic(r)
+			}
+			err = fmt.Errorf("rethinkdb: %v", r)
+		}
+	}()
+
+	queryProto = query.toProtobuf(ctx)
+	return
 }
