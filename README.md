@@ -64,8 +64,6 @@ Differences from official RethinkDB drivers
     * The query returns a list of responses: .Collect(&dest)
     * The query returns an empty response: .Exec()
 * No errors are generated when creating queries, only when running them, so Table(string) returns only an Expression instance, but sess.Run(Query).Err() will tell you if your query could not be serialized for the server.
-* There's a global SetDebug(bool) function to turn on printing of queries, rather than .run(debug=True)
-* r.Count() is a function, not a constant
 * There's no r(attributeName) or row[attributeName] function call / item indexing to get attributes of the "current" row or a specific row respectively.  Instead, there is a .Attr() method on the global "Row" object (r.Row) and any row Expressions that can be used to access attributes.  Examples:
 
         r.Table("marvel").OuterJoin(r.Table("dc"),
@@ -76,7 +74,7 @@ Differences from official RethinkDB drivers
         r.Table("marvel").Map(r.Row.Attr("strength").Mul(2))
 
 * Go does not have optional args, most optional args are either require or separate methods.
-    * A convenience method named ".GetById()" has been added for that common case
+    * A convenience method .GetById(string) has been added for that common case
     * .Atomic(bool) and .Overwrite(bool) are methods on write queries
     * .UseOutdated(bool) is a method on any Table() or other Expression (will apply to all tables already specified)
-    * TableCreate() has a variant called TableCreateSpec(TableSpec) which takes a TableSpec instance specifying the parameters for the table
+    * .TableCreate(string) has a variant called TableCreateSpec(TableSpec) which takes a TableSpec instance specifying the parameters for the table

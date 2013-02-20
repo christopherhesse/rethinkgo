@@ -24,7 +24,9 @@ type Session struct {
 	// database to use if no database is specified in query, e.g. "test"
 	database string
 
-	mutex     sync.Mutex // protects idleConns and closed
+	// protects idleConns and closed, because this lock is here, the session
+	// should not be copied according to the "sync" module
+	mutex     sync.Mutex
 	idleConns []*connection
 	closed    bool
 }
@@ -115,9 +117,11 @@ func (s *Session) getConn() (*connection, error) {
 		s.mutex.Unlock()
 		return nil, errors.New("rethinkdb: session is closed")
 	}
-	if len(s.idleConns) > 0 {
-		conn := s.idleConns[0]
-		s.idleConns = s.idleConns[1:]
+	if n := len(s.idleConns); n > 0 {
+		// grab from end of slice so that underlying array does not need to be
+		// resized when appending idle connections later
+		conn := s.idleConns[n-1]
+		s.idleConns = s.idleConns[:n-1]
 		s.mutex.Unlock()
 		return conn, nil
 	}

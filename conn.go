@@ -12,7 +12,9 @@ import (
 // connection is a connection to a rethinkdb database, it is not shared between
 // goroutines.
 type connection struct {
-	net.Conn // wrap the net.Conn type, so that we can define new methods on it, effectively
+	// wrap the net.Conn type, so that we can effectively define new methods on
+	// it (interfaces do not allow that)
+	net.Conn
 }
 
 var debugMode bool = false
