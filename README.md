@@ -72,7 +72,6 @@ Differences from official RethinkDB drivers
             })
 
         r.Table("marvel").Map(r.Row.Attr("strength").Mul(2))
-
 * Go does not have optional args, most optional args are either require or separate methods.
     * A convenience method .GetById(string) has been added for that common case
     * .Atomic(bool) and .Overwrite(bool) are methods on write queries
