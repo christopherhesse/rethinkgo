@@ -10,7 +10,9 @@ import (
 	"sync/atomic"
 )
 
-var maxIdleConnections int = 2
+// maximum number of connections to a server to keep laying around, should add
+// a function to change this if there is any demand
+var maxIdleConnections int = 5
 
 // Session represents a connection to a server, use it to run queries against a
 // database, with either sess.Run(query) or query.Run() (uses the most
