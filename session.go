@@ -214,7 +214,7 @@ func (s *Session) Run(query Query) *Rows {
 		return &Rows{lasterr: err}
 	}
 
-	buffer, status, err := conn.executeQuery(queryProto, query, s.timeout)
+	buffer, status, err := conn.executeQuery(queryProto, s.timeout)
 	if err != nil {
 		// see if we got a timeout error, close the connection if we did, since
 		// the connection may not be idle for quite some time and we don't
@@ -222,8 +222,8 @@ func (s *Session) Run(query Query) *Rows {
 		//
 		// judging from rethinkdb's CPU usage, this won't actually terminate the
 		// query, see https://github.com/rethinkdb/rethinkdb/issues/372
-		netErr := err.(net.Error)
-		if netErr.Timeout() {
+		netErr, ok := err.(net.Error)
+		if ok && netErr.Timeout() {
 			conn.Close()
 		} else {
 			s.putConn(conn)
@@ -257,7 +257,6 @@ func (s *Session) Run(query Query) *Rows {
 			buffer:   buffer,
 			complete: false,
 			token:    queryProto.GetToken(),
-			query:    query,
 			status:   status,
 		}
 	case p.Response_SUCCESS_STREAM:

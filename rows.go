@@ -46,17 +46,16 @@ type Rows struct {
 	complete bool
 	lasterr  error
 	token    int64
-	query    Query
 	status   p.Response_StatusCode
 }
 
 // continueQuery creates a query that will cause this query to continue
 func (rows *Rows) continueQuery() error {
-	querybuf := &p.Query{
+	queryProto := &p.Query{
 		Type:  p.Query_CONTINUE.Enum(),
 		Token: proto.Int64(rows.token),
 	}
-	buffer, status, err := rows.conn.executeQuery(querybuf, rows.query, rows.session.timeout)
+	buffer, status, err := rows.conn.executeQuery(queryProto, rows.session.timeout)
 	if err != nil {
 		return err
 	}
@@ -168,7 +167,7 @@ func (rows *Rows) Collect(slice interface{}) error {
 	}
 
 	if rows.status != p.Response_SUCCESS_PARTIAL && rows.status != p.Response_SUCCESS_STREAM {
-		return Error{Err: ErrWrongResponseType}
+		return WrongResponseTypeError{}
 	}
 
 	// create a new slice to hold the results
@@ -203,11 +202,11 @@ func (rows *Rows) One(row interface{}) error {
 	}
 
 	if rows.status != p.Response_SUCCESS_JSON {
-		return Error{Err: ErrWrongResponseType}
+		return WrongResponseTypeError{}
 	}
 
 	if rows.lasterr == io.EOF {
-		return Error{Err: ErrNoSuchRow}
+		return NoSuchRowError{}
 	}
 
 	rows.Next(row)
@@ -230,7 +229,7 @@ func (rows *Rows) Exec() error {
 	rows.Close()
 
 	if rows.status != p.Response_SUCCESS_EMPTY {
-		return Error{Err: ErrWrongResponseType}
+		return WrongResponseTypeError{}
 	}
 
 	return nil
@@ -259,11 +258,11 @@ func (rows *Rows) Close() (err error) {
 			// if this Rows iterator was closed before retrieving all results, send a
 			// stop query to the server to discard any remaining results
 			if !rows.complete {
-				querybuf := &p.Query{
+				queryProto := &p.Query{
 					Type:  p.Query_STOP.Enum(),
 					Token: proto.Int64(rows.token),
 				}
-				_, _, err = rows.conn.executeQuery(querybuf, rows.query, rows.session.timeout)
+				_, _, err = rows.conn.executeQuery(queryProto, rows.session.timeout)
 			}
 
 			// return this connection to the pool

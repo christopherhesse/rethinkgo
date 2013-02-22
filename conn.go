@@ -125,9 +125,8 @@ func (c *connection) executeQueryProtobuf(protobuf *p.Query) (responseProto *p.R
 // executeQuery is an internal function, shared by Rows iterator and the normal
 // Run() call. Runs a protocol buffer formatted query, returns a list of strings
 // and a status code.
-func (c *connection) executeQuery(queryProto *p.Query, query Query, timeout time.Duration) (result []string, status p.Response_StatusCode, err error) {
+func (c *connection) executeQuery(queryProto *p.Query, timeout time.Duration) (result []string, status p.Response_StatusCode, err error) {
 	if debugMode {
-		fmt.Printf("rethinkdb: query: %v\n", query)
 		fmt.Printf("rethinkdb: queryProto:\n%v", protobufToString(queryProto, 1))
 	}
 
@@ -159,18 +158,16 @@ func (c *connection) executeQuery(queryProto *p.Query, query Query, timeout time
 		result = r.Response
 	default:
 		// some sort of error
-		e := Error{Response: r, Query: query}
 		switch status {
 		case p.Response_RUNTIME_ERROR:
-			e.Err = ErrRuntime
+			err = RuntimeError{response: r}
 		case p.Response_BAD_QUERY:
-			e.Err = ErrBadQuery
+			err = BadQueryError{response: r}
 		case p.Response_BROKEN_CLIENT:
-			e.Err = ErrBrokenClient
+			err = BrokenClientError{response: r}
 		default:
-			e.Err = fmt.Errorf("rethinkdb: Unexpected status code from server: %v", status)
+			err = fmt.Errorf("rethinkdb: Unexpected status code from server: %v", status)
 		}
-		err = e
 	}
 	return
 }

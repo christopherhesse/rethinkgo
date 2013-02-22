@@ -29,7 +29,7 @@ func (e Expression) String() string {
 		ifArgs := e.value.(ifArgs)
 		return fmt.Sprintf(`Branch(%v, %v, %v)`, ifArgs.test, ifArgs.trueBranch, ifArgs.falseBranch)
 	case errorKind:
-		return fmt.Sprintf(`RuntimeError("%v")`, e.value.(string))
+		return fmt.Sprintf(`ThrowRuntimeError("%v")`, e.value.(string))
 	case getByKeyKind:
 		getArgs := e.value.(getArgs)
 		return fmt.Sprintf(`%v.Get(%v, "%v")`, getArgs.table, getArgs.key, getArgs.attribute)

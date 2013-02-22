@@ -3,8 +3,6 @@ rethinkgo
 
 [Go language](http://golang.org/) driver for [RethinkDB](http://www.rethinkdb.com/) made by [Christopher Hesse](http://www.christopherhesse.com/)
 
-****This is a work in progress but is mostly done. There are a few more changes left.  Some constants and types may be renamed.****
-
 Installation
 ============
 
@@ -42,6 +40,8 @@ Overview
 The Go driver is most similar to the [official Javascript driver](http://www.rethinkdb.com/api/#js).
 
 Most of the functions have all the same names, with a capital first letter.  See [Go Driver Documentation](http://godoc.org/github.com/christopherhesse/rethinkgo) for examples and documentation for each function.
+
+To use RethinkDB with this driver, you build a Query object using r.Table(), for example, and then call query.Run(session) to execute the query on the server and return an iterator for the results.  There are 3 convenience functions on the iterator if you don't want to iterate over the results, .One(&result) for a query that returns a single result, .Collect(&results) for multiple results, and .Exec() for a query that returns an empty response (for instance, .TableCreate(string)).
 
 The important types are r.Expression, r.List (used for Arrays, an alias for []interface{}), and r.Map (used for Objects, an alias for map[string]interface{}).
 
