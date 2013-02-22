@@ -56,7 +56,7 @@ func (rows *Rows) continueQuery() error {
 		Type:  p.Query_CONTINUE.Enum(),
 		Token: proto.Int64(rows.token),
 	}
-	buffer, status, err := rows.conn.executeQuery(querybuf, rows.query)
+	buffer, status, err := rows.conn.executeQuery(querybuf, rows.query, rows.session.timeout)
 	if err != nil {
 		return err
 	}
@@ -251,12 +251,25 @@ func (rows *Rows) Exec() error {
 //  for rows.Next(&result) {
 //      fmt.Println("result:", result)
 //  }
-func (rows *Rows) Close() {
+func (rows *Rows) Close() (err error) {
 	if !rows.closed {
 		if rows.conn != nil {
+			// if rows.conn is not nil, that means this is a stream response
+
+			// if this Rows iterator was closed before retrieving all results, send a
+			// stop query to the server to discard any remaining results
+			if !rows.complete {
+				querybuf := &p.Query{
+					Type:  p.Query_STOP.Enum(),
+					Token: proto.Int64(rows.token),
+				}
+				_, _, err = rows.conn.executeQuery(querybuf, rows.query, rows.session.timeout)
+			}
+
 			// return this connection to the pool
 			rows.session.putConn(rows.conn)
 		}
 		rows.closed = true
 	}
+	return
 }

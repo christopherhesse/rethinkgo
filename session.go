@@ -6,8 +6,10 @@ import (
 	"fmt"
 	p "github.com/christopherhesse/rethinkgo/query_language"
 	"io"
+	"net"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 // maximum number of connections to a server to keep laying around, should add
@@ -25,6 +27,8 @@ type Session struct {
 	address string
 	// database to use if no database is specified in query, e.g. "test"
 	database string
+	// maximum duration of a single query
+	timeout time.Duration
 
 	// protects idleConns and closed, because this lock is here, the session
 	// should not be copied according to the "sync" module
@@ -109,6 +113,20 @@ func (s *Session) Close() error {
 	s.closed = true
 
 	return lastError
+}
+
+// SetTimeout causes any future queries that are run on this session to timeout
+// after the given duration, returning a timeout error.  Set to zero to disable.
+//
+// The timeout is global to all queries run on a single Session and does not
+// apply to queries currently in progress.  The timeout does not cover the
+// time taken to connect to the server in the case that there is no idle
+// connection available.
+//
+// If a timeout occurs, the individual connection handling that query will be
+// closed instead of being returned to the connection pool.
+func (s *Session) SetTimeout(timeout time.Duration) {
+	s.timeout = timeout
 }
 
 // return a connection from the free connections list if available, otherwise,
@@ -196,9 +214,20 @@ func (s *Session) Run(query Query) *Rows {
 		return &Rows{lasterr: err}
 	}
 
-	buffer, status, err := conn.executeQuery(queryProto, query)
+	buffer, status, err := conn.executeQuery(queryProto, query, s.timeout)
 	if err != nil {
-		s.putConn(conn)
+		// see if we got a timeout error, close the connection if we did, since
+		// the connection may not be idle for quite some time and we don't
+		// want to try multiplexing queries over a rethinkdb connection
+		//
+		// judging from rethinkdb's CPU usage, this won't actually terminate the
+		// query, see https://github.com/rethinkdb/rethinkdb/issues/372
+		netErr := err.(net.Error)
+		if netErr.Timeout() {
+			conn.Close()
+		} else {
+			s.putConn(conn)
+		}
 		return &Rows{lasterr: err}
 	}
 

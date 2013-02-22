@@ -7,6 +7,7 @@ import (
 	"fmt"
 	p "github.com/christopherhesse/rethinkgo/query_language"
 	"net"
+	"time"
 )
 
 // connection is a connection to a rethinkdb database, it is not shared between
@@ -124,13 +125,26 @@ func (c *connection) executeQueryProtobuf(protobuf *p.Query) (responseProto *p.R
 // executeQuery is an internal function, shared by Rows iterator and the normal
 // Run() call. Runs a protocol buffer formatted query, returns a list of strings
 // and a status code.
-func (c *connection) executeQuery(queryProto *p.Query, query Query) (result []string, status p.Response_StatusCode, err error) {
+func (c *connection) executeQuery(queryProto *p.Query, query Query, timeout time.Duration) (result []string, status p.Response_StatusCode, err error) {
 	if debugMode {
 		fmt.Printf("rethinkdb: query: %v\n", query)
 		fmt.Printf("rethinkdb: queryProto:\n%v", protobufToString(queryProto, 1))
 	}
 
+	// if the user has set a timeout, make sure we set a deadline on the connection
+	// so that we don't exceed the timeout.  if not, use the zero time value to
+	// indicate no deadline
+	if timeout == 0 {
+		c.SetDeadline(time.Time{})
+	} else {
+		c.SetDeadline(time.Now().Add(timeout))
+	}
+
 	r, err := c.executeQueryProtobuf(queryProto)
+
+	// reset the deadline for the connection
+	c.SetDeadline(time.Time{})
+
 	if err != nil {
 		return
 	}

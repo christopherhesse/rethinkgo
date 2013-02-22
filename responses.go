@@ -1,6 +1,6 @@
 package rethinkgo
 
-// WriteResponse is a type that can be used to read any responses to write queries, such as .Insert()
+// WriteResponse is a type that can be used to read responses to write queries, such as .Insert()
 //
 // Example usage:
 //
