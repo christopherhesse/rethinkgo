@@ -160,11 +160,11 @@ func (c *connection) executeQuery(queryProto *p.Query, timeout time.Duration) (r
 		// some sort of error
 		switch status {
 		case p.Response_RUNTIME_ERROR:
-			err = RuntimeError{response: r}
+			err = ErrRuntime{response: r}
 		case p.Response_BAD_QUERY:
-			err = BadQueryError{response: r}
+			err = ErrBadQuery{response: r}
 		case p.Response_BROKEN_CLIENT:
-			err = BrokenClientError{response: r}
+			err = ErrBrokenClient{response: r}
 		default:
 			err = fmt.Errorf("rethinkdb: Unexpected status code from server: %v", status)
 		}

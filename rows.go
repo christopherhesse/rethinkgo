@@ -167,7 +167,7 @@ func (rows *Rows) Collect(slice interface{}) error {
 	}
 
 	if rows.status != p.Response_SUCCESS_PARTIAL && rows.status != p.Response_SUCCESS_STREAM {
-		return WrongResponseTypeError{}
+		return ErrWrongResponseType{}
 	}
 
 	// create a new slice to hold the results
@@ -202,11 +202,11 @@ func (rows *Rows) One(row interface{}) error {
 	}
 
 	if rows.status != p.Response_SUCCESS_JSON {
-		return WrongResponseTypeError{}
+		return ErrWrongResponseType{}
 	}
 
 	if rows.lasterr == io.EOF {
-		return NoSuchRowError{}
+		return ErrNoSuchRow{}
 	}
 
 	rows.Next(row)
@@ -229,7 +229,7 @@ func (rows *Rows) Exec() error {
 	rows.Close()
 
 	if rows.status != p.Response_SUCCESS_EMPTY {
-		return WrongResponseTypeError{}
+		return ErrWrongResponseType{}
 	}
 
 	return nil

@@ -333,13 +333,13 @@ func LetVar(name string) Exp {
 	return Exp{kind: variableKind, value: name}
 }
 
-// ThrowRuntimeError tells the server to respond with a RuntimeError, useful for
+// RuntimeError tells the server to respond with a ErrRuntime, useful for
 // testing.
 //
 // Example usage:
 //
-//  err := r.ThrowRuntimeError("hi there").Run().Err()
-func ThrowRuntimeError(message string) Exp {
+//  err := r.RuntimeError("hi there").Run().Err()
+func RuntimeError(message string) Exp {
 	return Exp{kind: errorKind, value: message}
 }
 
