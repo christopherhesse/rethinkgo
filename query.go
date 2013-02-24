@@ -1724,7 +1724,12 @@ type TableSpec struct {
 //
 // Example usage:
 //
-//  err := r.Db("marvel").TableCreate("heroes").Run().Exec()
+//  err := r.TableCreate("heroes").Run().Exec()
+func TableCreate(name string) MetaQuery {
+	spec := TableSpec{Name: name}
+	return MetaQuery{query: tableCreateQuery{spec: spec}}
+}
+
 func (db database) TableCreate(name string) MetaQuery {
 	spec := TableSpec{Name: name}
 	return MetaQuery{query: tableCreateQuery{spec: spec, database: db}}
@@ -1735,7 +1740,11 @@ func (db database) TableCreate(name string) MetaQuery {
 // Example usage:
 //
 //  spec := TableSpec{Name: "heroes", PrimaryKey: "name"}
-//  err := r.Db("marvel").TableCreateSpec(spec).Run().Exec()
+//  err := r.TableCreateSpec(spec).Run().Exec()
+func TableCreateSpec(spec TableSpec) MetaQuery {
+	return MetaQuery{query: tableCreateQuery{spec: spec}}
+}
+
 func (db database) TableCreateSpec(spec TableSpec) MetaQuery {
 	return MetaQuery{query: tableCreateQuery{spec: spec, database: db}}
 }
@@ -1744,16 +1753,20 @@ type tableListQuery struct {
 	database database
 }
 
-// TableList lists all tables in the specified database.
+// TableList lists all tables in the database.
 //
 // Example usage:
 //
 //  var tables []string
-//  err := r.Db("marvel").TableList().Run().Collect(&tables)
+//  err := r.TableList().Run().Collect(&tables)
 //
 // Example response:
 //
 //  ["heroes", "villains"]
+func TableList() MetaQuery {
+	return MetaQuery{query: tableListQuery{}}
+}
+
 func (db database) TableList() MetaQuery {
 	return MetaQuery{query: tableListQuery{db}}
 }
@@ -1767,11 +1780,13 @@ type tableDropQuery struct {
 // Example usage:
 //
 //  err := r.Db("marvel").TableDrop("heroes").Run().Exec()
+func TableDrop(name string) MetaQuery {
+	table := tableInfo{name: name}
+	return MetaQuery{query: tableDropQuery{table: table}}
+}
+
 func (db database) TableDrop(name string) MetaQuery {
-	table := tableInfo{
-		name:     name,
-		database: db,
-	}
+	table := tableInfo{name: name, database: db}
 	return MetaQuery{query: tableDropQuery{table: table}}
 }
 
@@ -1804,43 +1819,13 @@ type tableInfo struct {
 //    },
 //    ...
 //  ]
-func (db database) Table(name string) Expression {
-	value := tableInfo{
-		name:     name,
-		database: db,
-	}
+func Table(name string) Expression {
+	value := tableInfo{name: name}
 	return Expression{kind: tableKind, value: value}
 }
 
-// Table references all rows in a specific table, using the default database
-// specified on the connection.  If you want to use another database, use
-// Db(<dbname>).Table(<tablename>).
-//
-// Example usage:
-//
-//  var response []map[string]interface{}
-//  err := r.Table("heroes").Run().Collect(&response)
-//
-// Example response:
-//
-//  [
-//    {
-//      "strength": 3,
-//      "name": "Doctor Strange",
-//      "durability": 6,
-//      "intelligence": 4,
-//      "energy": 7,
-//      "fighting": 7,
-//      "real_name": "Stephen Vincent Strange",
-//      "speed": 5,
-//      "id": "edc3a46b-95a0-4f64-9d1c-0dd7d83c4bcd"
-//    },
-//    ...
-//  ]
-func Table(name string) Expression {
-	value := tableInfo{
-		name: name,
-	}
+func (db database) Table(name string) Expression {
+	value := tableInfo{name: name, database: db}
 	return Expression{kind: tableKind, value: value}
 }
 

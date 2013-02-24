@@ -39,6 +39,7 @@
 //      // delete JSON objects ("rows") on the server, as well as manage tables.
 //      query := r.Table("employees")
 //      rows := query.Run(session)
+//      defer rows.Close()
 //
 //      // 'rows' is an iterator that can be used to iterate over the
 //      // results.  If there was an error, it is available in rows.Err()
@@ -47,8 +48,8 @@
 //      for rows.Next(&row) {
 //          fmt.Println("row:", row)
 //      }
-//      if rows.Err() != nil {
-//          fmt.Println("err:", rows.Err())
+//      if err = rows.Err(); err != nil {
+//          fmt.Println("err:", err)
 //      }
 //  }
 //

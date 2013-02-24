@@ -589,23 +589,27 @@ func (q MetaQuery) toProtobuf(ctx context) *p.Query {
 		}
 
 	case tableCreateQuery:
+		table := tableInfo{name: v.spec.Name, database: v.database}
+
 		metaQueryProto = &p.MetaQuery{
 			Type: p.MetaQuery_CREATE_TABLE.Enum(),
 			CreateTable: &p.MetaQuery_CreateTable{
 				PrimaryKey: protoStringOrNil(v.spec.PrimaryKey),
 				Datacenter: protoStringOrNil(v.spec.PrimaryDatacenter),
-				TableRef: &p.TableRef{
-					DbName:    proto.String(v.database.name),
-					TableName: proto.String(v.spec.Name),
-				},
-				CacheSize: protoInt64OrNil(v.spec.CacheSize),
+				TableRef:   ctx.toTableRef(table),
+				CacheSize:  protoInt64OrNil(v.spec.CacheSize),
 			},
 		}
 
 	case tableListQuery:
+		dbName := v.database.name
+		if dbName == "" {
+			dbName = ctx.databaseName
+		}
+
 		metaQueryProto = &p.MetaQuery{
 			Type:   p.MetaQuery_LIST_TABLES.Enum(),
-			DbName: proto.String(v.database.name),
+			DbName: proto.String(dbName),
 		}
 
 	case tableDropQuery:
