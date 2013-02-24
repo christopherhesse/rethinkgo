@@ -124,7 +124,7 @@ const (
 // Example response:
 //
 //  [1, 2, 3]
-type Exp struct {
+type Exp struct { // this would be Expr, but then it would conflict with the function that creates Exp instances
 	value interface{}
 	kind  expressionKind
 }

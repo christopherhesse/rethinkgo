@@ -36,7 +36,8 @@ func (e ErrBadQuery) Error() string {
 //
 // Example usage:
 //
-//   err := r.Table("table_that_doesnt_exist").Run().Err()
+//   err := r.Table("table_that_doesnt_exist").Run(session).Err()
+//   err := r.RuntimeError().Run(session).Err()
 type ErrRuntime struct {
 	response *p.Response
 }
