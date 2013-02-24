@@ -5,7 +5,7 @@ package rethinkgo
 // Example usage:
 //
 //  var response r.WriteResponse
-//  err := r.Table("heroes").Insert(r.Map{"name": "Professor X"}).Run().One(&response)
+//  err := r.Table("heroes").Insert(r.Map{"name": "Professor X"}).Run(session).One(&response)
 //  fmt.Println("inserted", response.Inserted, "rows")
 type WriteResponse struct {
 	Inserted      int

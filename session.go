@@ -17,8 +17,8 @@ import (
 var maxIdleConnections int = 5
 
 // Session represents a connection to a server, use it to run queries against a
-// database, with either sess.Run(query) or query.Run() (uses the most
-// recently-created session).  It is safe to use from multiple goroutines.
+// database, with either sess.Run(query) or query.Run(session).  It is safe to
+// use from multiple goroutines.
 type Session struct {
 	// current query identifier, just needs to be unique for each query, so we
 	// can match queries with responses, e.g. 4782371
@@ -37,7 +37,7 @@ type Session struct {
 	closed    bool
 }
 
-// Query is the interface for queries that can be .Run(), this includes
+// Query is the interface for queries that can be .Run(session), this includes
 // Exp (run as a read query), MetaQuery, and WriteQuery. Methods that
 // generate a query are generally located on Exp objects.
 type Query interface {
@@ -176,7 +176,7 @@ func (s *Session) putConn(conn *connection) {
 // Example usage:
 //
 //  sess.Use("dave")
-//  rows := r.Table("employees").Run() // uses database "dave"
+//  rows := r.Table("employees").Run(session) // uses database "dave"
 func (s *Session) Use(database string) {
 	s.database = database
 }

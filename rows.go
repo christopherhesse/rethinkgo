@@ -25,12 +25,12 @@ import (
 // .One(&dest) for a response that always returns a single result:
 //
 //  var response string
-//  err := r.Table("heroes").Get("Omega Red", "name").Run().One(&response)
+//  err := r.Table("heroes").Get("Omega Red", "name").Run(session).One(&response)
 //
 // .Collect(&dest) for a list of results:
 //
 //  var response []string
-//  err := r.Db("marvel").TableList().Run().Collect(&response)
+//  err := r.Db("marvel").TableList().Run(session).Collect(&response)
 //
 // .Collect() may perform multiple network requests to get all of the results of
 // the query.  Use .Limit() if you only need a certain number.
@@ -83,7 +83,7 @@ func (rows *Rows) continueQuery() error {
 //
 // Example usage:
 //
-//  rows := r.Table("heroes").Run()
+//  rows := r.Table("heroes").Run(session)
 //  var hero interface{}
 //  for rows.Next(&hero) {
 //      fmt.Println("hero:", hero)
@@ -133,7 +133,7 @@ func (rows *Rows) Next(dest interface{}) bool {
 //
 // Example usage:
 //
-//  err := r.Table("heroes").Run().Err()
+//  err := r.Table("heroes").Run(session).Err()
 func (rows *Rows) Err() error {
 	if rows.lasterr == io.EOF {
 		// this represents a normal termination of the iterator, so it doesn't really
@@ -150,7 +150,7 @@ func (rows *Rows) Err() error {
 // Example usage:
 //
 //  var result []interface{}
-//  err := r.Table("heroes").Run().Collect(&result)
+//  err := r.Table("heroes").Run(session).Collect(&result)
 func (rows *Rows) Collect(slice interface{}) error {
 	if rows.Err() != nil {
 		return rows.Err()
@@ -195,7 +195,7 @@ func (rows *Rows) Collect(slice interface{}) error {
 // Example usage:
 //
 //  var result interface{}
-//  err := r.Table("villains").Get("Galactus", "name").Run().One(&result)
+//  err := r.Table("villains").Get("Galactus", "name").Run(session).One(&result)
 func (rows *Rows) One(row interface{}) error {
 	if rows.Err() != nil {
 		return rows.Err()
@@ -220,7 +220,7 @@ func (rows *Rows) One(row interface{}) error {
 //
 // Example usage:
 //
-//  err := r.Db("marvel").TableCreate("villains").Run().Exec()
+//  err := r.Db("marvel").TableCreate("villains").Run(session).Exec()
 func (rows *Rows) Exec() error {
 	if rows.Err() != nil {
 		return rows.Err()
@@ -243,7 +243,7 @@ func (rows *Rows) Exec() error {
 //
 // Example usage:
 //
-//  rows := r.Table("villains").Run()
+//  rows := r.Table("villains").Run(session)
 //  defer rows.Close()
 //
 //  var result interface{}

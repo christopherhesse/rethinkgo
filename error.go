@@ -22,7 +22,7 @@ func getBacktraceFrames(response *p.Response) []string {
 //
 // Example usage:
 //
-//   err := r.Table("heroes").ArrayToStream().ArrayToStream().Run().Err()
+//   err := r.Table("heroes").ArrayToStream().ArrayToStream().Run(session).Err()
 type ErrBadQuery struct {
 	response *p.Response
 }
@@ -62,7 +62,7 @@ func (e ErrBrokenClient) Error() string {
 // Example usage:
 //
 //  var row interface{}
-//  err := r.Table("heroes").Get("Apocalypse", "name").Run().One(&row)
+//  err := r.Table("heroes").Get("Apocalypse", "name").Run(session).One(&row)
 type ErrNoSuchRow struct {
 	response *p.Response
 }
@@ -78,7 +78,7 @@ func (e ErrNoSuchRow) Error() string {
 // Example usage:
 //
 //  var row []interface{}
-//  err := r.Table("heroes").Get("Archangel", "name").Run().Collect(&row)
+//  err := r.Table("heroes").Get("Archangel", "name").Run(session).Collect(&row)
 type ErrWrongResponseType struct {
 	response *p.Response
 }

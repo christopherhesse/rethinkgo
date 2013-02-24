@@ -106,7 +106,7 @@ const (
 //  getIntelligence := func(row r.Exp) r.Exp {
 //      return row.Attr("intelligence")
 //  }
-//  err := r.Table("heroes").Map(getIntelligence).Run().Collect(&response)
+//  err := r.Table("heroes").Map(getIntelligence).Run(session).Collect(&response)
 //
 // Example response:
 //
@@ -119,7 +119,7 @@ const (
 //  var squares []int
 //  // Square a series of numbers
 //  square := func(row r.Exp) r.Exp { return row.Mul(row) }
-//  err := r.Expr(1,2,3).Map(square).Run().One(&squares)
+//  err := r.Expr(1,2,3).Map(square).Run(session).One(&squares)
 //
 // Example response:
 //
@@ -156,13 +156,13 @@ type MetaQuery struct {
 //  // Get the real names of all the villains
 //  err := r.Table("villains").Map(func(row r.Exp) r.Exp {
 //      return row.Attr("real_name")
-//  }).Run().Collect(&response)
+//  }).Run(session).Collect(&response)
 //
 // Example with Row:
 //
 //  var response []interface{}
 //  // Get the real names of all the villains
-//  err := r.Table("employees").Map(Row.Attr("real_name")).Run().Collect(&response)
+//  err := r.Table("employees").Map(Row.Attr("real_name")).Run(session).Collect(&response)
 //
 // Example response:
 //
@@ -172,7 +172,7 @@ var Row = Exp{kind: implicitVariableKind}
 // Expr converts any value to an expression.  Internally it uses the `json`
 // module to convert any literals, so any type annotations or methods understood
 // by that module can be used. If the value cannot be converted, an error is
-// returned at query .Run() time.
+// returned at query .Run(session) time.
 //
 // If you want to call expression methods on an object that is not yet an
 // expression, this is the function you want.
@@ -180,7 +180,7 @@ var Row = Exp{kind: implicitVariableKind}
 // Example usage:
 //
 //  var response interface{}
-//  rows := r.Expr(r.Map{"go": "awesome", "rethinkdb": "awesomer"}).Run().One(&response)
+//  rows := r.Expr(r.Map{"go": "awesome", "rethinkdb": "awesomer"}).Run(session).One(&response)
 //
 // Example response:
 //
@@ -215,11 +215,11 @@ func Expr(values ...interface{}) Exp {
 // Example usages:
 //
 //  // (same effect as r.Expr(1,2,3))
-//  r.Js(`[1,2,3]`).Run()
+//  r.Js(`[1,2,3]`).Run(session)
 //  // Parens are required here, otherwise eval() thinks it's a block.
-//  r.Js(`({name: 2})`).Run()
+//  r.Js(`({name: 2})`).Run(session)
 //  // String concatenation is possible using r.Js
-//  r.Table("employees").Map(r.Js(`this.first_name[0] + ' Fucking ' + this.last_name[0]`)).Run()
+//  r.Table("employees").Map(r.Js(`this.first_name[0] + ' Fucking ' + this.last_name[0]`)).Run(session)
 //
 // Example without Js:
 //
@@ -227,7 +227,7 @@ func Expr(values ...interface{}) Exp {
 //  // Combine each hero's strength and durability
 //  rows := r.Table("heroes").Map(func(row r.Exp) r.Exp {
 //      return row.Attr("strength").Add(row.Attr("durability"))
-//  }).Run().Collect(&response)
+//  }).Run(session).Collect(&response)
 //
 // Example with Js:
 //
@@ -235,7 +235,7 @@ func Expr(values ...interface{}) Exp {
 //  // Combine each hero's strength and durability
 //  rows := r.Table("heroes").Map(
 //      r.Js(`this.strength + this.durability`)
-//  ).Run().Collect(&response)
+//  ).Run(session).Collect(&response)
 //
 // Example response:
 //
@@ -252,7 +252,7 @@ func Expr(values ...interface{}) Exp {
 //  // Find each hero-villain pair with the same strength
 //  err := r.Table("heroes").InnerJoin(r.Table("villains"), func(hero, villain r.Exp) r.Exp {
 //      return r.Js(fmt.Sprintf("%v.strength == %v.strength", hero, villain))
-//  }).Run().Collect(&response)
+//  }).Run(session).Collect(&response)
 //
 // Example response:
 //
@@ -314,7 +314,7 @@ type letArgs struct {
 //  binds := r.Map{"havok": r.Table("heroes").Get("Havok", "name")}
 //  expr := r.Row.Attr("strength").Gt(r.LetVar("havok").Attr("strength"))
 //  query := r.Table("villains").Map(r.Let(binds, expr))
-//  err := query.Run().Collect(&response)
+//  err := query.Run(session).Collect(&response)
 //
 // Example response:
 //
@@ -338,7 +338,7 @@ func LetVar(name string) Exp {
 //
 // Example usage:
 //
-//  err := r.RuntimeError("hi there").Run().Err()
+//  err := r.RuntimeError("hi there").Run(session).Err()
 func RuntimeError(message string) Exp {
 	return Exp{kind: errorKind, value: message}
 }
@@ -379,7 +379,7 @@ type getArgs struct {
 // Example usage:
 //
 //  var response map[string]interface{}
-//  err := r.Table("heroes").Get("Doctor Strange", "name").Run().One(&response)
+//  err := r.Table("heroes").Get("Doctor Strange", "name").Run(session).One(&response)
 //
 // Example response:
 //
@@ -404,7 +404,7 @@ func (e Exp) Get(key interface{}, attribute string) Exp {
 // Example usage:
 //
 //  var response map[string]interface{}
-//  err := r.Table("heroes").GetById("edc3a46b-95a0-4f64-9d1c-0dd7d83c4bcd").Run().One(&response)
+//  err := r.Table("heroes").GetById("edc3a46b-95a0-4f64-9d1c-0dd7d83c4bcd").Run(session).One(&response)
 //
 // Example response:
 //
@@ -445,7 +445,7 @@ type groupByArgs struct {
 //  var response []interface{}
 //  // Find all heroes with the same durability, calculate their average speed
 //  // to see if more durable heroes are slower.
-//  err := r.Table("heroes").GroupBy("durability", r.Avg("speed")).Run().One(&response)
+//  err := r.Table("heroes").GroupBy("durability", r.Avg("speed")).Run(session).One(&response)
 //
 // Example response:
 //
@@ -470,12 +470,12 @@ type groupByArgs struct {
 //      Reduction: func(acc, val r.Exp) r.Exp { return acc.Add(val) },
 //      Finalizer: nil,
 //  }
-//  err := r.Table("heroes").GroupBy("strength", gmr).Run().One(&response)
+//  err := r.Table("heroes").GroupBy("strength", gmr).Run(session).One(&response)
 //
 // Example with multiple attributes:
 //
 //  // Find all heroes with the same strength and speed, sum their intelligence
-//  rows := r.Table("heroes").GroupBy([]string{"strength", "speed"}, gmr).Run()
+//  rows := r.Table("heroes").GroupBy([]string{"strength", "speed"}, gmr).Run(session)
 func (e Exp) GroupBy(attribute interface{}, groupedMapReduce GroupedMapReduce) Exp {
 	return Exp{
 		kind: groupByKind,
@@ -498,12 +498,12 @@ type useOutdatedArgs struct {
 //
 // Example with single table:
 //
-//  rows := r.Table("heroes").UseOutdated(true).Run()
+//  rows := r.Table("heroes").UseOutdated(true).Run(session)
 //
 // Example with multiple tables (all tables would be allowed to use outdated data):
 //
 //  villain_strength := r.Table("villains").Get("Doctor Doom", "name").Attr("strength")
-//  rows := r.Table("heroes").Filter(r.Row.Attr("strength").Eq(villain_strength)).UseOutdated(true).Run()
+//  rows := r.Table("heroes").Filter(r.Row.Attr("strength").Eq(villain_strength)).UseOutdated(true).Run(session)
 func (e Exp) UseOutdated(useOutdated bool) Exp {
 	value := useOutdatedArgs{expr: e, useOutdated: useOutdated}
 	return Exp{kind: useOutdatedKind, value: value}
@@ -668,17 +668,17 @@ func (e Exp) Not() Exp {
 // Example with array (note use of .One()):
 //
 //  var response []interface{}
-//  err := r.Expr(1,2,3).Run().One(&response) => [1, 2, 3]
+//  err := r.Expr(1,2,3).Run(session).One(&response) => [1, 2, 3]
 //
 // Example with stream (note use of .Collect()):
 //
 //  var response []interface{}
-//  err := r.Expr(1,2,3).ArrayToStream().Run().Collect(&response) => [1, 2, 3]
+//  err := r.Expr(1,2,3).ArrayToStream().Run(session).Collect(&response) => [1, 2, 3]
 //
 // Example with .Union():
 //
 //  var response []interface{}
-//  r.Expr(1,2,3,4).ArrayToStream().Union(r.Table("heroes")).Run().Collect(&response)
+//  r.Expr(1,2,3,4).ArrayToStream().Union(r.Table("heroes")).Run(session).Collect(&response)
 func (e Exp) ArrayToStream() Exp {
 	return naryBuiltin(arrayToStreamKind, nil, e)
 }
@@ -690,17 +690,17 @@ func (e Exp) ArrayToStream() Exp {
 // Example with stream (note use of .Collect()):
 //
 //  var response []interface{}
-//  err := r.Table("heroes").Run().Collect(&response) => [{hero...}, {hero...}, ...]
+//  err := r.Table("heroes").Run(session).Collect(&response) => [{hero...}, {hero...}, ...]
 //
 // Example with array (note use of .One()):
 //
 //  var response []interface{}
-//  err := r.Table("heroes").StreamToArray().Run().One(&response) => [{hero...}, {hero...}, ...]
+//  err := r.Table("heroes").StreamToArray().Run(session).One(&response) => [{hero...}, {hero...}, ...]
 //
 // Example with .Union():
 //
 //  var response []interface{}
-//  err := r.Expr(1,2,3,4).Union(r.Table("heroes").StreamToArray()).Run().One(&response)
+//  err := r.Expr(1,2,3,4).Union(r.Table("heroes").StreamToArray()).Run(session).One(&response)
 func (e Exp) StreamToArray() Exp {
 	return naryBuiltin(streamToArrayKind, nil, e)
 }
@@ -711,7 +711,7 @@ func (e Exp) StreamToArray() Exp {
 //
 //  var response []interface{}
 //  // Get a list of all possible strength values for our heroes
-//  err := r.Table("heroes").Map(r.Row.Attr("strength")).Distinct().Run().Collect(&response)
+//  err := r.Table("heroes").Map(r.Row.Attr("strength")).Distinct().Run(session).Collect(&response)
 //
 // Example response:
 //
@@ -725,7 +725,7 @@ func (e Exp) Distinct() Exp {
 // Example usage:
 //
 //  var response int
-//  err := r.Table("heroes").Count().Run().One(&response)
+//  err := r.Table("heroes").Count().Run(session).One(&response)
 //
 // Example response:
 //
@@ -742,7 +742,7 @@ func (e Exp) Count() Exp {
 //  var response interface{}
 //  firstMap := r.Map{"name": "HAL9000", "role": "Support System"}
 //  secondMap := r.Map{"color": "Red", "role": "Betrayal System"}
-//  err := r.Expr(firstMap).Merge(secondMap).Run().One(&response)
+//  err := r.Expr(firstMap).Merge(secondMap).Run(session).One(&response)
 //
 // Example response:
 //
@@ -760,7 +760,7 @@ func (e Exp) Merge(operand interface{}) Exp {
 // Example usage:
 //
 //  var response []interface{}
-//  err := r.Expr(r.List{1, 2, 3, 4}).Append(5).Run().One(&response)
+//  err := r.Expr(r.List{1, 2, 3, 4}).Append(5).Run(session).One(&response)
 //
 // Example response:
 //
@@ -775,7 +775,7 @@ func (e Exp) Append(operand interface{}) Exp {
 //
 //  var response []interface{}
 //  // Retrieve all heroes and villains
-//  r.Table("heroes").Union(r.Table("villains")).Run().Collect(&response)
+//  r.Table("heroes").Union(r.Table("villains")).Run(session).Collect(&response)
 //
 // Example response:
 //
@@ -805,7 +805,7 @@ func (e Exp) Union(operands ...interface{}) Exp {
 //
 //  var response int
 //  // Get the second element of an array
-//  err := r.Expr(4,3,2,1).Nth(1).Run().One(&response)
+//  err := r.Expr(4,3,2,1).Nth(1).Run(session).One(&response)
 //
 // Example response:
 //
@@ -820,7 +820,7 @@ func (e Exp) Nth(operand interface{}) Exp {
 // Example usage:
 //
 //  var response []int
-//  err := r.Expr(1,2,3,4,5).Slice(2,4).Run().One(&response)
+//  err := r.Expr(1,2,3,4,5).Slice(2,4).Run(session).One(&response)
 //
 // Example response:
 //
@@ -834,7 +834,7 @@ func (e Exp) Slice(lower, upper interface{}) Exp {
 // Example usage:
 //
 //  var response []int
-//  err := r.Expr(1,2,3,4,5).Limit(3).Run().One(&response)
+//  err := r.Expr(1,2,3,4,5).Limit(3).Run(session).One(&response)
 //
 // Example response:
 //
@@ -849,7 +849,7 @@ func (e Exp) Limit(limit interface{}) Exp {
 // Example usage:
 //
 //  var response []int
-//  err := r.Expr(1,2,3,4,5).Skip(3).Run().One(&response)
+//  err := r.Expr(1,2,3,4,5).Skip(3).Run(session).One(&response)
 //
 // Example response:
 //
@@ -865,7 +865,7 @@ func (e Exp) Skip(start interface{}) Exp {
 //  var squares []int
 //  // Square a series of numbers
 //  square := func(row r.Exp) r.Exp { return row.Mul(row) }
-//  err := r.Expr(1,2,3).Map(square).Run().One(&squares)
+//  err := r.Expr(1,2,3).Map(square).Run(session).One(&squares)
 //
 // Example response:
 //
@@ -877,7 +877,7 @@ func (e Exp) Skip(start interface{}) Exp {
 //  // Fetch multiple rows by primary key
 //  heroNames := []string{"Iron Man", "Colossus"}
 //  getHero := func (name r.Exp) r.Exp { return r.Table("heroes").Get(name, "name") }
-//  err := r.Expr(heroNames).Map(getHero).Run().One(&heroes)
+//  err := r.Expr(heroNames).Map(getHero).Run(session).One(&heroes)
 //
 // Example response:
 //
@@ -906,7 +906,7 @@ func (e Exp) Map(operand interface{}) Exp {
 //  var flattened []int
 //  // Flatten some nested lists
 //  flatten := func(row r.Exp) r.Exp { return row }
-//  err := r.Expr(r.List{1,2}, r.List{3,4}).ConcatMap(flatten).Run().One(&flattened)
+//  err := r.Expr(r.List{1,2}, r.List{3,4}).ConcatMap(flatten).Run(session).One(&flattened)
 //
 // Example response:
 //
@@ -917,7 +917,7 @@ func (e Exp) Map(operand interface{}) Exp {
 //  var names []string
 //  // Get all hero real names and aliases in a list
 //  getNames := func(row r.Exp) interface{} { return r.List{row.Attr("name"), row.Attr("real_name")} }
-//  err := r.Table("heroes").ConcatMap(getNames).Run().Collect(&names)
+//  err := r.Table("heroes").ConcatMap(getNames).Run(session).Collect(&names)
 //
 // Example response:
 //
@@ -934,16 +934,16 @@ func (e Exp) ConcatMap(operand interface{}) Exp {
 //
 //   var response []interface{}
 //   // Get all heroes with durability 6
-//   err := r.Table("heroes").Filter(r.Row.Attr("durability").Eq(6)).Run().Collect(&response)
+//   err := r.Table("heroes").Filter(r.Row.Attr("durability").Eq(6)).Run(session).Collect(&response)
 //
 // Example with r.Map:
 //
-//   err := r.Table("heroes").Filter(r.Map{"durability": 6}).Run().Collect(&response)
+//   err := r.Table("heroes").Filter(r.Map{"durability": 6}).Run(session).Collect(&response)
 //
 // Example with function:
 //
 //   filterFunc := func (row r.Exp) r.Exp { return row.Attr("durability").Eq(6) }
-//   err := r.Table("heroes").Filter(filterFunc).Run().Collect(&response)
+//   err := r.Table("heroes").Filter(filterFunc).Run(session).Collect(&response)
 //
 // Example response:
 //
@@ -986,7 +986,7 @@ func (e Exp) Contains(keys ...string) Exp {
 // Example usage:
 //
 //  hero := r.Map{"name": "Iron Man", "energy": 6, "speed": 5}
-//  err := r.Expr(hero).Pick("name", "energy").Run().One(&response)
+//  err := r.Expr(hero).Pick("name", "energy").Run(session).One(&response)
 //
 // Example response:
 //
@@ -1003,7 +1003,7 @@ func (e Exp) Pick(attributes ...string) Exp {
 // Example usage:
 //
 //  hero := r.Map{"name": "Iron Man", "energy": 6, "speed": 5}
-//  err := r.Expr(hero).Unpick("name", "energy").Run().One(&response)
+//  err := r.Expr(hero).Unpick("name", "energy").Run(session).One(&response)
 //
 // Example response:
 //
@@ -1027,7 +1027,7 @@ type rangeArgs struct {
 //
 //   var response []interface{}
 //   // Retrieve all heroes with names between "E" and "F"
-//   err := r.Table("heroes").Between("name", "E", "F").Run().Collect(&response)
+//   err := r.Table("heroes").Between("name", "E", "F").Run(session).Collect(&response)
 //
 // Example response:
 //
@@ -1058,7 +1058,7 @@ func (e Exp) Between(attribute string, lowerbound, upperbound interface{}) Exp {
 //
 //   var response []interface{}
 //   // Retrieve all heroes with ids between "1" and "2"
-//   err := r.Table("heroes").BetweenIds("1", "2").Run().Collect(&response)
+//   err := r.Table("heroes").BetweenIds("1", "2").Run(session).Collect(&response)
 func (e Exp) BetweenIds(lowerbound, upperbound interface{}) Exp {
 	return e.Between("id", lowerbound, upperbound)
 }
@@ -1074,10 +1074,10 @@ type orderByArgs struct {
 //
 //   var response []interface{}
 //   // Retrieve villains in order of increasing strength
-//   err := r.Table("villains").OrderBy("strength").Run().Collect(&response)
+//   err := r.Table("villains").OrderBy("strength").Run(session).Collect(&response)
 //
 //   // Retrieve villains in order of decreasing strength, then increasing intelligence
-//   err := r.Table("villains").OrderBy(r.Desc("strength"), "intelligence").Run().Collect(&response)
+//   err := r.Table("villains").OrderBy(r.Desc("strength"), "intelligence").Run(session).Collect(&response)
 func (e Exp) OrderBy(orderings ...interface{}) Exp {
 	// These are not required to be strings because they could also be
 	// orderByAttr structs which specify the direction of sorting
@@ -1099,7 +1099,7 @@ type orderByAttr struct {
 //
 //   var response []interface{}
 //   // Retrieve villains in order of increasing fighting ability (worst fighters first)
-//   err := r.Table("villains").OrderBy(r.Asc("fighting")).Run().Collect(&response)
+//   err := r.Table("villains").OrderBy(r.Asc("fighting")).Run(session).Collect(&response)
 func Asc(attr string) orderByAttr {
 	return orderByAttr{attr, true}
 }
@@ -1110,7 +1110,7 @@ func Asc(attr string) orderByAttr {
 //
 //   var response []interface{}
 //   // Retrieve villains in order of decreasing speed (fastest villains first)
-//   err := r.Table("villains").OrderBy(r.Desc("speed")).Run().Collect(&response)
+//   err := r.Table("villains").OrderBy(r.Desc("speed")).Run(session).Collect(&response)
 func Desc(attr string) orderByAttr {
 	return orderByAttr{attr, false}
 }
@@ -1134,7 +1134,7 @@ type reduceArgs struct {
 //  var sum int
 //  // Add the numbers 1-4 together
 //  reduction := func(acc, val r.Exp) r.Exp { return acc.Add(val) }
-//  err := r.Expr(1,2,3,4).Reduce(0, reduction).Run().One(&sum)
+//  err := r.Expr(1,2,3,4).Reduce(0, reduction).Run(session).One(&sum)
 //
 // Example response:
 //
@@ -1147,7 +1147,7 @@ type reduceArgs struct {
 //  // be the same, so we extract the speed first with a .Map()
 //  mapping := func(row r.Exp) r.Exp { return row.Attr("speed") }
 //  reduction := func(acc, val r.Exp) r.Exp { return acc.Add(val) }
-//  err := r.Table("heroes").Map(mapping).Reduce(0, reduction).Run().One(&totalSpeed)
+//  err := r.Table("heroes").Map(mapping).Reduce(0, reduction).Run(session).One(&totalSpeed)
 //
 // Example response:
 //
@@ -1181,7 +1181,7 @@ type groupedMapReduceArgs struct {
 //  }
 //
 //  var response []interface{}
-//  err := r.Expr(1,2,3,4,5).GroupedMapReduce(grouping, mapping, base, reduction).Run().One(&response)
+//  err := r.Expr(1,2,3,4,5).GroupedMapReduce(grouping, mapping, base, reduction).Run(session).One(&response)
 //
 // Example response:
 //
@@ -1207,7 +1207,7 @@ type groupedMapReduceArgs struct {
 //  }
 //
 //  var response []interface{}
-//  err := r.Table("heroes").GroupedMapReduce(grouping, mapping, base, reduction).Run().One(&response)
+//  err := r.Table("heroes").GroupedMapReduce(grouping, mapping, base, reduction).Run(session).One(&response)
 //
 // Example response:
 //
@@ -1248,7 +1248,7 @@ func (e Exp) GroupedMapReduce(grouping, mapping, base, reduction interface{}) Ex
 // Example usage:
 //
 //  var heroes []interface{}
-//  err := r.Table("heroes").Pluck("real_name", "id").Run().Collect(&heroes)
+//  err := r.Table("heroes").Pluck("real_name", "id").Run(session).Collect(&heroes)
 //
 // Example response:
 //
@@ -1269,7 +1269,7 @@ func (e Exp) Pluck(attributes ...string) Exp {
 // Example usage:
 //
 //  var heroes []interface{}
-//  err := r.Table("heroes").Without("real_name", "id").Run().Collect(&heroes)
+//  err := r.Table("heroes").Without("real_name", "id").Run(session).Collect(&heroes)
 //
 // Example response:
 //
@@ -1303,7 +1303,7 @@ func (e Exp) Without(attributes ...string) Exp {
 //  // Get each hero and their associated lair, in this case, "villain_id" is
 //  // the primary key for the "lairs" table
 //  compareRows := func (left, right r.Exp) r.Exp { return left.Attr("id").Eq(right.Attr("villain_id")) }
-//  err := r.Table("villains").InnerJoin(r.Table("lairs"), compareRows).Run().Collect(&response)
+//  err := r.Table("villains").InnerJoin(r.Table("lairs"), compareRows).Run(session).Collect(&response)
 //
 // Example response:
 //
@@ -1354,7 +1354,7 @@ func (leftExpr Exp) InnerJoin(rightExpr Exp, predicate func(Exp, Exp) Exp) Exp {
 //  // Get each hero and their associated lair, in this case, "villain_id" is
 //  // the primary key for the "lairs" table
 //  compareRows := func (left, right r.Exp) r.Exp { return left.Attr("id").Eq(right.Attr("villain_id")) }
-//  err := r.Table("villains").OuterJoin(r.Table("lairs"), compareRows).Run().Collect(&response)
+//  err := r.Table("villains").OuterJoin(r.Table("lairs"), compareRows).Run(session).Collect(&response)
 //
 // Example response:
 //
@@ -1417,7 +1417,7 @@ func (leftExpr Exp) OuterJoin(rightExpr Exp, predicate func(Exp, Exp) Exp) Exp {
 //  var response []interface{}
 //  // Get each hero and their associated lair, in this case, "villain_id" is
 //  // the primary key for the "lairs" table
-//  err := r.Table("villains").EqJoin("id", r.Table("lairs"), "villain_id").Run().Collect(&response)
+//  err := r.Table("villains").EqJoin("id", r.Table("lairs"), "villain_id").Run(session).Collect(&response)
 //
 // Example response:
 //
@@ -1462,7 +1462,7 @@ func (leftExpr Exp) EqJoin(leftAttribute string, rightExpr Exp, rightAttribute s
 //  equalStrength := func(hero, villain r.Exp) r.Exp {
 //      return hero.Attr("strength").Eq(villain.Attr("strength"))
 //  }
-//  err := r.Table("heroes").InnerJoin(r.Table("villains"), equalStrength).Run().Collect(&response)
+//  err := r.Table("heroes").InnerJoin(r.Table("villains"), equalStrength).Run(session).Collect(&response)
 //
 // Example response:
 //
@@ -1503,7 +1503,7 @@ func (leftExpr Exp) EqJoin(leftAttribute string, rightExpr Exp, rightAttribute s
 //  equalStrength := func(hero, villain r.Exp) r.Exp {
 //      return hero.Attr("strength").Eq(villain.Attr("strength"))
 //  }
-//  err := r.Table("heroes").InnerJoin(r.Table("villains"), equalStrength).Zip().Run().Collect(&response)
+//  err := r.Table("heroes").InnerJoin(r.Table("villains"), equalStrength).Zip().Run(session).Collect(&response)
 //
 // Example response:
 //
@@ -1548,7 +1548,7 @@ type GroupedMapReduce struct {
 //
 //  var response []interface{}
 //  // Count all heroes in each superhero group
-//  err := r.Table("heroes").GroupBy("affiliation", r.Count()).Run().One(&response)
+//  err := r.Table("heroes").GroupBy("affiliation", r.Count()).Run(session).One(&response)
 //
 // Example response:
 //
@@ -1578,7 +1578,7 @@ func Count() GroupedMapReduce {
 //
 //  var response []interface{}
 //  // Get the total intelligence of all heroes who have the same strength
-//  err := r.Table("heroes").GroupBy("strength", r.Sum("intelligence")).Run().One(&response)
+//  err := r.Table("heroes").GroupBy("strength", r.Sum("intelligence")).Run(session).One(&response)
 //
 // Example response:
 //
@@ -1609,7 +1609,7 @@ func Sum(attribute string) GroupedMapReduce {
 // Example usage:
 //
 //  var response []interface{}
-//  err := r.Table("heroes").GroupBy("strength", r.Avg("intelligence")).Run().One(&response)
+//  err := r.Table("heroes").GroupBy("strength", r.Avg("intelligence")).Run(session).One(&response)
 //
 // Example response:
 //
@@ -1653,7 +1653,7 @@ type createDatabaseQuery struct {
 //
 // Example usage:
 //
-//  err := r.DbCreate("marvel").Run().Exec()
+//  err := r.DbCreate("marvel").Run(session).Exec()
 func DbCreate(name string) MetaQuery {
 	return MetaQuery{query: createDatabaseQuery{name}}
 }
@@ -1666,7 +1666,7 @@ type dropDatabaseQuery struct {
 //
 // Example usage:
 //
-//  err := r.DbDrop("marvel").Run().Exec()
+//  err := r.DbDrop("marvel").Run(session).Exec()
 func DbDrop(name string) MetaQuery {
 	return MetaQuery{query: dropDatabaseQuery{name}}
 }
@@ -1678,7 +1678,7 @@ type listDatabasesQuery struct{}
 // Example usage:
 //
 //  var databases []string
-//  err := r.DbList().Run().Collect(&databases)
+//  err := r.DbList().Run(session).Collect(&databases)
 //
 // Example response:
 //
@@ -1699,9 +1699,9 @@ type database struct {
 //
 //  var response []interface{}
 //  // this query will use the default database of the last created session
-//  r.Table("test").Run().Collect(&response)
+//  r.Table("test").Run(session).Collect(&response)
 //  // this query will use database "marvel" regardless of what database the session has set
-//  r.Db("marvel").Table("heroes").Run().Collect(&response)
+//  r.Db("marvel").Table("heroes").Run(session).Collect(&response)
 func Db(name string) database {
 	return database{name}
 }
@@ -1724,7 +1724,7 @@ type TableSpec struct {
 //
 // Example usage:
 //
-//  err := r.TableCreate("heroes").Run().Exec()
+//  err := r.TableCreate("heroes").Run(session).Exec()
 func TableCreate(name string) MetaQuery {
 	spec := TableSpec{Name: name}
 	return MetaQuery{query: tableCreateQuery{spec: spec}}
@@ -1740,7 +1740,7 @@ func (db database) TableCreate(name string) MetaQuery {
 // Example usage:
 //
 //  spec := TableSpec{Name: "heroes", PrimaryKey: "name"}
-//  err := r.TableCreateSpec(spec).Run().Exec()
+//  err := r.TableCreateSpec(spec).Run(session).Exec()
 func TableCreateSpec(spec TableSpec) MetaQuery {
 	return MetaQuery{query: tableCreateQuery{spec: spec}}
 }
@@ -1758,7 +1758,7 @@ type tableListQuery struct {
 // Example usage:
 //
 //  var tables []string
-//  err := r.TableList().Run().Collect(&tables)
+//  err := r.TableList().Run(session).Collect(&tables)
 //
 // Example response:
 //
@@ -1779,7 +1779,7 @@ type tableDropQuery struct {
 //
 // Example usage:
 //
-//  err := r.Db("marvel").TableDrop("heroes").Run().Exec()
+//  err := r.Db("marvel").TableDrop("heroes").Run(session).Exec()
 func TableDrop(name string) MetaQuery {
 	table := tableInfo{name: name}
 	return MetaQuery{query: tableDropQuery{table: table}}
@@ -1801,7 +1801,7 @@ type tableInfo struct {
 // Example usage:
 //
 //  var response []map[string]interface{}
-//  err := r.Db("marvel").Table("heroes").Run().Collect(&response)
+//  err := r.Db("marvel").Table("heroes").Run(session).Collect(&response)
 //
 // Example response:
 //
@@ -1842,7 +1842,7 @@ type insertQuery struct {
 //
 //  var response r.WriteResponse
 //  row := r.Map{"name": "Thing"}
-//  err := r.Table("heroes").Insert(row).Run().One(&response)
+//  err := r.Table("heroes").Insert(row).Run(session).One(&response)
 func (e Exp) Insert(rows ...interface{}) WriteQuery {
 	// Assume the expression is a table for now, we'll check later in buildProtobuf
 	return WriteQuery{query: insertQuery{
@@ -1858,7 +1858,7 @@ func (e Exp) Insert(rows ...interface{}) WriteQuery {
 //
 //  var response r.WriteResponse
 //  row := r.Map{"name": "Thing"}
-//  err := r.Table("heroes").Insert(row).Overwrite(true).Run().One(&response)
+//  err := r.Table("heroes").Insert(row).Overwrite(true).Run(session).One(&response)
 func (q WriteQuery) Overwrite(overwrite bool) WriteQuery {
 	q.overwrite = overwrite
 	return q
@@ -1875,9 +1875,9 @@ func (q WriteQuery) Overwrite(overwrite bool) WriteQuery {
 //  id := "05679c96-9a05-4f42-a2f6-a9e47c45a5ae"
 //  replacement := r.Map{"name": r.Js("Thing")}
 //  // The following will return an error, because of the use of r.Js
-//  err := r.Table("heroes").GetById(id).Update(replacement).Run().One(&response)
+//  err := r.Table("heroes").GetById(id).Update(replacement).Run(session).One(&response)
 //  // This will work
-//  err := r.Table("heroes").GetById(id).Update(replacement).Atomic(false).Run().One(&response)
+//  err := r.Table("heroes").GetById(id).Update(replacement).Atomic(false).Run(session).One(&response)
 func (q WriteQuery) Atomic(atomic bool) WriteQuery {
 	q.nonatomic = !atomic
 	return q
@@ -1897,9 +1897,9 @@ type updateQuery struct {
 //  replacement := r.Map{"name": "Thing"}
 //  // Update a single row by id
 //  id := "05679c96-9a05-4f42-a2f6-a9e47c45a5ae"
-//  err := r.Table("heroes").GetById(id).Update(replacement).Run().One(&response)
+//  err := r.Table("heroes").GetById(id).Update(replacement).Run(session).One(&response)
 //  // Update all rows in the database
-//  err := r.Table("heroes").Update(replacement).Run().One(&response)
+//  err := r.Table("heroes").Update(replacement).Run(session).One(&response)
 func (e Exp) Update(mapping interface{}) WriteQuery {
 	return WriteQuery{query: updateQuery{
 		view:    e,
@@ -1923,10 +1923,10 @@ type replaceQuery struct {
 //  // Replace a single row by id
 //  id := "05679c96-9a05-4f42-a2f6-a9e47c45a5ae"
 //  replacement := r.Map{"id": r.Row.Attr("id"), "name": "Thing"}
-//  err := r.Table("heroes").GetById(id).Replace(replacement).Run().One(&response)
+//  err := r.Table("heroes").GetById(id).Replace(replacement).Run(session).One(&response)
 //
 //  // Replace all rows in a table
-//  err := r.Table("heroes").Replace(replacement).Run().One(&response)
+//  err := r.Table("heroes").Replace(replacement).Run(session).One(&response)
 func (e Exp) Replace(mapping interface{}) WriteQuery {
 	return WriteQuery{query: replaceQuery{
 		view:    e,
@@ -1945,13 +1945,13 @@ type deleteQuery struct {
 //  var response r.WriteResponse
 //
 //  // Delete a single row by id
-//  err := r.Table("heroes").GetById("5d93edbb-2882-4594-8163-f64d8695e575").Delete().Run().One(&response)
+//  err := r.Table("heroes").GetById("5d93edbb-2882-4594-8163-f64d8695e575").Delete().Run(session).One(&response)
 //
 //  // Delete all rows in a table
-//  err := r.Table("heroes").Delete().Run().One(&response)
+//  err := r.Table("heroes").Delete().Run(session).One(&response)
 //
 //  // Find a row, then delete it
-//  err := r.Table("heroes").Filter(r.Map{"real_name": "Peter Benjamin Parker"}).Delete().Run().One(&response)
+//  err := r.Table("heroes").Filter(r.Map{"real_name": "Peter Benjamin Parker"}).Delete().Run(session).One(&response)
 func (e Exp) Delete() WriteQuery {
 	return WriteQuery{query: deleteQuery{view: e}}
 }
@@ -1971,7 +1971,7 @@ type forEachQuery struct {
 //  // Delete multiple rows by primary key
 //  heroNames := []string{"Iron Man", "Colossus"}
 //  deleteHero := func (name r.Exp) r.Query { return r.Table("heroes").Get(name, "name").Delete() }
-//  err := r.Expr(heroNames).ForEach(deleteHero).Run().One(&response)
+//  err := r.Expr(heroNames).ForEach(deleteHero).Run(session).One(&response)
 //
 // Example response:
 //
