@@ -34,7 +34,7 @@
 //          return
 //      }
 //
-//      // This creates a database session 'sess' that may be used to run
+//      // This creates a database session 'session' that may be used to run
 //      // queries on the server.  Queries let you read, insert, update, and
 //      // delete JSON objects ("rows") on the server, as well as manage tables.
 //      query := r.Table("employees")
