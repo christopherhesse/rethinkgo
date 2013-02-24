@@ -220,7 +220,7 @@ func (rows *Rows) One(row interface{}) error {
 //
 // Example usage:
 //
-//  err := r.Db("marvel").TableCreate("villains").Run(session).Exec()
+//  err := r.TableCreate("villains").Run(session).Exec()
 func (rows *Rows) Exec() error {
 	if rows.Err() != nil {
 		return rows.Err()

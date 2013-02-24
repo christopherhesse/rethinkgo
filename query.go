@@ -404,7 +404,8 @@ func (e Exp) Get(key interface{}, attribute string) Exp {
 // Example usage:
 //
 //  var response map[string]interface{}
-//  err := r.Table("heroes").GetById("edc3a46b-95a0-4f64-9d1c-0dd7d83c4bcd").Run(session).One(&response)
+//  id := "edc3a46b-95a0-4f64-9d1c-0dd7d83c4bcd"
+//  err := r.Table("heroes").GetById(id).Run(session).One(&response)
 //
 // Example response:
 //
@@ -503,7 +504,8 @@ type useOutdatedArgs struct {
 // Example with multiple tables (all tables would be allowed to use outdated data):
 //
 //  villain_strength := r.Table("villains").Get("Doctor Doom", "name").Attr("strength")
-//  rows := r.Table("heroes").Filter(r.Row.Attr("strength").Eq(villain_strength)).UseOutdated(true).Run(session)
+//  compareFunc := r.Row.Attr("strength").Eq(villain_strength)
+//  rows := r.Table("heroes").Filter(compareFunc).UseOutdated(true).Run(session)
 func (e Exp) UseOutdated(useOutdated bool) Exp {
 	value := useOutdatedArgs{expr: e, useOutdated: useOutdated}
 	return Exp{kind: useOutdatedKind, value: value}
@@ -916,7 +918,9 @@ func (e Exp) Map(operand interface{}) Exp {
 //
 //  var names []string
 //  // Get all hero real names and aliases in a list
-//  getNames := func(row r.Exp) interface{} { return r.List{row.Attr("name"), row.Attr("real_name")} }
+//  getNames := func(row r.Exp) interface{} {
+//      return r.List{row.Attr("name"), row.Attr("real_name")}
+//  }
 //  err := r.Table("heroes").ConcatMap(getNames).Run(session).Collect(&names)
 //
 // Example response:
@@ -1198,7 +1202,7 @@ type groupedMapReduceArgs struct {
 //
 // Example usage:
 //
-//  // Group all heroes by intelligence, then find the most fastest one in each group
+//  // Group all heroes by intelligence, then find the fastest one in each group
 //  grouping := func(row r.Exp) r.Exp { return row.Attr("intelligence") }
 //  mapping := func(row r.Exp) r.Exp { return row.Pick("name", "speed") }
 //  base := r.Map{"name": nil, "speed": 0}
@@ -1302,7 +1306,9 @@ func (e Exp) Without(attributes ...string) Exp {
 //  var response []interface{}
 //  // Get each hero and their associated lair, in this case, "villain_id" is
 //  // the primary key for the "lairs" table
-//  compareRows := func (left, right r.Exp) r.Exp { return left.Attr("id").Eq(right.Attr("villain_id")) }
+//  compareRows := func (left, right r.Exp) r.Exp {
+//      return left.Attr("id").Eq(right.Attr("villain_id"))
+//  }
 //  err := r.Table("villains").InnerJoin(r.Table("lairs"), compareRows).Run(session).Collect(&response)
 //
 // Example response:
@@ -1353,7 +1359,9 @@ func (leftExpr Exp) InnerJoin(rightExpr Exp, predicate func(Exp, Exp) Exp) Exp {
 //  var response []interface{}
 //  // Get each hero and their associated lair, in this case, "villain_id" is
 //  // the primary key for the "lairs" table
-//  compareRows := func (left, right r.Exp) r.Exp { return left.Attr("id").Eq(right.Attr("villain_id")) }
+//  compareRows := func (left, right r.Exp) r.Exp {
+//      return left.Attr("id").Eq(right.Attr("villain_id"))
+//  }
 //  err := r.Table("villains").OuterJoin(r.Table("lairs"), compareRows).Run(session).Collect(&response)
 //
 // Example response:
@@ -1615,8 +1623,10 @@ func Sum(attribute string) GroupedMapReduce {
 //
 //  [
 //    {
-//      "group": 1, // this is the strength attribute for every member of this group
-//      "reduction": 1  // this is the average value of the intelligence attribute of all members of the group
+//      // this is the strength attribute for every member of this group
+//      "group": 1,
+//      // this is the average value of the intelligence attribute of all members of the group
+//      "reduction": 1
 //    },
 //    {
 //      "group": 2,
@@ -1945,13 +1955,15 @@ type deleteQuery struct {
 //  var response r.WriteResponse
 //
 //  // Delete a single row by id
-//  err := r.Table("heroes").GetById("5d93edbb-2882-4594-8163-f64d8695e575").Delete().Run(session).One(&response)
+//  id := "5d93edbb-2882-4594-8163-f64d8695e575"
+//  err := r.Table("heroes").GetById(id).Delete().Run(session).One(&response)
 //
 //  // Delete all rows in a table
 //  err := r.Table("heroes").Delete().Run(session).One(&response)
 //
 //  // Find a row, then delete it
-//  err := r.Table("heroes").Filter(r.Map{"real_name": "Peter Benjamin Parker"}).Delete().Run(session).One(&response)
+//  row := r.Map{"real_name": "Peter Benjamin Parker"}
+//  err := r.Table("heroes").Filter(row).Delete().Run(session).One(&response)
 func (e Exp) Delete() WriteQuery {
 	return WriteQuery{query: deleteQuery{view: e}}
 }
@@ -1966,7 +1978,6 @@ type forEachQuery struct {
 // Example usage:
 //
 //  // Delete all rows with the given ids
-//
 //  var response r.WriteResponse
 //  // Delete multiple rows by primary key
 //  heroNames := []string{"Iron Man", "Colossus"}
