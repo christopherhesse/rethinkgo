@@ -39,13 +39,15 @@ Overview
 
 The Go driver is most similar to the [official Javascript driver](http://www.rethinkdb.com/api/#js).
 
-Most of the functions have all the same names, with a capital first letter.  See [Go Driver Documentation](http://godoc.org/github.com/christopherhesse/rethinkgo) for examples and documentation for each function.
+Most of the functions have the same names as in the Javascript driver, only with the first letter capitalized.  See [Go Driver Documentation](http://godoc.org/github.com/christopherhesse/rethinkgo) for examples and documentation for each function.
 
-To use RethinkDB with this driver, you build a Query object using r.Table(), for example, and then call query.Run(session) to execute the query on the server and return an iterator for the results.  There are 3 convenience functions on the iterator if you don't want to iterate over the results, .One(&result) for a query that returns a single result, .Collect(&results) for multiple results, and .Exec() for a query that returns an empty response (for instance, .TableCreate(string)).
+To use RethinkDB with this driver, you build a query using r.Table(), for example, and then call query.Run(session) to execute the query on the server and return an iterator for the results.
 
-The important types are r.Exp, r.List (used for Arrays, an alias for []interface{}), and r.Map (used for Objects, an alias for map[string]interface{}).
+There are 3 convenience functions on the iterator if you don't want to iterate over the results, .One(&result) for a query that returns a single result, .Collect(&results) for multiple results, and .Exec() for a query that returns an empty response (for instance, r.TableCreate(string)).
 
-Expr() can take arbitrary structs and uses the "json" module to serialize them.  This means that structs can use the json.Marshaler interface (define a method MarshalJSON() on the struct).  Also, struct fields can also be annotated to specify their JSON equivalents:
+The important types are r.Exp (for RethinkDB expressions), r.Query (interface for all queries, including expressions), r.List (used for Arrays, an alias for []interface{}), and r.Map (used for Objects, an alias for map[string]interface{}).
+
+The function r.Expr() can take arbitrary structs and uses the "json" module to serialize them.  This means that structs can use the json.Marshaler interface (define a method MarshalJSON() on the struct).  Also, struct fields can also be annotated to specify their JSON equivalents:
 
     type MyStruct struct {
         MyField int `json:"my_field"`
@@ -59,7 +61,7 @@ Differences from official RethinkDB drivers
 
 * There is no global implicit connection that stores the last connected server, instead query.Run(*Session) requires a session as its only argument.
 * When running queries, getting results is a little different from the more dynamic languages.  .Run(*Session) returns a *Rows iterator object with the following methods that put the response into a variable `dest`, here's when you should use the different methods:
-    * You want to iterate through the results of the query individually: rows.Next(&dest)
+    * You want to iterate through the results of the query individually: rows.Next(&dest) (you should generally defer rows.Close() when using this)
     * The query always returns a single response: .One(&dest)
     * The query returns a list of responses: .Collect(&dest)
     * The query returns an empty response: .Exec()
