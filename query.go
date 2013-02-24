@@ -1081,7 +1081,8 @@ type orderByArgs struct {
 //   err := r.Table("villains").OrderBy("strength").Run(session).Collect(&response)
 //
 //   // Retrieve villains in order of decreasing strength, then increasing intelligence
-//   err := r.Table("villains").OrderBy(r.Desc("strength"), "intelligence").Run(session).Collect(&response)
+//   query := r.Table("villains").OrderBy(r.Desc("strength"), "intelligence")
+//   err := query.Run(session).Collect(&response)
 func (e Exp) OrderBy(orderings ...interface{}) Exp {
 	// These are not required to be strings because they could also be
 	// orderByAttr structs which specify the direction of sorting
@@ -1185,7 +1186,8 @@ type groupedMapReduceArgs struct {
 //  }
 //
 //  var response []interface{}
-//  err := r.Expr(1,2,3,4,5).GroupedMapReduce(grouping, mapping, base, reduction).Run(session).One(&response)
+//  query := r.Expr(1,2,3,4,5).GroupedMapReduce(grouping, mapping, base, reduction)
+//  err := query.Run(session).One(&response)
 //
 // Example response:
 //
@@ -1211,7 +1213,8 @@ type groupedMapReduceArgs struct {
 //  }
 //
 //  var response []interface{}
-//  err := r.Table("heroes").GroupedMapReduce(grouping, mapping, base, reduction).Run(session).One(&response)
+//  query := r.Table("heroes").GroupedMapReduce(grouping, mapping, base, reduction)
+//  err := query.Run(session).One(&response)
 //
 // Example response:
 //
@@ -1425,7 +1428,8 @@ func (leftExpr Exp) OuterJoin(rightExpr Exp, predicate func(Exp, Exp) Exp) Exp {
 //  var response []interface{}
 //  // Get each hero and their associated lair, in this case, "villain_id" is
 //  // the primary key for the "lairs" table
-//  err := r.Table("villains").EqJoin("id", r.Table("lairs"), "villain_id").Run(session).Collect(&response)
+//  query := r.Table("villains").EqJoin("id", r.Table("lairs"), "villain_id")
+//  err := query.Run(session).Collect(&response)
 //
 // Example response:
 //
@@ -1470,7 +1474,8 @@ func (leftExpr Exp) EqJoin(leftAttribute string, rightExpr Exp, rightAttribute s
 //  equalStrength := func(hero, villain r.Exp) r.Exp {
 //      return hero.Attr("strength").Eq(villain.Attr("strength"))
 //  }
-//  err := r.Table("heroes").InnerJoin(r.Table("villains"), equalStrength).Run(session).Collect(&response)
+//  query := r.Table("heroes").InnerJoin(r.Table("villains"), equalStrength)
+//  err := query.Run(session).Collect(&response)
 //
 // Example response:
 //
@@ -1511,7 +1516,8 @@ func (leftExpr Exp) EqJoin(leftAttribute string, rightExpr Exp, rightAttribute s
 //  equalStrength := func(hero, villain r.Exp) r.Exp {
 //      return hero.Attr("strength").Eq(villain.Attr("strength"))
 //  }
-//  err := r.Table("heroes").InnerJoin(r.Table("villains"), equalStrength).Zip().Run(session).Collect(&response)
+//  query := r.Table("heroes").InnerJoin(r.Table("villains"), equalStrength).Zip()
+//  err := query.Run(session).Collect(&response)
 //
 // Example response:
 //
@@ -1981,7 +1987,9 @@ type forEachQuery struct {
 //  var response r.WriteResponse
 //  // Delete multiple rows by primary key
 //  heroNames := []string{"Iron Man", "Colossus"}
-//  deleteHero := func (name r.Exp) r.Query { return r.Table("heroes").Get(name, "name").Delete() }
+//  deleteHero := func (name r.Exp) r.Query {
+//      return r.Table("heroes").Get(name, "name").Delete()
+//  }
 //  err := r.Expr(heroNames).ForEach(deleteHero).Run(session).One(&response)
 //
 // Example response:
