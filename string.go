@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-func (e Expression) String() string {
+func (e Exp) String() string {
 	switch e.kind {
 	case literalKind:
 		if s, ok := e.value.(string); ok {
@@ -50,7 +50,7 @@ func (e Expression) String() string {
 	return "<unrecognized expression>"
 }
 
-func builtinArgsToString(e Expression) string {
+func builtinArgsToString(e Exp) string {
 	b := e.value.(builtinArgs)
 	var s string
 	switch e.kind {

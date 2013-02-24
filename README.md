@@ -43,7 +43,7 @@ Most of the functions have all the same names, with a capital first letter.  See
 
 To use RethinkDB with this driver, you build a Query object using r.Table(), for example, and then call query.Run(session) to execute the query on the server and return an iterator for the results.  There are 3 convenience functions on the iterator if you don't want to iterate over the results, .One(&result) for a query that returns a single result, .Collect(&results) for multiple results, and .Exec() for a query that returns an empty response (for instance, .TableCreate(string)).
 
-The important types are r.Expression, r.List (used for Arrays, an alias for []interface{}), and r.Map (used for Objects, an alias for map[string]interface{}).
+The important types are r.Exp, r.List (used for Arrays, an alias for []interface{}), and r.Map (used for Objects, an alias for map[string]interface{}).
 
 Expr() can take arbitrary structs and uses the "json" module to serialize them.  This means that structs can use the json.Marshaler interface (define a method MarshalJSON() on the struct).  Also, struct fields can also be annotated to specify their JSON equivalents:
 
@@ -63,16 +63,16 @@ Differences from official RethinkDB drivers
     * The query always returns a single response: .One(&dest)
     * The query returns a list of responses: .Collect(&dest)
     * The query returns an empty response: .Exec()
-* No errors are generated when creating queries, only when running them, so Table(string) returns only an Expression instance, but sess.Run(Query).Err() will tell you if your query could not be serialized for the server.
+* No errors are generated when creating queries, only when running them, so Table(string) returns only an Exp instance, but sess.Run(Query).Err() will tell you if your query could not be serialized for the server.
 * Go does not have optional args, most optional args are either require or separate methods.
     * A convenience method .GetById(string) has been added for that common case
     * .Atomic(bool) and .Overwrite(bool) are methods on write queries
-    * .UseOutdated(bool) is a method on any Table() or other Expression (will apply to all tables already specified)
+    * .UseOutdated(bool) is a method on any Table() or other Exp (will apply to all tables already specified)
     * .TableCreate(string) has a variant called TableCreateSpec(TableSpec) which takes a TableSpec instance specifying the parameters for the table
 * There's no r(attributeName) or row[attributeName] function call / item indexing to get attributes of the "current" row or a specific row respectively.  Instead, there is a .Attr() method on the global "Row" object (r.Row) and any row Expressions that can be used to access attributes.  Examples:
 
         r.Table("marvel").OuterJoin(r.Table("dc"),
-            func(marvel, dc r.Expression) interface{} {
+            func(marvel, dc r.Exp) interface{} {
                 return marvel.Attr("strength").Eq(dc.Attr("strength"))
             })
 

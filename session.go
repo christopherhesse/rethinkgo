@@ -38,8 +38,8 @@ type Session struct {
 }
 
 // Query is the interface for queries that can be .Run(), this includes
-// Expression (run as a read query), MetaQuery, and WriteQuery. Methods that
-// generate a query are generally located on Expression objects.
+// Exp (run as a read query), MetaQuery, and WriteQuery. Methods that
+// generate a query are generally located on Exp objects.
 type Query interface {
 	toProtobuf(context) *p.Query // will panic on errors
 	Check(*Session) error
@@ -285,7 +285,7 @@ func (s *Session) getContext() context {
 
 // Run runs a query using the given session, there is one Run()
 // method for each type of query.
-func (e Expression) Run(session *Session) *Rows {
+func (e Exp) Run(session *Session) *Rows {
 	return session.Run(e)
 }
 

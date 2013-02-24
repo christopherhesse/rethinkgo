@@ -1,6 +1,6 @@
 package rethinkgo
 
-// Convert Expression trees and queries into protocol buffer form.
+// Convert Exp trees and queries into protocol buffer form.
 // Functions in this file will panic on failure, the caller is expected to
 // recover().
 
@@ -112,8 +112,8 @@ func (ctx context) toTerm(o interface{}) *p.Term {
 
 		finalizer := gmr.Finalizer
 		if finalizer != nil {
-			finalizerFunc := finalizer.(func(Expression) interface{})
-			result = result.Map(func(row Expression) interface{} {
+			finalizerFunc := finalizer.(func(Exp) interface{})
+			result = result.Map(func(row Exp) interface{} {
 				result := map[string]interface{}{
 					"reduction": finalizerFunc(row.Attr("reduction")),
 				}
@@ -135,14 +135,14 @@ func (ctx context) toTerm(o interface{}) *p.Term {
 	}
 }
 
-func createGrouping(attribute interface{}) func(row Expression) interface{} {
+func createGrouping(attribute interface{}) func(row Exp) interface{} {
 	if attr, ok := attribute.(string); ok {
-		return func(row Expression) interface{} {
+		return func(row Exp) interface{} {
 			return row.Attr(attr)
 		}
 	} else if attrs, ok := attribute.([]string); ok {
-		return func(row Expression) interface{} {
-			result := []Expression{}
+		return func(row Exp) interface{} {
+			result := []Exp{}
 			for _, attr := range attrs {
 				result = append(result, row.Attr(attr))
 			}
@@ -380,9 +380,9 @@ func (ctx context) compileGoFunc(f interface{}, requiredArgs int) (params []stri
 		args = append(args, reflect.ValueOf(LetVar(name)))
 		params = append(params, name)
 
-		// make sure all input arguments are of type Expression
-		if !valueType.In(i).AssignableTo(reflect.TypeOf(Expression{})) {
-			panic("Function argument is not of type Expression")
+		// make sure all input arguments are of type Exp
+		if !valueType.In(i).AssignableTo(reflect.TypeOf(Exp{})) {
+			panic("Function argument is not of type Exp")
 		}
 	}
 
@@ -395,7 +395,7 @@ func (ctx context) compileGoFunc(f interface{}, requiredArgs int) (params []stri
 	return
 }
 
-func (ctx context) compileExpressionFunc(e Expression, requiredArgs int) (params []string, body *p.Term) {
+func (ctx context) compileExpressionFunc(e Exp, requiredArgs int) (params []string, body *p.Term) {
 	// an expression that takes no args, e.g. Row.Attr("name") or
 	// possibly a Javascript function Js(`row.key`) which does take args
 	body = ctx.toTerm(e)
@@ -556,8 +556,8 @@ func (ctx context) toTableRef(table tableInfo) *p.TableRef {
 	}
 }
 
-// toProtobuf converts a bare Expression directly to a read query protobuf
-func (e Expression) toProtobuf(ctx context) *p.Query {
+// toProtobuf converts a bare Exp directly to a read query protobuf
+func (e Exp) toProtobuf(ctx context) *p.Query {
 	return &p.Query{
 		Type: p.Query_READ.Enum(),
 		ReadQuery: &p.ReadQuery{
@@ -769,7 +769,7 @@ func (ctx context) buildProtobuf(query Query) (queryProto *p.Query, err error) {
 
 // Check compiles a query for sending to the server, but does not send it.
 // There is one .Check() method for each query type.
-func (e Expression) Check(s *Session) error {
+func (e Exp) Check(s *Session) error {
 	_, err := s.getContext().buildProtobuf(e)
 	return err
 }
