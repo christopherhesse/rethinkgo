@@ -2,11 +2,11 @@ package rethinkgo
 
 import (
 	"fmt"
-	p "github.com/christopherhesse/rethinkgo/query_language"
+	p "github.com/christopherhesse/rethinkgo/ql2"
 )
 
 func formatError(message string, response *p.Response) string {
-	return fmt.Sprintf("rethinkdb: %v: %v %v", message, response.GetErrorMessage(), getBacktraceFrames(response))
+	return fmt.Sprintf("rethinkdb: %v: %v %v", message, response.GetResponse(), getBacktraceFrames(response))
 }
 
 func getBacktraceFrames(response *p.Response) []string {
@@ -14,7 +14,11 @@ func getBacktraceFrames(response *p.Response) []string {
 	if bt == nil {
 		return nil
 	}
-	return bt.Frame
+	frames := []string{}
+	for _, frame := range bt.GetFrames() {
+		frames = append(frames, frame.String())
+	}
+	return frames
 }
 
 // ErrBadQuery indicates that the server has told us we have constructed an
@@ -71,18 +75,18 @@ func (e ErrNoSuchRow) Error() string {
 	return "rethinkdb: No such row found"
 }
 
-// ErrWrongResponseType is returned when .Exec(), .One(). or .Collect() have
+// ErrWrongResponseType is returned when .Exec(), .One(). or .All() have
 // been used, but the expected response type does not match the type we got
 // from the server.
 //
 // Example usage:
 //
 //  var row []interface{}
-//  err := r.Table("heroes").Get("Archangel", "name").Run(session).Collect(&row)
+//  err := r.Table("heroes").Get("Archangel", "name").Run(session).All(&row)
 type ErrWrongResponseType struct {
 	response *p.Response
 }
 
 func (e ErrWrongResponseType) Error() string {
-	return "rethinkdb: Wrong response type, you may have used the wrong one of: .Exec(), .One(), .Collect()"
+	return "rethinkdb: Wrong response type, you may have used the wrong one of: .Exec(), .One(), .All()"
 }

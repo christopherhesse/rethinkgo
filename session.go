@@ -4,9 +4,8 @@ import (
 	"code.google.com/p/goprotobuf/proto"
 	"errors"
 	"fmt"
-	p "github.com/christopherhesse/rethinkgo/query_language"
-	"io"
 	"net"
+	p "github.com/christopherhesse/rethinkgo/ql2"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -37,15 +36,6 @@ type Session struct {
 	closed    bool
 }
 
-// Query is the interface for queries that can be .Run(session), this includes
-// Exp (run as a read query), MetaQuery, and WriteQuery. Methods that
-// generate a query are generally located on Exp objects.
-type Query interface {
-	toProtobuf(context) *p.Query // will panic on errors
-	Check(*Session) error
-	Run(*Session) *Rows
-}
-
 // Connect creates a new database session.
 //
 // Example usage:
@@ -64,7 +54,7 @@ func Connect(address, database string) (*Session, error) {
 }
 
 // Reconnect closes and re-opens a session.
-//
+//[
 // Example usage:
 //
 //  err := sess.Reconnect()
@@ -188,20 +178,22 @@ func (s *Session) getToken() int64 {
 }
 
 // Run executes a query directly on a specific session and returns an iterator
-// that moves through the resulting JSON rows with rows.Next(&dest). See the
-// documentation for the Rows object for other options.
+// that moves through the resulting JSON rows with rows.Next() and
+// rows.Scan(&dest). See the documentation for the Rows object for other
+// options.
 //
 // Example usage:
 //
 //  rows := session.Run(query)
-//  var row map[string]interface{}
-//  for rows.Next(&row) {
+//  for rows.Next() {
+//      var row map[string]interface{}
+//      rows.Scan(&row)
 //      fmt.Println("row:", row)
 //  }
 //  if rows.Err() {
 //      ...
 //  }
-func (s *Session) Run(query Query) *Rows {
+func (s *Session) Run(query Exp) *Rows {
 	queryProto, err := s.getContext().buildProtobuf(query)
 	if err != nil {
 		return &Rows{lasterr: err}
@@ -214,14 +206,11 @@ func (s *Session) Run(query Query) *Rows {
 		return &Rows{lasterr: err}
 	}
 
-	buffer, status, err := conn.executeQuery(queryProto, s.timeout)
+	buffer, responseType, err := conn.executeQuery(queryProto, s.timeout)
 	if err != nil {
 		// see if we got a timeout error, close the connection if we did, since
 		// the connection may not be idle for quite some time and we don't
 		// want to try multiplexing queries over a rethinkdb connection
-		//
-		// judging from rethinkdb's CPU usage, this won't actually terminate the
-		// query, see https://github.com/rethinkdb/rethinkdb/issues/372
 		netErr, ok := err.(net.Error)
 		if ok && netErr.Timeout() {
 			conn.Close()
@@ -231,68 +220,54 @@ func (s *Session) Run(query Query) *Rows {
 		return &Rows{lasterr: err}
 	}
 
-	if status != p.Response_SUCCESS_PARTIAL {
+	if responseType != p.Response_SUCCESS_PARTIAL {
 		// if we have a success stream response, the connection needs to be tied to
 		// the iterator, since the iterator can only get more results from the same
 		// connection it was originally started on
 		s.putConn(conn)
 	}
 
-	switch status {
-	case p.Response_SUCCESS_JSON:
+	switch responseType {
+	case p.Response_SUCCESS_ATOM:
 		// single document (or json) response, return an iterator anyway for
 		// consistency of types
 		return &Rows{
-			buffer:   buffer,
-			complete: true,
-			status:   status,
+			buffer:       buffer,
+			complete:     true,
+			responseType: responseType,
 		}
 	case p.Response_SUCCESS_PARTIAL:
 		// beginning of stream of rows, there are more results available from the
 		// server than the ones we just received, so save the connection we used in
 		// case the user wants more
 		return &Rows{
-			session:  s,
-			conn:     conn,
-			buffer:   buffer,
-			complete: false,
-			token:    queryProto.GetToken(),
-			status:   status,
+			session:      s,
+			conn:         conn,
+			buffer:       buffer,
+			complete:     false,
+			token:        queryProto.GetToken(),
+			responseType: responseType,
 		}
-	case p.Response_SUCCESS_STREAM:
+	case p.Response_SUCCESS_SEQUENCE:
 		// end of a stream of rows, since we got this on the initial query this means
 		// that we got a stream response, but the number of results was less than the
 		// number required to break the response into chunks. we can just return all
 		// the results in one go, as this is the only response
 		return &Rows{
-			buffer:   buffer,
-			complete: true,
-			status:   status,
-		}
-	case p.Response_SUCCESS_EMPTY:
-		return &Rows{
-			lasterr:  io.EOF,
-			complete: true,
-			status:   status,
+			buffer:       buffer,
+			complete:     true,
+			responseType: responseType,
 		}
 	}
-	return &Rows{lasterr: fmt.Errorf("rethinkdb: Unexpected status code from server: %v", status)}
+	return &Rows{lasterr: fmt.Errorf("rethinkdb: Unexpected response type from server: %v", responseType)}
 }
 
 func (s *Session) getContext() context {
-	return context{databaseName: s.database}
+	return context{databaseName: s.database, atomic: true}
 }
 
 // Run runs a query using the given session, there is one Run()
 // method for each type of query.
 func (e Exp) Run(session *Session) *Rows {
 	return session.Run(e)
-}
-
-func (q MetaQuery) Run(session *Session) *Rows {
-	return session.Run(q)
-}
-
-func (q WriteQuery) Run(session *Session) *Rows {
-	return session.Run(q)
 }

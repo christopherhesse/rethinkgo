@@ -14,83 +14,118 @@ type List []interface{}
 type expressionKind int
 
 const (
-	// These I just made up
-	literalKind expressionKind = iota // converted to an Exp
-	groupByKind
-	useOutdatedKind
+	literalKind expressionKind = iota
 
-	///////////
-	// Terms //
-	///////////
-	// Null
 	variableKind
-	letKind
-	// Call - implicit for all Builtin types
-	ifKind
-	errorKind
-	// Number - stored as JSON
-	// String - stored as JSON
-	// JSON - implicitly specified (use anything that is not Array or Object)
-	// Bool - stored as JSON
-	// Array - implicitly specified as type []interface{}
-	// Object - implicitly specified as type map[string]interface{}
-	getByKeyKind
-	tableKind
 	javascriptKind
+	errorKind
 	implicitVariableKind
 
-	//////////////
-	// Builtins //
-	//////////////
-	// these are all subtypes of the CALL term type
+	databaseKind
+	tableKind
+	getKind
+
+	equalityKind
+	inequalityKind
+	lessThanKind
+	lessThanOrEqualKind
+	greaterThanKind
+	greaterThanOrEqualKind
+
 	logicalNotKind
-	getAttributeKind
-	// implicitGetAttributeKind - appears to be unused
-	hasAttributeKind
-	// ImplictHasAttribute - appears to be unused
-	pickAttributesKind
-	// ImplicitPickAttributes - appears to be unused
-	mapMergeKind
-	arrayAppendKind
-	sliceKind
 	addKind
 	subtractKind
 	multiplyKind
 	divideKind
 	moduloKind
-	// Compare - implicit for all compare subtypes below
-	filterKind
+
+	appendKind
+	sliceKind
+	skipKind
+	limitKind
+
+	getAttributeKind
+	containsKind
+	pluckKind
+	withoutKind
+	mergeKind
+
+	betweenKind
+	reduceKind
 	mapKind
+	filterKind
 	concatMapKind
 	orderByKind
 	distinctKind
-	lengthKind
+	countKind
 	unionKind
 	nthKind
-	streamToArrayKind
-	arrayToStreamKind
-	reduceKind
 	groupedMapReduceKind
-	logicalOrKind
-	logicalAndKind
-	rangeKind
-	withoutKind
-	// ImplicitWithout - appears to be unused
-	// Compare sub-types
-	equalityKind
-	inequalityKind
-	greaterThanKind
-	greaterThanOrEqualKind
-	lessThanKind
-	lessThanOrEqualKind
+	groupByKind
+	innerJoinKind
+	outerJoinKind
+	eqJoinKind
+	zipKind
+
+	coerceToKind
+	typeOfKind
+
+	updateKind
+	deleteKind
+	replaceKind
+	insertKind
+
+	databaseCreateKind
+	databaseDropKind
+	databaseListKind
+	tableCreateKind
+	tableDropKind
+	tableListKind
+
+	funcallKind
+	branchKind
+	anyKind
+	allKind
+	forEachKind
+
+	funcKind
+	ascendingKind
+	descendingKind
+
+	// added by me
+	upsertKind
+	atomicKind
+	useOutdatedKind
 )
+
+func nullaryOperator(kind expressionKind) Exp {
+	return Exp{kind: kind}
+}
+
+func naryOperator(kind expressionKind, operand interface{}, operands ...interface{}) Exp {
+	args := []interface{}{operand}
+	args = append(args, operands...)
+	return Exp{kind: kind, args: args}
+}
+
+func stringsToInterfaces(strings []string) []interface{} {
+	interfaces := make([]interface{}, len(strings))
+	for i, v := range strings {
+		interfaces[i] = interface{}(v)
+	}
+	return interfaces
+}
+
+func funcWrapper(f interface{}, requiredArgs int) Exp {
+	return naryOperator(funcKind, f, requiredArgs)
+}
 
 // Exp represents an RQL expression, such as the return value of
 // r.Expr(). Exp has all the RQL methods on it, such as .Add(), .Attr(),
 // .Filter() etc.
 //
-// To create an Exp from a native type, or user-defined type, or
-// function, use r.Expr().
+// To create an Exp from a native or user-defined type, or function, use
+// r.Expr().
 //
 // Example usage:
 //
@@ -106,7 +141,7 @@ const (
 //  getIntelligence := func(row r.Exp) r.Exp {
 //      return row.Attr("intelligence")
 //  }
-//  err := r.Table("heroes").Map(getIntelligence).Run(session).Collect(&response)
+//  err := r.Table("heroes").Map(getIntelligence).Run(session).All(&response)
 //
 // Example response:
 //
@@ -125,26 +160,8 @@ const (
 //
 //  [1, 2, 3]
 type Exp struct { // this would be Expr, but then it would conflict with the function that creates Exp instances
-	value interface{}
-	kind  expressionKind
-}
-
-// WriteQuery is the type returned by any method that writes to a table, this
-// includes .Insert(), .Update(), .Delete(), .ForEach(), and .Replace().  The
-// message returned by the server for these queries can be read into the
-// r.WriteResponse struct.
-type WriteQuery struct {
-	query     interface{}
-	nonatomic bool
-	overwrite bool // for insert query
-}
-
-// MetaQuery is the type returned by methods that create/modify/delete
-// databases, this includes .TableCreate(), .TableList(), .TableDrop(),
-// .DbCreate(), .DbList(), and .DbDrop().  These return empty responses, except
-// for .*List() functions, which return []string.
-type MetaQuery struct {
-	query interface{}
+	args []interface{}
+	kind expressionKind
 }
 
 // Row supplies access to the current row in any query, even if there's no go
@@ -156,13 +173,13 @@ type MetaQuery struct {
 //  // Get the real names of all the villains
 //  err := r.Table("villains").Map(func(row r.Exp) r.Exp {
 //      return row.Attr("real_name")
-//  }).Run(session).Collect(&response)
+//  }).Run(session).All(&response)
 //
 // Example with Row:
 //
 //  var response []interface{}
 //  // Get the real names of all the villains
-//  err := r.Table("employees").Map(Row.Attr("real_name")).Run(session).Collect(&response)
+//  err := r.Table("employees").Map(Row.Attr("real_name")).Run(session).All(&response)
 //
 // Example response:
 //
@@ -185,19 +202,12 @@ var Row = Exp{kind: implicitVariableKind}
 // Example response:
 //
 //  {"go": "awesome", "rethinkdb": "awesomer"}
-func Expr(values ...interface{}) Exp {
-	switch len(values) {
-	case 0:
-		return Exp{kind: literalKind, value: nil}
-	case 1:
-		value := values[0]
-		v, ok := value.(Exp)
-		if ok {
-			return v
-		}
-		return Exp{kind: literalKind, value: value}
+func Expr(value interface{}) Exp {
+	v, ok := value.(Exp) // check if it's already an Exp
+	if ok {
+		return v
 	}
-	return Exp{kind: literalKind, value: values}
+	return naryOperator(literalKind, value)
 }
 
 ///////////
@@ -225,112 +235,23 @@ func Expr(values ...interface{}) Exp {
 //
 //  var response []interface{}
 //  // Combine each hero's strength and durability
-//  rows := r.Table("heroes").Map(func(row r.Exp) r.Exp {
+//  err := r.Table("heroes").Map(func(row r.Exp) r.Exp {
 //      return row.Attr("strength").Add(row.Attr("durability"))
-//  }).Run(session).Collect(&response)
+//  }).Run(session).All(&response)
 //
 // Example with Js:
 //
 //  var response []interface{}
 //  // Combine each hero's strength and durability
-//  rows := r.Table("heroes").Map(
-//      r.Js(`this.strength + this.durability`)
-//  ).Run(session).Collect(&response)
+//  err := r.Table("heroes").Map(
+//  	r.Js(`(function (row) { return row.strength + row.durability; })`),
+//  ).Run(session).All(&response)
 //
 // Example response:
 //
 //  [11, 6, 9, 11, ...]
-//
-// When using a Js call inside of a function that is compiled into RQL, the
-// variable names inside the javascript are not the same as in Go.  To access
-// the variable, you can convert the variable to a string (it will become the
-// name of the variable) and use that in the Js code.
-//
-// Example inside a function:
-//
-//  var response []interface{}
-//  // Find each hero-villain pair with the same strength
-//  err := r.Table("heroes").InnerJoin(r.Table("villains"), func(hero, villain r.Exp) r.Exp {
-//      return r.Js(fmt.Sprintf("%v.strength == %v.strength", hero, villain))
-//  }).Run(session).Collect(&response)
-//
-// Example response:
-//
-//  [
-//    {
-//      "left":
-//      {
-//        "durability": 5,
-//        "energy": 7,
-//        "fighting": 7,
-//        "id": "f915d9a7-6cfa-4151-b5f6-6aded7da595f",
-//        "intelligence": 5,
-//        "name": "Nightcrawler",
-//        "real_name": "Kurt Wagner",
-//        "speed": 7,
-//        "strength": 4
-//      },
-//      "right":
-//      {
-//        "durability": 4,
-//        "energy": 1,
-//        "fighting": 7,
-//        "id": "12e58b11-93b3-4e89-987d-efb345001dfe",
-//        "intelligence": 2,
-//        "name": "Sabretooth",
-//        "real_name": "Victor Creed",
-//        "speed": 2,
-//        "strength": 4
-//      }
-//    },
-//    ...
-//   ]
 func Js(body string) Exp {
-	return Exp{kind: javascriptKind, value: body}
-}
-
-type letArgs struct {
-	binds map[string]interface{}
-	expr  interface{}
-}
-
-// Let binds a variable name to a value, then evaluates the given expression
-// using the bindings it just made.  This is basically just assignment, but
-// expressed in a way that works with RQL.
-//
-// Say you want something like this pseudo-javascript:
-//
-//  var results = [];
-//  var havok = r.table("heroes").get("havok", "name");
-//  for (villain in r.table("villains")) {
-//      results.push(villain.strength > havok.strength);
-//  }
-//  return results;
-//
-// You can do that with the following RQL:
-//
-//  var response []bool
-//  // For each villain, check if that villain is stronger than Havok
-//  binds := r.Map{"havok": r.Table("heroes").Get("Havok", "name")}
-//  expr := r.Row.Attr("strength").Gt(r.LetVar("havok").Attr("strength"))
-//  query := r.Table("villains").Map(r.Let(binds, expr))
-//  err := query.Run(session).Collect(&response)
-//
-// Example response:
-//
-//  [true, true, true, false, false, ...]
-func Let(binds Map, expr interface{}) Exp {
-	value := letArgs{
-		binds: binds,
-		expr:  expr,
-	}
-	return Exp{kind: letKind, value: value}
-}
-
-// LetVar lets you reference a variable bound in the current context (for
-// example, with Let()).  See the Let example for how to use LetVar.
-func LetVar(name string) Exp {
-	return Exp{kind: variableKind, value: name}
+	return Exp{kind: javascriptKind, args: List{body}}
 }
 
 // RuntimeError tells the server to respond with a ErrRuntime, useful for
@@ -340,13 +261,7 @@ func LetVar(name string) Exp {
 //
 //  err := r.RuntimeError("hi there").Run(session).Err()
 func RuntimeError(message string) Exp {
-	return Exp{kind: errorKind, value: message}
-}
-
-type ifArgs struct {
-	test        interface{}
-	trueBranch  interface{}
-	falseBranch interface{}
+	return Exp{kind: errorKind, args: List{message}}
 }
 
 // Branch checks a test expression, evaluating the trueBranch expression if it's
@@ -354,32 +269,19 @@ type ifArgs struct {
 //
 // Example usage:
 //
-//  // Javascript expression
-//  r.Js(`this.first_name == "Marc" ? "is probably marc" : "who cares"`)
 //  // Roughly equivalent RQL expression
 //  r.Branch(r.Row.Attr("first_name").Eq("Marc"), "is probably marc", "who cares")
 func Branch(test, trueBranch, falseBranch interface{}) Exp {
-	value := ifArgs{
-		test:        test,
-		trueBranch:  trueBranch,
-		falseBranch: falseBranch,
-	}
-	return Exp{kind: ifKind, value: value}
+	return naryOperator(branchKind, test, trueBranch, falseBranch)
 }
 
-type getArgs struct {
-	table     Exp
-	key       Exp
-	attribute string
-}
-
-// Get retrieves a single row by the named primary key (secondary key indexes are not
+// Get retrieves a single row by primary key (secondary key indexes are not
 // supported yet by RethinkDB).
 //
 // Example usage:
 //
 //  var response map[string]interface{}
-//  err := r.Table("heroes").Get("Doctor Strange", "name").Run(session).One(&response)
+//  err := r.Table("heroes").Get("Doctor Strange").Run(session).One(&response)
 //
 // Example response:
 //
@@ -394,52 +296,17 @@ type getArgs struct {
 //    "speed": 5,
 //    "id": "edc3a46b-95a0-4f64-9d1c-0dd7d83c4bcd"
 //  }
-func (e Exp) Get(key interface{}, attribute string) Exp {
-	value := getArgs{table: e, key: Expr(key), attribute: attribute}
-	return Exp{kind: getByKeyKind, value: value}
-}
-
-// GetById is the same as Get with "id" used as the attribute
-//
-// Example usage:
-//
-//  var response map[string]interface{}
-//  id := "edc3a46b-95a0-4f64-9d1c-0dd7d83c4bcd"
-//  err := r.Table("heroes").GetById(id).Run(session).One(&response)
-//
-// Example response:
-//
-//  {
-//    "strength": 3,
-//    "name": "Doctor Strange",
-//    "durability": 6,
-//    "intelligence": 4,
-//    "energy": 7,
-//    "fighting": 7,
-//    "real_name": "Stephen Vincent Strange",
-//    "speed": 5,
-//    "id": "edc3a46b-95a0-4f64-9d1c-0dd7d83c4bcd"
-//  }
-func (e Exp) GetById(key interface{}) Exp {
-	return e.Get(key, "id")
-}
-
-type groupByArgs struct {
-	attribute        interface{}
-	groupedMapReduce GroupedMapReduce
-	expr             Exp
+func (e Exp) Get(key interface{}) Exp {
+	return naryOperator(getKind, e, key)
 }
 
 // GroupBy does a sort of grouped map reduce.  First the server groups all rows
 // that have the same value for `attribute`, then it applys the map reduce to
-// each group.  It takes a GroupedMapReduce object that specifies how to do the
-// map reduce.
+// each group.  It takes one of the following reductions: r.Count(),
+// r.Sum(string), r.Avg(string)
 //
 // `attribute` must be a single attribute (string) or a list of attributes
 // ([]string)
-//
-// The GroupedMapReduce object can be one of the 3 supplied ones: r.Count(),
-// r.Avg(attribute), r.Sum(attribute) or a user-supplied object:
 //
 // Example usage:
 //
@@ -462,35 +329,16 @@ type groupByArgs struct {
 //    ...
 //  ]
 //
-// Example with user-supplied GroupedMapReduce object:
-//
-//  // Find all heroes with the same strength, sum their intelligence
-//  gmr := r.GroupedMapReduce{
-//      Mapping: func(row r.Exp) r.Exp { return row.Attr("intelligence") },
-//      Base: 0,
-//      Reduction: func(acc, val r.Exp) r.Exp { return acc.Add(val) },
-//      Finalizer: nil,
-//  }
-//  err := r.Table("heroes").GroupBy("strength", gmr).Run(session).One(&response)
-//
 // Example with multiple attributes:
 //
 //  // Find all heroes with the same strength and speed, sum their intelligence
-//  rows := r.Table("heroes").GroupBy([]string{"strength", "speed"}, gmr).Run(session)
-func (e Exp) GroupBy(attribute interface{}, groupedMapReduce GroupedMapReduce) Exp {
-	return Exp{
-		kind: groupByKind,
-		value: groupByArgs{
-			attribute:        attribute,
-			groupedMapReduce: groupedMapReduce,
-			expr:             e,
-		},
+//  rows := r.Table("heroes").GroupBy([]string{"strength", "speed"}, r.Count()).Run(session)
+func (e Exp) GroupBy(attribute, groupedMapReduce interface{}) Exp {
+	_, ok := attribute.(string)
+	if ok {
+		attribute = List{attribute}
 	}
-}
-
-type useOutdatedArgs struct {
-	expr        Exp
-	useOutdated bool
+	return naryOperator(groupByKind, e, attribute, groupedMapReduce)
 }
 
 // UseOutdated tells the server to use potentially out-of-date data from all
@@ -507,24 +355,7 @@ type useOutdatedArgs struct {
 //  compareFunc := r.Row.Attr("strength").Eq(villain_strength)
 //  rows := r.Table("heroes").Filter(compareFunc).UseOutdated(true).Run(session)
 func (e Exp) UseOutdated(useOutdated bool) Exp {
-	value := useOutdatedArgs{expr: e, useOutdated: useOutdated}
-	return Exp{kind: useOutdatedKind, value: value}
-}
-
-//////////////
-// Builtins //
-//////////////
-
-type builtinArgs struct {
-	operand interface{}
-	args    []interface{}
-}
-
-func naryBuiltin(kind expressionKind, operand interface{}, args ...interface{}) Exp {
-	return Exp{
-		kind:  kind,
-		value: builtinArgs{operand: operand, args: args},
-	}
+	return Exp{kind: useOutdatedKind, args: List{e, useOutdated}}
 }
 
 // Attr gets an attribute's value from the row.
@@ -533,7 +364,7 @@ func naryBuiltin(kind expressionKind, operand interface{}, args ...interface{}) 
 //
 //  r.Expr(r.Map{"key": "value"}).Attr("key") => "value"
 func (e Exp) Attr(name string) Exp {
-	return naryBuiltin(getAttributeKind, name, e)
+	return naryOperator(getAttributeKind, e, name)
 }
 
 // Add sums two numbers or concatenates two arrays.
@@ -543,7 +374,7 @@ func (e Exp) Attr(name string) Exp {
 //  r.Expr(1,2,3).Add(r.Expr(4,5,6)) => [1,2,3,4,5,6]
 //  r.Expr(2).Add(2) => 4
 func (e Exp) Add(operand interface{}) Exp {
-	return naryBuiltin(addKind, nil, e, operand)
+	return naryOperator(addKind, e, operand)
 }
 
 // Sub subtracts two numbers.
@@ -552,7 +383,7 @@ func (e Exp) Add(operand interface{}) Exp {
 //
 //  r.Expr(2).Sub(2) => 0
 func (e Exp) Sub(operand interface{}) Exp {
-	return naryBuiltin(subtractKind, nil, e, operand)
+	return naryOperator(subtractKind, e, operand)
 }
 
 // Mul multiplies two numbers.
@@ -561,7 +392,7 @@ func (e Exp) Sub(operand interface{}) Exp {
 //
 //  r.Expr(2).Mul(3) => 6
 func (e Exp) Mul(operand interface{}) Exp {
-	return naryBuiltin(multiplyKind, nil, e, operand)
+	return naryOperator(multiplyKind, e, operand)
 }
 
 // Div divides two numbers.
@@ -570,7 +401,7 @@ func (e Exp) Mul(operand interface{}) Exp {
 //
 //  r.Expr(3).Div(2) => 1.5
 func (e Exp) Div(operand interface{}) Exp {
-	return naryBuiltin(divideKind, nil, e, operand)
+	return naryOperator(divideKind, e, operand)
 }
 
 // Mod divides two numbers and returns the remainder.
@@ -579,7 +410,7 @@ func (e Exp) Div(operand interface{}) Exp {
 //
 //  r.Expr(23).Mod(10) => 3
 func (e Exp) Mod(operand interface{}) Exp {
-	return naryBuiltin(moduloKind, nil, e, operand)
+	return naryOperator(moduloKind, e, operand)
 }
 
 // And performs a logical and on two values.
@@ -588,7 +419,7 @@ func (e Exp) Mod(operand interface{}) Exp {
 //
 //  r.Expr(true).And(true) => true
 func (e Exp) And(operand interface{}) Exp {
-	return naryBuiltin(logicalAndKind, nil, e, operand)
+	return naryOperator(allKind, e, operand)
 }
 
 // Or performs a logical or on two values.
@@ -597,7 +428,7 @@ func (e Exp) And(operand interface{}) Exp {
 //
 //  r.Expr(true).Or(false) => true
 func (e Exp) Or(operand interface{}) Exp {
-	return naryBuiltin(logicalOrKind, nil, e, operand)
+	return naryOperator(anyKind, e, operand)
 }
 
 // Eq returns true if two values are equal.
@@ -606,7 +437,7 @@ func (e Exp) Or(operand interface{}) Exp {
 //
 //  r.Expr(1).Eq(1) => true
 func (e Exp) Eq(operand interface{}) Exp {
-	return naryBuiltin(equalityKind, nil, e, operand)
+	return naryOperator(equalityKind, e, operand)
 }
 
 // Ne returns true if two values are not equal.
@@ -615,7 +446,7 @@ func (e Exp) Eq(operand interface{}) Exp {
 //
 //  r.Expr(1).Ne(-1) => true
 func (e Exp) Ne(operand interface{}) Exp {
-	return naryBuiltin(inequalityKind, nil, e, operand)
+	return naryOperator(inequalityKind, e, operand)
 }
 
 // Gt returns true if the first value is greater than the second.
@@ -624,7 +455,7 @@ func (e Exp) Ne(operand interface{}) Exp {
 //
 //  r.Expr(2).Gt(1) => true
 func (e Exp) Gt(operand interface{}) Exp {
-	return naryBuiltin(greaterThanKind, nil, e, operand)
+	return naryOperator(greaterThanKind, e, operand)
 }
 
 // Gt returns true if the first value is greater than or equal to the second.
@@ -633,7 +464,7 @@ func (e Exp) Gt(operand interface{}) Exp {
 //
 //  r.Expr(2).Gt(2) => true
 func (e Exp) Ge(operand interface{}) Exp {
-	return naryBuiltin(greaterThanOrEqualKind, nil, e, operand)
+	return naryOperator(greaterThanOrEqualKind, e, operand)
 }
 
 // Lt returns true if the first value is less than the second.
@@ -642,7 +473,7 @@ func (e Exp) Ge(operand interface{}) Exp {
 //
 //  r.Expr(1).Lt(2) => true
 func (e Exp) Lt(operand interface{}) Exp {
-	return naryBuiltin(lessThanKind, nil, e, operand)
+	return naryOperator(lessThanKind, e, operand)
 }
 
 // Le returns true if the first value is less than or equal to the second.
@@ -651,60 +482,16 @@ func (e Exp) Lt(operand interface{}) Exp {
 //
 //  r.Expr(2).Lt(2) => true
 func (e Exp) Le(operand interface{}) Exp {
-	return naryBuiltin(lessThanOrEqualKind, nil, e, operand)
+	return naryOperator(lessThanOrEqualKind, e, operand)
 }
 
 // Not performs a logical not on a value.
 //
 // Example usage:
 //
-//  r.Expr(2).Lt(2) => true
+//  r.Expr(true).Not() => false
 func (e Exp) Not() Exp {
-	return naryBuiltin(logicalNotKind, nil, e)
-}
-
-// ArrayToStream converts an array of objects to a stream.  Many operators work
-// on both streams and arrays, but some (such as .Union()) require that both
-// operands be the same type.
-//
-// Example with array (note use of .One()):
-//
-//  var response []interface{}
-//  err := r.Expr(1,2,3).Run(session).One(&response) => [1, 2, 3]
-//
-// Example with stream (note use of .Collect()):
-//
-//  var response []interface{}
-//  err := r.Expr(1,2,3).ArrayToStream().Run(session).Collect(&response) => [1, 2, 3]
-//
-// Example with .Union():
-//
-//  var response []interface{}
-//  r.Expr(1,2,3,4).ArrayToStream().Union(r.Table("heroes")).Run(session).Collect(&response)
-func (e Exp) ArrayToStream() Exp {
-	return naryBuiltin(arrayToStreamKind, nil, e)
-}
-
-// StreamToArray converts an stream of objects into an array.  Many operators
-// work on both streams and arrays. .Union() requires that both operands be the
-// same type.
-//
-// Example with stream (note use of .Collect()):
-//
-//  var response []interface{}
-//  err := r.Table("heroes").Run(session).Collect(&response) => [{hero...}, {hero...}, ...]
-//
-// Example with array (note use of .One()):
-//
-//  var response []interface{}
-//  err := r.Table("heroes").StreamToArray().Run(session).One(&response) => [{hero...}, {hero...}, ...]
-//
-// Example with .Union():
-//
-//  var response []interface{}
-//  err := r.Expr(1,2,3,4).Union(r.Table("heroes").StreamToArray()).Run(session).One(&response)
-func (e Exp) StreamToArray() Exp {
-	return naryBuiltin(streamToArrayKind, nil, e)
+	return naryOperator(logicalNotKind, e)
 }
 
 // Distinct removes duplicate elements from a sequence.
@@ -713,13 +500,13 @@ func (e Exp) StreamToArray() Exp {
 //
 //  var response []interface{}
 //  // Get a list of all possible strength values for our heroes
-//  err := r.Table("heroes").Map(r.Row.Attr("strength")).Distinct().Run(session).Collect(&response)
+//  err := r.Table("heroes").Map(r.Row.Attr("strength")).Distinct().Run(session).All(&response)
 //
 // Example response:
 //
 //  [7, 1, 6, 4, 2, 5, 3]
 func (e Exp) Distinct() Exp {
-	return naryBuiltin(distinctKind, nil, e)
+	return naryOperator(distinctKind, e)
 }
 
 // Count returns the number of elements in the response.
@@ -733,7 +520,7 @@ func (e Exp) Distinct() Exp {
 //
 //  42
 func (e Exp) Count() Exp {
-	return naryBuiltin(lengthKind, nil, e)
+	return naryOperator(countKind, e)
 }
 
 // Merge combines an object with another object, overwriting properties from
@@ -754,7 +541,7 @@ func (e Exp) Count() Exp {
 //    "role": "Betrayal System"
 //  }
 func (e Exp) Merge(operand interface{}) Exp {
-	return naryBuiltin(mapMergeKind, nil, e, operand)
+	return naryOperator(mergeKind, e, operand)
 }
 
 // Append appends a value to an array.
@@ -768,7 +555,7 @@ func (e Exp) Merge(operand interface{}) Exp {
 //
 //  [1, 2, 3, 4, 5]
 func (e Exp) Append(operand interface{}) Exp {
-	return naryBuiltin(arrayAppendKind, nil, e, operand)
+	return naryOperator(appendKind, e, operand)
 }
 
 // Union concatenates two sequences.
@@ -777,7 +564,7 @@ func (e Exp) Append(operand interface{}) Exp {
 //
 //  var response []interface{}
 //  // Retrieve all heroes and villains
-//  r.Table("heroes").Union(r.Table("villains")).Run(session).Collect(&response)
+//  r.Table("heroes").Union(r.Table("villains")).Run(session).All(&response)
 //
 // Example response:
 //
@@ -796,9 +583,7 @@ func (e Exp) Append(operand interface{}) Exp {
 //    ...
 //  ]
 func (e Exp) Union(operands ...interface{}) Exp {
-	args := []interface{}{e}
-	args = append(args, operands...)
-	return naryBuiltin(unionKind, nil, args...)
+	return naryOperator(unionKind, e, operands...)
 }
 
 // Nth returns the nth element in sequence, zero-indexed.
@@ -813,7 +598,7 @@ func (e Exp) Union(operands ...interface{}) Exp {
 //
 //  3
 func (e Exp) Nth(operand interface{}) Exp {
-	return naryBuiltin(nthKind, nil, e, operand)
+	return naryOperator(nthKind, e, operand)
 }
 
 // Slice returns a section of a sequence, with bounds [lower, upper), where
@@ -828,7 +613,7 @@ func (e Exp) Nth(operand interface{}) Exp {
 //
 //  [3, 4]
 func (e Exp) Slice(lower, upper interface{}) Exp {
-	return naryBuiltin(sliceKind, nil, e, lower, upper)
+	return naryOperator(sliceKind, e, lower, upper)
 }
 
 // Limit returns only the first `limit` results from the query.
@@ -842,7 +627,7 @@ func (e Exp) Slice(lower, upper interface{}) Exp {
 //
 //  [1, 2, 3]
 func (e Exp) Limit(limit interface{}) Exp {
-	return e.Slice(0, limit)
+	return naryOperator(limitKind, e, limit)
 }
 
 // Skip returns all results after the first `start` results.  Basically it's the
@@ -857,7 +642,7 @@ func (e Exp) Limit(limit interface{}) Exp {
 //
 //  [4, 5]
 func (e Exp) Skip(start interface{}) Exp {
-	return e.Slice(start, nil)
+	return naryOperator(skipKind, e, start)
 }
 
 // Map transforms a sequence by applying the given function to each row.
@@ -897,7 +682,7 @@ func (e Exp) Skip(start interface{}) Exp {
 //    ...
 //  ]
 func (e Exp) Map(operand interface{}) Exp {
-	return naryBuiltin(mapKind, operand, e)
+	return naryOperator(mapKind, e, funcWrapper(operand, 1))
 }
 
 // ConcatMap constructs a sequence by running the provided function on each row,
@@ -921,13 +706,13 @@ func (e Exp) Map(operand interface{}) Exp {
 //  getNames := func(row r.Exp) interface{} {
 //      return r.List{row.Attr("name"), row.Attr("real_name")}
 //  }
-//  err := r.Table("heroes").ConcatMap(getNames).Run(session).Collect(&names)
+//  err := r.Table("heroes").ConcatMap(getNames).Run(session).All(&names)
 //
 // Example response:
 //
 //  ["Captain Britain", "Brian Braddock", "Iceman", "Robert \"Bobby\" Louis Drake", ...]
 func (e Exp) ConcatMap(operand interface{}) Exp {
-	return naryBuiltin(concatMapKind, operand, e)
+	return naryOperator(concatMapKind, e, funcWrapper(operand, 1))
 }
 
 // Filter removes all objects from a sequence that do not match the given
@@ -938,16 +723,16 @@ func (e Exp) ConcatMap(operand interface{}) Exp {
 //
 //   var response []interface{}
 //   // Get all heroes with durability 6
-//   err := r.Table("heroes").Filter(r.Row.Attr("durability").Eq(6)).Run(session).Collect(&response)
+//   err := r.Table("heroes").Filter(r.Row.Attr("durability").Eq(6)).Run(session).All(&response)
 //
 // Example with r.Map:
 //
-//   err := r.Table("heroes").Filter(r.Map{"durability": 6}).Run(session).Collect(&response)
+//   err := r.Table("heroes").Filter(r.Map{"durability": 6}).Run(session).All(&response)
 //
 // Example with function:
 //
 //   filterFunc := func (row r.Exp) r.Exp { return row.Attr("durability").Eq(6) }
-//   err := r.Table("heroes").Filter(filterFunc).Run(session).Collect(&response)
+//   err := r.Table("heroes").Filter(filterFunc).Run(session).All(&response)
 //
 // Example response:
 //
@@ -966,7 +751,7 @@ func (e Exp) ConcatMap(operand interface{}) Exp {
 //    ...
 //  ]
 func (e Exp) Filter(operand interface{}) Exp {
-	return naryBuiltin(filterKind, operand, e)
+	return naryOperator(filterKind, e, funcWrapper(operand, 1))
 }
 
 // Contains returns true if an object has all the given attributes.
@@ -977,61 +762,17 @@ func (e Exp) Filter(operand interface{}) Exp {
 //  r.Expr(hero).Contains("energy", "speed") => true
 //  r.Expr(hero).Contains("energy", "guns") => false
 func (e Exp) Contains(keys ...string) Exp {
-	expr := Expr(true)
-	for _, key := range keys {
-		expr = expr.And(naryBuiltin(hasAttributeKind, key, e))
-	}
-	return expr
+	return naryOperator(containsKind, e, stringsToInterfaces(keys)...)
 }
 
-// Pick takes only the given attributes from an object, discarding all other
-// attributes. See also .Unpick()
-//
-// Example usage:
-//
-//  hero := r.Map{"name": "Iron Man", "energy": 6, "speed": 5}
-//  err := r.Expr(hero).Pick("name", "energy").Run(session).One(&response)
-//
-// Example response:
-//
-//    {
-//      "energy": 6,
-//      "name": "Iron Man"
-//    }
-func (e Exp) Pick(attributes ...string) Exp {
-	return naryBuiltin(pickAttributesKind, attributes, e)
-}
-
-// Unpick removes the given attributes from an object.  See also .Pick()
-//
-// Example usage:
-//
-//  hero := r.Map{"name": "Iron Man", "energy": 6, "speed": 5}
-//  err := r.Expr(hero).Unpick("name", "energy").Run(session).One(&response)
-//
-// Example response:
-//
-//    {
-//      "speed": 5,
-//    }
-func (e Exp) Unpick(attributes ...string) Exp {
-	return naryBuiltin(withoutKind, attributes, e)
-}
-
-type rangeArgs struct {
-	attribute  string
-	lowerbound interface{}
-	upperbound interface{}
-}
-
-// Between gets all rows where the given primary key attribute's value falls
-// between the lowerbound and upperbound (inclusive).
+// Between gets all rows where the primary key attribute's value falls between
+// the lowerbound and upperbound (inclusive).
 //
 // Example usage:
 //
 //   var response []interface{}
-//   // Retrieve all heroes with names between "E" and "F"
-//   err := r.Table("heroes").Between("name", "E", "F").Run(session).Collect(&response)
+//   // Retrieve all heroes with names between "E" and "F" ("name" is the primary key)
+//   err := r.Table("heroes").Between("E", "F").Run(session).All(&response)
 //
 // Example response:
 //
@@ -1045,30 +786,8 @@ type rangeArgs struct {
 //    "real_name": "Elektra Natchios",
 //    "speed": 6,
 //  }
-func (e Exp) Between(attribute string, lowerbound, upperbound interface{}) Exp {
-	operand := rangeArgs{
-		attribute:  attribute,
-		lowerbound: lowerbound,
-		upperbound: upperbound,
-	}
-
-	return naryBuiltin(rangeKind, operand, e)
-}
-
-// BetweenIds is the same as .Between() with the primary key attribute name set
-// to "id".
-//
-// Example usage:
-//
-//   var response []interface{}
-//   // Retrieve all heroes with ids between "1" and "2"
-//   err := r.Table("heroes").BetweenIds("1", "2").Run(session).Collect(&response)
-func (e Exp) BetweenIds(lowerbound, upperbound interface{}) Exp {
-	return e.Between("id", lowerbound, upperbound)
-}
-
-type orderByArgs struct {
-	orderings []interface{}
+func (e Exp) Between(lowerbound, upperbound interface{}) Exp {
+	return naryOperator(betweenKind, e, lowerbound, upperbound)
 }
 
 // OrderBy sort the sequence by the values of the given key(s) in each row. The
@@ -1078,23 +797,15 @@ type orderByArgs struct {
 //
 //   var response []interface{}
 //   // Retrieve villains in order of increasing strength
-//   err := r.Table("villains").OrderBy("strength").Run(session).Collect(&response)
+//   err := r.Table("villains").OrderBy("strength").Run(session).All(&response)
 //
 //   // Retrieve villains in order of decreasing strength, then increasing intelligence
 //   query := r.Table("villains").OrderBy(r.Desc("strength"), "intelligence")
-//   err := query.Run(session).Collect(&response)
+//   err := query.Run(session).All(&response)
 func (e Exp) OrderBy(orderings ...interface{}) Exp {
 	// These are not required to be strings because they could also be
 	// orderByAttr structs which specify the direction of sorting
-	operand := orderByArgs{
-		orderings: orderings,
-	}
-	return naryBuiltin(orderByKind, operand, e)
-}
-
-type orderByAttr struct {
-	attr      string
-	ascending bool
+	return naryOperator(orderByKind, e, orderings...)
 }
 
 // Asc tells OrderBy to sort a particular attribute in ascending order.  This is
@@ -1104,9 +815,9 @@ type orderByAttr struct {
 //
 //   var response []interface{}
 //   // Retrieve villains in order of increasing fighting ability (worst fighters first)
-//   err := r.Table("villains").OrderBy(r.Asc("fighting")).Run(session).Collect(&response)
-func Asc(attr string) orderByAttr {
-	return orderByAttr{attr, true}
+//   err := r.Table("villains").OrderBy(r.Asc("fighting")).Run(session).All(&response)
+func Asc(attr string) Exp {
+	return naryOperator(ascendingKind, attr)
 }
 
 // Desc tells OrderBy to sort a particular attribute in descending order.
@@ -1115,31 +826,20 @@ func Asc(attr string) orderByAttr {
 //
 //   var response []interface{}
 //   // Retrieve villains in order of decreasing speed (fastest villains first)
-//   err := r.Table("villains").OrderBy(r.Desc("speed")).Run(session).Collect(&response)
-func Desc(attr string) orderByAttr {
-	return orderByAttr{attr, false}
-}
-
-type reduceArgs struct {
-	base      interface{}
-	reduction interface{}
+//   err := r.Table("villains").OrderBy(r.Desc("speed")).Run(session).All(&response)
+func Desc(attr string) Exp {
+	return naryOperator(descendingKind, attr)
 }
 
 // Reduce iterates over a sequence, starting with a base value and applying a
 // reduction function to the value so far and the next row of the sequence.
-//
-// Currently, the reduction function must satisfy the constraint:
-//
-//  reduction(base, value) == value
-//
-// This restriction may be removed in a future version of RethinkDB.
 //
 // Example usage:
 //
 //  var sum int
 //  // Add the numbers 1-4 together
 //  reduction := func(acc, val r.Exp) r.Exp { return acc.Add(val) }
-//  err := r.Expr(1,2,3,4).Reduce(0, reduction).Run(session).One(&sum)
+//  err := r.Expr(1,2,3,4).Reduce(reduction, 0).Run(session).One(&sum)
 //
 // Example response:
 //
@@ -1152,24 +852,13 @@ type reduceArgs struct {
 //  // be the same, so we extract the speed first with a .Map()
 //  mapping := func(row r.Exp) r.Exp { return row.Attr("speed") }
 //  reduction := func(acc, val r.Exp) r.Exp { return acc.Add(val) }
-//  err := r.Table("heroes").Map(mapping).Reduce(0, reduction).Run(session).One(&totalSpeed)
+//  err := r.Table("heroes").Map(mapping).Reduce(reduction, 0).Run(session).One(&totalSpeed)
 //
 // Example response:
 //
 //  232
-func (e Exp) Reduce(base, reduction interface{}) Exp {
-	operand := reduceArgs{
-		base:      base,
-		reduction: reduction,
-	}
-	return naryBuiltin(reduceKind, operand, e)
-}
-
-type groupedMapReduceArgs struct {
-	grouping  interface{}
-	mapping   interface{}
-	base      interface{}
-	reduction interface{}
+func (e Exp) Reduce(reduction, base interface{}) Exp {
+	return naryOperator(reduceKind, e, funcWrapper(reduction, 2), base)
 }
 
 // GroupedMapReduce partitions a sequence into groups, then performs a map and a
@@ -1186,7 +875,7 @@ type groupedMapReduceArgs struct {
 //  }
 //
 //  var response []interface{}
-//  query := r.Expr(1,2,3,4,5).GroupedMapReduce(grouping, mapping, base, reduction)
+//  query := r.Expr(1,2,3,4,5).GroupedMapReduce(grouping, mapping, reduction, base)
 //  err := query.Run(session).One(&response)
 //
 // Example response:
@@ -1206,14 +895,14 @@ type groupedMapReduceArgs struct {
 //
 //  // Group all heroes by intelligence, then find the fastest one in each group
 //  grouping := func(row r.Exp) r.Exp { return row.Attr("intelligence") }
-//  mapping := func(row r.Exp) r.Exp { return row.Pick("name", "speed") }
+//  mapping := func(row r.Exp) r.Exp { return row.Pluck("name", "speed") }
 //  base := r.Map{"name": nil, "speed": 0}
 //  reduction := func(acc, row r.Exp) r.Exp {
 //  	return r.Branch(acc.Attr("speed").Lt(row.Attr("speed")), row, acc)
 //  }
 //
 //  var response []interface{}
-//  query := r.Table("heroes").GroupedMapReduce(grouping, mapping, base, reduction)
+//  query := r.Table("heroes").GroupedMapReduce(grouping, mapping, reduction, base)
 //  err := query.Run(session).One(&response)
 //
 // Example response:
@@ -1235,27 +924,21 @@ type groupedMapReduceArgs struct {
 //    },
 //    ...
 //  ]
-func (e Exp) GroupedMapReduce(grouping, mapping, base, reduction interface{}) Exp {
-	operand := groupedMapReduceArgs{
-		grouping:  grouping,
-		mapping:   mapping,
-		base:      base,
-		reduction: reduction,
-	}
-	return naryBuiltin(groupedMapReduceKind, operand, e)
+func (e Exp) GroupedMapReduce(grouping, mapping, reduction, base interface{}) Exp {
+	return naryOperator(groupedMapReduceKind, e, funcWrapper(grouping, 1), funcWrapper(mapping, 1), funcWrapper(reduction, 2), base)
 }
 
 /////////////////////
 // Derived Methods //
 /////////////////////
 
-// Pluck runs .Pick() for each row in the sequence, removing all but the
-// specified attributes from each row. See also .Without().
+// Pluck takes only the given attributes from an object, discarding all others.
+// See also .Without().
 //
 // Example usage:
 //
 //  var heroes []interface{}
-//  err := r.Table("heroes").Pluck("real_name", "id").Run(session).Collect(&heroes)
+//  err := r.Table("heroes").Pluck("real_name", "id").Run(session).All(&heroes)
 //
 // Example response:
 //
@@ -1267,16 +950,15 @@ func (e Exp) GroupedMapReduce(grouping, mapping, base, reduction interface{}) Ex
 //    ...
 //  ]
 func (e Exp) Pluck(attributes ...string) Exp {
-	return e.Map(Row.Pick(attributes...))
+	return naryOperator(pluckKind, e, stringsToInterfaces(attributes)...)
 }
 
-// Without runs .Unpick() for each row in the sequence, removing any specified
-// attributes from each individual row.  See also .Pluck().
+// Without removes the given attributes from an object.  See also .Pluck().
 //
 // Example usage:
 //
 //  var heroes []interface{}
-//  err := r.Table("heroes").Without("real_name", "id").Run(session).Collect(&heroes)
+//  err := r.Table("heroes").Without("real_name", "id").Run(session).All(&heroes)
 //
 // Example response:
 //
@@ -1293,7 +975,7 @@ func (e Exp) Pluck(attributes ...string) Exp {
 //    ...
 //  ]
 func (e Exp) Without(attributes ...string) Exp {
-	return e.Map(Row.Unpick(attributes...))
+	return naryOperator(withoutKind, e, stringsToInterfaces(attributes)...)
 }
 
 // InnerJoin performs an inner join on two sequences, using the provided
@@ -1312,7 +994,7 @@ func (e Exp) Without(attributes ...string) Exp {
 //  compareRows := func (left, right r.Exp) r.Exp {
 //      return left.Attr("id").Eq(right.Attr("villain_id"))
 //  }
-//  err := r.Table("villains").InnerJoin(r.Table("lairs"), compareRows).Run(session).Collect(&response)
+//  err := r.Table("villains").InnerJoin(r.Table("lairs"), compareRows).Run(session).All(&response)
 //
 // Example response:
 //
@@ -1335,15 +1017,8 @@ func (e Exp) Without(attributes ...string) Exp {
 //      }
 //    }
 //  ]
-func (leftExpr Exp) InnerJoin(rightExpr Exp, predicate func(Exp, Exp) Exp) Exp {
-	return leftExpr.ConcatMap(func(left Exp) interface{} {
-		return rightExpr.ConcatMap(func(right Exp) interface{} {
-			return Branch(predicate(left, right),
-				List{Map{"left": left, "right": right}},
-				List{},
-			)
-		})
-	})
+func (leftExpr Exp) InnerJoin(rightExpr Exp, predicate interface{}) Exp {
+	return naryOperator(innerJoinKind, leftExpr, rightExpr, funcWrapper(predicate, 2))
 }
 
 // OuterJoin performs a left outer join on two sequences, using the provided
@@ -1365,7 +1040,7 @@ func (leftExpr Exp) InnerJoin(rightExpr Exp, predicate func(Exp, Exp) Exp) Exp {
 //  compareRows := func (left, right r.Exp) r.Exp {
 //      return left.Attr("id").Eq(right.Attr("villain_id"))
 //  }
-//  err := r.Table("villains").OuterJoin(r.Table("lairs"), compareRows).Run(session).Collect(&response)
+//  err := r.Table("villains").OuterJoin(r.Table("lairs"), compareRows).Run(session).All(&response)
 //
 // Example response:
 //
@@ -1402,21 +1077,8 @@ func (leftExpr Exp) InnerJoin(rightExpr Exp, predicate func(Exp, Exp) Exp) Exp {
 //    }
 //    ...
 //  ]
-func (leftExpr Exp) OuterJoin(rightExpr Exp, predicate func(Exp, Exp) Exp) Exp {
-	return leftExpr.ConcatMap(func(left Exp) interface{} {
-		return Let(Map{"matches": rightExpr.ConcatMap(func(right Exp) Exp {
-			return Branch(
-				predicate(left, right),
-				List{Map{"left": left, "right": right}},
-				List{},
-			)
-		}).StreamToArray()},
-			Branch(
-				LetVar("matches").Count().Gt(0),
-				LetVar("matches"),
-				List{Map{"left": left}},
-			))
-	})
+func (leftExpr Exp) OuterJoin(rightExpr Exp, predicate interface{}) Exp {
+	return naryOperator(outerJoinKind, leftExpr, rightExpr, funcWrapper(predicate, 2))
 }
 
 // EqJoin performs a join on two expressions, it is more efficient than
@@ -1428,8 +1090,8 @@ func (leftExpr Exp) OuterJoin(rightExpr Exp, predicate func(Exp, Exp) Exp) Exp {
 //  var response []interface{}
 //  // Get each hero and their associated lair, in this case, "villain_id" is
 //  // the primary key for the "lairs" table
-//  query := r.Table("villains").EqJoin("id", r.Table("lairs"), "villain_id")
-//  err := query.Run(session).Collect(&response)
+//  query := r.Table("villains").EqJoin("id", r.Table("lairs"))
+//  err := query.Run(session).All(&response)
 //
 // Example response:
 //
@@ -1453,14 +1115,8 @@ func (leftExpr Exp) OuterJoin(rightExpr Exp, predicate func(Exp, Exp) Exp) Exp {
 //    },
 //    ...
 //  ]
-func (leftExpr Exp) EqJoin(leftAttribute string, rightExpr Exp, rightAttribute string) Exp {
-	return leftExpr.ConcatMap(func(left Exp) interface{} {
-		return Let(Map{"right": rightExpr.Get(left.Attr(leftAttribute), rightAttribute)},
-			Branch(LetVar("right").Ne(nil),
-				List{Map{"left": left, "right": LetVar("right")}},
-				List{},
-			))
-	})
+func (leftExpr Exp) EqJoin(leftAttribute string, rightExpr Exp) Exp {
+	return naryOperator(eqJoinKind, leftExpr, leftAttribute, rightExpr)
 }
 
 // Zip flattens the results of a join by merging the "left" and "right" fields
@@ -1475,7 +1131,7 @@ func (leftExpr Exp) EqJoin(leftAttribute string, rightExpr Exp, rightAttribute s
 //      return hero.Attr("strength").Eq(villain.Attr("strength"))
 //  }
 //  query := r.Table("heroes").InnerJoin(r.Table("villains"), equalStrength)
-//  err := query.Run(session).Collect(&response)
+//  err := query.Run(session).All(&response)
 //
 // Example response:
 //
@@ -1517,7 +1173,7 @@ func (leftExpr Exp) EqJoin(leftAttribute string, rightExpr Exp, rightAttribute s
 //      return hero.Attr("strength").Eq(villain.Attr("strength"))
 //  }
 //  query := r.Table("heroes").InnerJoin(r.Table("villains"), equalStrength).Zip()
-//  err := query.Run(session).Collect(&response)
+//  err := query.Run(session).All(&response)
 //
 // Example response:
 //
@@ -1536,23 +1192,7 @@ func (leftExpr Exp) EqJoin(leftAttribute string, rightExpr Exp, rightAttribute s
 //    ...
 //  ]
 func (e Exp) Zip() Exp {
-	return e.Map(func(row Exp) interface{} {
-		return Branch(
-			row.Contains("right"),
-			row.Attr("left").Merge(row.Attr("right")),
-			row.Attr("left"),
-		)
-	})
-}
-
-// GroupedMapReduce stores all the expressions needed to perform a .GroupBy()
-// call, there are three pre-made ones: r.Count(), r.Sum(attribute), and
-// r.Avg(attribute).  See the documentation for .GroupBy() for more information.
-type GroupedMapReduce struct {
-	Mapping   interface{}
-	Base      interface{}
-	Reduction interface{}
-	Finalizer interface{}
+	return naryOperator(zipKind, e)
 }
 
 // Count counts the number of rows in a group, for use with the .GroupBy()
@@ -1577,12 +1217,8 @@ type GroupedMapReduce struct {
 //    },
 //    ...
 //  ]
-func Count() GroupedMapReduce {
-	return GroupedMapReduce{
-		Mapping:   func(row Exp) interface{} { return 1 },
-		Base:      0,
-		Reduction: func(acc, val Exp) interface{} { return acc.Add(val) },
-	}
+func Count() Exp {
+	return Expr(Map{"COUNT": true})
 }
 
 // Sum computes the sum of an attribute for a group, for use with the .GroupBy()
@@ -1609,12 +1245,8 @@ func Count() GroupedMapReduce {
 //    },
 //    ...
 //  ]
-func Sum(attribute string) GroupedMapReduce {
-	return GroupedMapReduce{
-		Mapping:   func(row Exp) interface{} { return row.Attr(attribute) },
-		Base:      0,
-		Reduction: func(acc, val Exp) interface{} { return acc.Add(val) },
-	}
+func Sum(attribute string) Exp {
+	return Expr(Map{"SUM": attribute})
 }
 
 // Avg computes the average value of an attribute for a group, for use with the
@@ -1640,29 +1272,8 @@ func Sum(attribute string) GroupedMapReduce {
 //    },
 //    ...
 //  ]
-func Avg(attribute string) GroupedMapReduce {
-	return GroupedMapReduce{
-		Mapping: func(row Exp) interface{} {
-			return List{row.Attr(attribute), 1}
-		},
-		Base: []int{0, 0},
-		Reduction: func(acc, val Exp) interface{} {
-			return []interface{}{
-				acc.Nth(0).Add(val.Nth(0)),
-				acc.Nth(1).Add(val.Nth(1)),
-			}
-		},
-		Finalizer: func(row Exp) interface{} {
-			return row.Nth(0).Div(row.Nth(1))
-		},
-	}
-}
-
-// Meta Queries
-// Database administration (e.g. database create, table drop, etc)
-
-type createDatabaseQuery struct {
-	name string
+func Avg(attribute string) Exp {
+	return Expr(Map{"AVG": attribute})
 }
 
 // DbCreate creates a database with the supplied name.
@@ -1670,12 +1281,8 @@ type createDatabaseQuery struct {
 // Example usage:
 //
 //  err := r.DbCreate("marvel").Run(session).Exec()
-func DbCreate(name string) MetaQuery {
-	return MetaQuery{query: createDatabaseQuery{name}}
-}
-
-type dropDatabaseQuery struct {
-	name string
+func DbCreate(name string) Exp {
+	return naryOperator(databaseCreateKind, name)
 }
 
 // DbDrop deletes the specified database
@@ -1683,28 +1290,22 @@ type dropDatabaseQuery struct {
 // Example usage:
 //
 //  err := r.DbDrop("marvel").Run(session).Exec()
-func DbDrop(name string) MetaQuery {
-	return MetaQuery{query: dropDatabaseQuery{name}}
+func DbDrop(name string) Exp {
+	return naryOperator(databaseDropKind, name)
 }
-
-type listDatabasesQuery struct{}
 
 // DbList lists all databases on the server
 //
 // Example usage:
 //
 //  var databases []string
-//  err := r.DbList().Run(session).Collect(&databases)
+//  err := r.DbList().Run(session).All(&databases)
 //
 // Example response:
 //
 //  ["test", "marvel"]
-func DbList() MetaQuery {
-	return MetaQuery{query: listDatabasesQuery{}}
-}
-
-type database struct {
-	name string
+func DbList() Exp {
+	return Exp{kind: databaseListKind}
 }
 
 // Db lets you perform operations within a specific database (this will override
@@ -1715,25 +1316,20 @@ type database struct {
 //
 //  var response []interface{}
 //  // this query will use the default database of the last created session
-//  r.Table("test").Run(session).Collect(&response)
+//  r.Table("test").Run(session).All(&response)
 //  // this query will use database "marvel" regardless of what database the session has set
-//  r.Db("marvel").Table("heroes").Run(session).Collect(&response)
-func Db(name string) database {
-	return database{name}
-}
-
-type tableCreateQuery struct {
-	database database
-	spec     TableSpec
+//  r.Db("marvel").Table("heroes").Run(session).All(&response)
+func Db(name string) Exp {
+	return naryOperator(databaseKind, name)
 }
 
 // TableSpec lets you specify the various parameters for a table, then create it
 // with TableCreateSpec().  See that function for documentation.
 type TableSpec struct {
-	Name              string
-	PrimaryKey        string
-	PrimaryDatacenter string
-	CacheSize         int64
+	Name       string
+	PrimaryKey string
+	Datacenter string
+	CacheSize  int64
 }
 
 // TableCreate creates a table with the specified name.
@@ -1741,14 +1337,14 @@ type TableSpec struct {
 // Example usage:
 //
 //  err := r.TableCreate("heroes").Run(session).Exec()
-func TableCreate(name string) MetaQuery {
+func TableCreate(name string) Exp {
 	spec := TableSpec{Name: name}
-	return MetaQuery{query: tableCreateQuery{spec: spec}}
+	return naryOperator(tableCreateKind, spec)
 }
 
-func (db database) TableCreate(name string) MetaQuery {
+func (e Exp) TableCreate(name string) Exp {
 	spec := TableSpec{Name: name}
-	return MetaQuery{query: tableCreateQuery{spec: spec, database: db}}
+	return naryOperator(tableCreateKind, e, spec)
 }
 
 // TableCreateSpec creates a table with the specified attributes.
@@ -1757,16 +1353,12 @@ func (db database) TableCreate(name string) MetaQuery {
 //
 //  spec := TableSpec{Name: "heroes", PrimaryKey: "name"}
 //  err := r.TableCreateSpec(spec).Run(session).Exec()
-func TableCreateSpec(spec TableSpec) MetaQuery {
-	return MetaQuery{query: tableCreateQuery{spec: spec}}
+func TableCreateSpec(spec TableSpec) Exp {
+	return naryOperator(tableCreateKind, spec)
 }
 
-func (db database) TableCreateSpec(spec TableSpec) MetaQuery {
-	return MetaQuery{query: tableCreateQuery{spec: spec, database: db}}
-}
-
-type tableListQuery struct {
-	database database
+func (e Exp) TableCreateSpec(spec TableSpec) Exp {
+	return naryOperator(tableCreateKind, e, spec)
 }
 
 // TableList lists all tables in the database.
@@ -1774,21 +1366,17 @@ type tableListQuery struct {
 // Example usage:
 //
 //  var tables []string
-//  err := r.TableList().Run(session).Collect(&tables)
+//  err := r.TableList().Run(session).All(&tables)
 //
 // Example response:
 //
 //  ["heroes", "villains"]
-func TableList() MetaQuery {
-	return MetaQuery{query: tableListQuery{}}
+func TableList() Exp {
+	return nullaryOperator(tableListKind)
 }
 
-func (db database) TableList() MetaQuery {
-	return MetaQuery{query: tableListQuery{db}}
-}
-
-type tableDropQuery struct {
-	table tableInfo
+func (e Exp) TableList() Exp {
+	return naryOperator(tableListKind, e)
 }
 
 // TableDrop removes a table from the database.
@@ -1796,19 +1384,12 @@ type tableDropQuery struct {
 // Example usage:
 //
 //  err := r.Db("marvel").TableDrop("heroes").Run(session).Exec()
-func TableDrop(name string) MetaQuery {
-	table := tableInfo{name: name}
-	return MetaQuery{query: tableDropQuery{table: table}}
+func TableDrop(name string) Exp {
+	return naryOperator(tableDropKind, name)
 }
 
-func (db database) TableDrop(name string) MetaQuery {
-	table := tableInfo{name: name, database: db}
-	return MetaQuery{query: tableDropQuery{table: table}}
-}
-
-type tableInfo struct {
-	name     string
-	database database
+func (e Exp) TableDrop(name string) Exp {
+	return naryOperator(tableDropKind, e, name)
 }
 
 // Table references all rows in a specific table, using the database that this
@@ -1817,7 +1398,7 @@ type tableInfo struct {
 // Example usage:
 //
 //  var response []map[string]interface{}
-//  err := r.Db("marvel").Table("heroes").Run(session).Collect(&response)
+//  err := r.Db("marvel").Table("heroes").Run(session).All(&response)
 //
 // Example response:
 //
@@ -1836,18 +1417,11 @@ type tableInfo struct {
 //    ...
 //  ]
 func Table(name string) Exp {
-	value := tableInfo{name: name}
-	return Exp{kind: tableKind, value: value}
+	return naryOperator(tableKind, name)
 }
 
-func (db database) Table(name string) Exp {
-	value := tableInfo{name: name, database: db}
-	return Exp{kind: tableKind, value: value}
-}
-
-type insertQuery struct {
-	tableExpr Exp
-	rows      []interface{}
+func (e Exp) Table(name string) Exp {
+	return naryOperator(tableKind, e, name)
 }
 
 // Insert inserts rows into the database.  If no value is specified for the
@@ -1859,12 +1433,8 @@ type insertQuery struct {
 //  var response r.WriteResponse
 //  row := r.Map{"name": "Thing"}
 //  err := r.Table("heroes").Insert(row).Run(session).One(&response)
-func (e Exp) Insert(rows ...interface{}) WriteQuery {
-	// Assume the expression is a table for now, we'll check later in buildProtobuf
-	return WriteQuery{query: insertQuery{
-		tableExpr: e,
-		rows:      rows,
-	}}
+func (e Exp) Insert(rows ...interface{}) Exp {
+	return naryOperator(insertKind, e, rows...)
 }
 
 // Overwrite tells an Insert query to overwrite existing rows instead of
@@ -1875,9 +1445,8 @@ func (e Exp) Insert(rows ...interface{}) WriteQuery {
 //  var response r.WriteResponse
 //  row := r.Map{"name": "Thing"}
 //  err := r.Table("heroes").Insert(row).Overwrite(true).Run(session).One(&response)
-func (q WriteQuery) Overwrite(overwrite bool) WriteQuery {
-	q.overwrite = overwrite
-	return q
+func (e Exp) Overwrite(overwrite bool) Exp {
+	return naryOperator(upsertKind, e, overwrite)
 }
 
 // Atomic changes the required atomic-ness of a query.  By default queries will
@@ -1894,14 +1463,8 @@ func (q WriteQuery) Overwrite(overwrite bool) WriteQuery {
 //  err := r.Table("heroes").GetById(id).Update(replacement).Run(session).One(&response)
 //  // This will work
 //  err := r.Table("heroes").GetById(id).Update(replacement).Atomic(false).Run(session).One(&response)
-func (q WriteQuery) Atomic(atomic bool) WriteQuery {
-	q.nonatomic = !atomic
-	return q
-}
-
-type updateQuery struct {
-	view    Exp
-	mapping interface{}
+func (e Exp) Atomic(atomic bool) Exp {
+	return naryOperator(atomicKind, e, atomic)
 }
 
 // Update updates rows in the database. Accepts a JSON document, a RQL
@@ -1916,16 +1479,8 @@ type updateQuery struct {
 //  err := r.Table("heroes").GetById(id).Update(replacement).Run(session).One(&response)
 //  // Update all rows in the database
 //  err := r.Table("heroes").Update(replacement).Run(session).One(&response)
-func (e Exp) Update(mapping interface{}) WriteQuery {
-	return WriteQuery{query: updateQuery{
-		view:    e,
-		mapping: mapping,
-	}}
-}
-
-type replaceQuery struct {
-	view    Exp
-	mapping interface{}
+func (e Exp) Update(mapping interface{}) Exp {
+	return naryOperator(updateKind, e, funcWrapper(mapping, 1))
 }
 
 // Replace replaces rows in the database. Accepts a JSON document or a RQL
@@ -1943,15 +1498,8 @@ type replaceQuery struct {
 //
 //  // Replace all rows in a table
 //  err := r.Table("heroes").Replace(replacement).Run(session).One(&response)
-func (e Exp) Replace(mapping interface{}) WriteQuery {
-	return WriteQuery{query: replaceQuery{
-		view:    e,
-		mapping: mapping,
-	}}
-}
-
-type deleteQuery struct {
-	view Exp
+func (e Exp) Replace(mapping interface{}) Exp {
+	return naryOperator(replaceKind, e, funcWrapper(mapping, 1))
 }
 
 // Delete removes one or more rows from the database.
@@ -1970,13 +1518,8 @@ type deleteQuery struct {
 //  // Find a row, then delete it
 //  row := r.Map{"real_name": "Peter Benjamin Parker"}
 //  err := r.Table("heroes").Filter(row).Delete().Run(session).One(&response)
-func (e Exp) Delete() WriteQuery {
-	return WriteQuery{query: deleteQuery{view: e}}
-}
-
-type forEachQuery struct {
-	stream    Exp
-	queryFunc func(Exp) Query
+func (e Exp) Delete() Exp {
+	return naryOperator(deleteKind, e)
 }
 
 // ForEach runs a given write query for each row of a sequence.
@@ -1997,6 +1540,57 @@ type forEachQuery struct {
 //  {
 //    "deleted": 2
 //  }
-func (e Exp) ForEach(queryFunc (func(Exp) Query)) WriteQuery {
-	return WriteQuery{query: forEachQuery{stream: e, queryFunc: queryFunc}}
+func (e Exp) ForEach(queryFunc interface{}) Exp {
+	return naryOperator(forEachKind, e, funcWrapper(queryFunc, 1))
+}
+
+// Do evalutes the last argument (a function) using all previous arguments as the arguments to the function.
+//
+// For instance, Do(a, b, c, f) will be run as f(a, b, c).
+//
+// Example usage:
+//
+//  var response interface{}
+//  err := r.Do(1, 2, 3, func(a, b, c r.Exp) interface{} {
+// 	    return r.List{a, b, c}
+//  }).Run(session).One(&response)
+//
+// Example response:
+//
+// [1,2,3]
+func Do(operands ...interface{}) Exp {
+	// last argument is a function
+	f := operands[len(operands)-1]
+	operands = operands[:len(operands)-1]
+	return naryOperator(funcallKind, funcWrapper(f, -1), operands...)
+}
+
+// TypeOf returns the type of the expression.
+//
+// Example usage:
+//
+//  var response string
+//  err := r.Expr(1).TypeOf().Run(session).One(&response)
+//
+// Example response:
+//
+//  "NUMBER"
+func (e Exp) TypeOf() Exp {
+	return naryOperator(typeOfKind, e)
+}
+
+// CoerceTo converts a value of one type to another type.
+//
+// You can convert: a selection, sequence, or object into an ARRAY, an array of pairs into an OBJECT, and any DATUM into a STRING.
+//
+// Example usage:
+//
+//  var response string
+//  err := Expr(1).CoerceTo("string").Run(session).One(&response)
+//
+// Example response:
+//
+//  "1"
+func (e Exp) CoerceTo(typename string) Exp {
+	return naryOperator(coerceToKind, e, typename)
 }

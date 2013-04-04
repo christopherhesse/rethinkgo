@@ -43,9 +43,12 @@
 //
 //      // 'rows' is an iterator that can be used to iterate over the
 //      // results.  If there was an error, it is available in rows.Err()
-//
-//      var row Employee
-//      for rows.Next(&row) {
+//      for rows.Next() {
+//          var row Employee
+//          if err = rows.Scan(&row); err != nil {
+//              fmt.Println("err:", err)
+//              break
+//          }
 //          fmt.Println("row:", row)
 //      }
 //      if err = rows.Err(); err != nil {

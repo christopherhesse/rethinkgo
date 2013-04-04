@@ -1,16 +1,16 @@
 package rethinkgo
 
-// Convert Exp trees and queries into protocol buffer form.
-// Functions in this file will panic on failure, the caller is expected to
-// recover().
+// // Convert Exp trees and queries into protocol buffer form.
+// // Functions in this file will panic on failure, the caller is expected to
+// // recover().
 
 import (
 	"code.google.com/p/goprotobuf/proto"
-	"encoding/json"
 	"fmt"
-	p "github.com/christopherhesse/rethinkgo/query_language"
 	"reflect"
+	p "github.com/christopherhesse/rethinkgo/ql2"
 	"runtime"
+	"sync/atomic"
 )
 
 // context stores some state that is required when converting Expressions to
@@ -18,367 +18,287 @@ import (
 type context struct {
 	databaseName string
 	useOutdated  bool
+	overwrite    bool
+	atomic       bool
 }
 
 // toTerm converts an arbitrary object to a Term, within the context that toTerm
 // was called on.
 func (ctx context) toTerm(o interface{}) *p.Term {
 	e := Expr(o)
-	value := e.value
+
+	var termType p.Term_TermType
+	arguments := e.args
+	options := map[string]interface{}{}
 
 	switch e.kind {
 	case literalKind:
-		return ctx.literalToTerm(value)
+		return ctx.literalToTerm(e.args[0])
 	case variableKind:
-		return &p.Term{
-			Type: p.Term_VAR.Enum(),
-			Var:  proto.String(value.(string)),
-		}
-	case useOutdatedKind:
-		useOutdatedArgs := value.(useOutdatedArgs)
-		ctx.useOutdated = useOutdatedArgs.useOutdated
-		return ctx.toTerm(useOutdatedArgs.expr)
-	case implicitVariableKind:
-		return &p.Term{
-			Type: p.Term_IMPLICIT_VAR.Enum(),
-		}
-	case letKind:
-		letArgs := value.(letArgs)
-
-		return &p.Term{
-			Type: p.Term_LET.Enum(),
-			Let: &p.Term_Let{
-				Binds: ctx.mapToVarTermTuples(letArgs.binds),
-				Expr:  ctx.toTerm(letArgs.expr),
-			},
-		}
-	case ifKind:
-		ifArgs := value.(ifArgs)
-
-		return &p.Term{
-			Type: p.Term_IF.Enum(),
-			If_: &p.Term_If{
-				Test:        ctx.toTerm(ifArgs.test),
-				TrueBranch:  ctx.toTerm(ifArgs.trueBranch),
-				FalseBranch: ctx.toTerm(ifArgs.falseBranch),
-			},
-		}
-	case errorKind:
-		return &p.Term{
-			Type:  p.Term_ERROR.Enum(),
-			Error: proto.String(value.(string)),
-		}
-	case getByKeyKind:
-		getArgs := value.(getArgs)
-		table, ok := getArgs.table.value.(tableInfo)
-		if !ok {
-			panic(".Get() used on something that's not a table")
-		}
-
-		return &p.Term{
-			Type: p.Term_GETBYKEY.Enum(),
-			GetByKey: &p.Term_GetByKey{
-				TableRef: ctx.toTableRef(table),
-				Attrname: proto.String(getArgs.attribute),
-				Key:      ctx.toTerm(getArgs.key),
-			},
-		}
-	case tableKind:
-		table := value.(tableInfo)
-		return &p.Term{
-			Type: p.Term_TABLE.Enum(),
-			Table: &p.Term_Table{
-				TableRef: ctx.toTableRef(table),
-			},
-		}
+		termType = p.Term_VAR
 	case javascriptKind:
-		return &p.Term{
-			Type:       p.Term_JAVASCRIPT.Enum(),
-			Javascript: proto.String(value.(string)),
+		termType = p.Term_JAVASCRIPT
+	case errorKind:
+		termType = p.Term_ERROR
+	case implicitVariableKind:
+		termType = p.Term_IMPLICIT_VAR
+
+	case databaseKind:
+		termType = p.Term_DB
+	case tableKind:
+		termType = p.Term_TABLE
+		// first arg to table must be the database
+		if len(arguments) == 1 {
+			dbExpr := naryOperator(databaseKind, ctx.databaseName)
+			arguments = []interface{}{dbExpr, arguments[0]}
 		}
+		options["use_outdated"] = ctx.useOutdated
+	case getKind:
+		termType = p.Term_GET
+
+	case equalityKind:
+		termType = p.Term_EQ
+	case inequalityKind:
+		termType = p.Term_NE
+	case lessThanKind:
+		termType = p.Term_LT
+	case lessThanOrEqualKind:
+		termType = p.Term_LE
+	case greaterThanKind:
+		termType = p.Term_GT
+	case greaterThanOrEqualKind:
+		termType = p.Term_GE
+
+	case logicalNotKind:
+		termType = p.Term_NOT
+	case addKind:
+		termType = p.Term_ADD
+	case subtractKind:
+		termType = p.Term_SUB
+	case multiplyKind:
+		termType = p.Term_MUL
+	case divideKind:
+		termType = p.Term_DIV
+	case moduloKind:
+		termType = p.Term_MOD
+
+	case appendKind:
+		termType = p.Term_APPEND
+	case sliceKind:
+		termType = p.Term_SLICE
+	case skipKind:
+		termType = p.Term_SKIP
+	case limitKind:
+		termType = p.Term_LIMIT
+
+	case getAttributeKind:
+		termType = p.Term_GETATTR
+	case containsKind:
+		termType = p.Term_CONTAINS
+	case pluckKind:
+		termType = p.Term_PLUCK
+	case withoutKind:
+		termType = p.Term_WITHOUT
+	case mergeKind:
+		termType = p.Term_MERGE
+
+	case betweenKind:
+		termType = p.Term_BETWEEN
+		options["left_bound"] = arguments[1]
+		options["right_bound"] = arguments[2]
+		arguments = arguments[:1]
+	case reduceKind:
+		termType = p.Term_REDUCE
+		options["base"] = arguments[2]
+		arguments = arguments[:2]
+	case mapKind:
+		termType = p.Term_MAP
+	case filterKind:
+		termType = p.Term_FILTER
+	case concatMapKind:
+		termType = p.Term_CONCATMAP
+	case orderByKind:
+		termType = p.Term_ORDERBY
+	case distinctKind:
+		termType = p.Term_DISTINCT
+	case countKind:
+		termType = p.Term_COUNT
+	case unionKind:
+		termType = p.Term_UNION
+	case nthKind:
+		termType = p.Term_NTH
+	case groupedMapReduceKind:
+		termType = p.Term_GROUPED_MAP_REDUCE
+		options["base"] = arguments[4]
+		arguments = arguments[:4]
 	case groupByKind:
-		groupByArgs := value.(groupByArgs)
+		termType = p.Term_GROUPBY
+	case innerJoinKind:
+		termType = p.Term_INNER_JOIN
+	case outerJoinKind:
+		termType = p.Term_OUTER_JOIN
+	case eqJoinKind:
+		termType = p.Term_EQ_JOIN
+	case zipKind:
+		termType = p.Term_ZIP
 
-		grouping := createGrouping(groupByArgs.attribute)
+	case coerceToKind:
+		termType = p.Term_COERCE_TO
+	case typeOfKind:
+		termType = p.Term_TYPEOF
 
-		gmr := groupByArgs.groupedMapReduce
+	case updateKind:
+		termType = p.Term_UPDATE
+		options["non_atomic"] = !ctx.atomic
+	case deleteKind:
+		termType = p.Term_DELETE
+	case replaceKind:
+		termType = p.Term_REPLACE
+		options["non_atomic"] = !ctx.atomic
+	case insertKind:
+		termType = p.Term_INSERT
+		options["upsert"] = ctx.overwrite
 
-		result := groupByArgs.expr.GroupedMapReduce(
-			grouping,
-			gmr.Mapping,
-			gmr.Base,
-			gmr.Reduction,
-		)
+	case databaseCreateKind:
+		termType = p.Term_DB_CREATE
+	case databaseDropKind:
+		termType = p.Term_DB_DROP
+	case databaseListKind:
+		termType = p.Term_DB_LIST
+	case tableCreateKind:
+		termType = p.Term_TABLE_CREATE
+		// last argument is the table spec
+		spec := arguments[len(arguments)-1].(TableSpec)
+		arguments = arguments[:len(arguments)-1]
 
-		finalizer := gmr.Finalizer
-		if finalizer != nil {
-			finalizerFunc := finalizer.(func(Exp) interface{})
-			result = result.Map(func(row Exp) interface{} {
-				result := map[string]interface{}{
-					"reduction": finalizerFunc(row.Attr("reduction")),
-				}
-				return row.Merge(result)
-			})
+		if len(arguments) == 0 {
+			// just spec, need to add database
+			dbExpr := naryOperator(databaseKind, ctx.databaseName)
+			arguments = append(arguments, dbExpr)
 		}
-		return ctx.toTerm(result)
+		arguments = append(arguments, spec.Name)
+
+		if spec.Datacenter != "" {
+			options["datacenter"] = spec.Datacenter
+		}
+		if spec.PrimaryKey != "" {
+			options["primary_key"] = spec.PrimaryKey
+		}
+		if spec.CacheSize != 0 {
+			options["cache_size"] = spec.CacheSize
+		}
+	case tableDropKind:
+		termType = p.Term_TABLE_DROP
+	case tableListKind:
+		termType = p.Term_TABLE_LIST
+
+	case funcallKind:
+		termType = p.Term_FUNCALL
+	case branchKind:
+		termType = p.Term_BRANCH
+	case anyKind:
+		termType = p.Term_ANY
+	case allKind:
+		termType = p.Term_ALL
+	case forEachKind:
+		termType = p.Term_FOREACH
+
+	case funcKind:
+		return ctx.toFuncTerm(arguments[0], arguments[1].(int))
+	case ascendingKind:
+		termType = p.Term_ASC
+	case descendingKind:
+		termType = p.Term_DESC
+
+	// special made-up kind to set options on the query
+	case upsertKind:
+		ctx.overwrite = e.args[1].(bool)
+		return ctx.toTerm(e.args[0])
+	case atomicKind:
+		ctx.atomic = e.args[1].(bool)
+		return ctx.toTerm(e.args[0])
+	case useOutdatedKind:
+		ctx.useOutdated = e.args[1].(bool)
+		return ctx.toTerm(e.args[0])
+	default:
+		panic("invalid term kind")
 	}
 
-	// If we're here, the term must be a kind of builtin
-	builtinArgs := value.(builtinArgs)
+	args := []*p.Term{}
+	for _, arg := range arguments {
+		args = append(args, ctx.toTerm(arg))
+	}
+
+	var optargs []*p.Term_AssocPair
+	for key, value := range options {
+		optarg := &p.Term_AssocPair{
+			Key: proto.String(key),
+			Val: ctx.toTerm(value),
+		}
+		optargs = append(optargs, optarg)
+	}
 
 	return &p.Term{
-		Type: p.Term_CALL.Enum(),
-		Call: &p.Term_Call{
-			Builtin: ctx.toBuiltin(e.kind, builtinArgs.operand),
-			Args:    ctx.sliceToTerms(builtinArgs.args),
-		},
+		Type:    termType.Enum(),
+		Args:    args,
+		Optargs: optargs,
 	}
 }
 
-func createGrouping(attribute interface{}) func(row Exp) interface{} {
-	if attr, ok := attribute.(string); ok {
-		return func(row Exp) interface{} {
-			return row.Attr(attr)
-		}
-	} else if attrs, ok := attribute.([]string); ok {
-		return func(row Exp) interface{} {
-			result := []Exp{}
-			for _, attr := range attrs {
-				result = append(result, row.Attr(attr))
-			}
-			return result
-		}
-	}
-	panic("attribute is neither a string, nor []string")
+var variableCounter int64 = 0
+
+func nextVariableNumber() int64 {
+	return atomic.AddInt64(&variableCounter, 1)
 }
 
-func (ctx context) toBuiltin(kind expressionKind, operand interface{}) *p.Builtin {
-	var t p.Builtin_BuiltinType
+func (ctx context) toFuncTerm(f interface{}, requiredArgs int) *p.Term {
+	if reflect.ValueOf(f).Kind() == reflect.Func {
+		return ctx.compileGoFunc(f, requiredArgs)
+	}
+	e := Expr(f)
+	if e.kind == javascriptKind {
+		return ctx.toTerm(e)
+	}
+	return ctx.compileExpressionFunc(e, requiredArgs)
+}
 
-	switch kind {
-	case addKind:
-		t = p.Builtin_ADD
-	case subtractKind:
-		t = p.Builtin_SUBTRACT
-	case multiplyKind:
-		t = p.Builtin_MULTIPLY
-	case divideKind:
-		t = p.Builtin_DIVIDE
-	case moduloKind:
-		t = p.Builtin_MODULO
-	case logicalAndKind:
-		t = p.Builtin_ALL
-	case logicalOrKind:
-		t = p.Builtin_ANY
-	case logicalNotKind:
-		t = p.Builtin_NOT
-	case arrayToStreamKind:
-		t = p.Builtin_ARRAYTOSTREAM
-	case streamToArrayKind:
-		t = p.Builtin_STREAMTOARRAY
-	case mapMergeKind:
-		t = p.Builtin_MAPMERGE
-	case arrayAppendKind:
-		t = p.Builtin_ARRAYAPPEND
-	case distinctKind:
-		t = p.Builtin_DISTINCT
-	case lengthKind:
-		t = p.Builtin_LENGTH
-	case unionKind:
-		t = p.Builtin_UNION
-	case nthKind:
-		t = p.Builtin_NTH
-	case sliceKind:
-		t = p.Builtin_SLICE
-
-	case getAttributeKind, hasAttributeKind:
-		switch kind {
-		case getAttributeKind:
-			t = p.Builtin_GETATTR
-		case hasAttributeKind:
-			t = p.Builtin_HASATTR
-		}
-
-		return &p.Builtin{
-			Type: t.Enum(),
-			Attr: proto.String(operand.(string)),
-		}
-
-	case pickAttributesKind, withoutKind:
-		switch kind {
-		case pickAttributesKind:
-			t = p.Builtin_PICKATTRS
-		case withoutKind:
-			t = p.Builtin_WITHOUT
-
-		}
-
-		return &p.Builtin{
-			Type:  t.Enum(),
-			Attrs: operand.([]string),
-		}
-
-	case filterKind:
-		var predicate *p.Predicate
-		if reflect.ValueOf(operand).Kind() == reflect.Map {
-			// if we get a map like this, the user actually wants to compare
-			// individual keys in the document to see if it matches the provided
-			// map, build an expression to do that
-			predicate = ctx.mapToPredicate(operand)
-		} else {
-			predicate = ctx.toPredicate(operand)
-		}
-
-		return &p.Builtin{
-			Type: p.Builtin_FILTER.Enum(),
-			Filter: &p.Builtin_Filter{
-				Predicate: predicate,
-			},
-		}
-
-	case orderByKind:
-		orderByArgs := operand.(orderByArgs)
-
-		var orderBys []*p.Builtin_OrderBy
-		for _, ordering := range orderByArgs.orderings {
-			// ascending sort by default
-			ascending := true
-			attr, ok := ordering.(string)
-			if !ok {
-				// check if it's the special value returned by asc or dec
-				d, ok := ordering.(orderByAttr)
-				if !ok {
-					panic("Invalid attribute type for OrderBy")
-				}
-				attr = d.attr
-				ascending = d.ascending
-			}
-
-			orderBy := &p.Builtin_OrderBy{
-				Attr:      proto.String(attr),
-				Ascending: proto.Bool(ascending),
-			}
-			orderBys = append(orderBys, orderBy)
-		}
-
-		return &p.Builtin{
-			Type:    p.Builtin_ORDERBY.Enum(),
-			OrderBy: orderBys,
-		}
-
-	case mapKind, concatMapKind:
-		mapping := ctx.toMapping(operand)
-
-		if kind == mapKind {
-			return &p.Builtin{
-				Type: p.Builtin_MAP.Enum(),
-				Map: &p.Builtin_Map{
-					Mapping: mapping,
-				},
-			}
-		} else { // ConcatMap
-			return &p.Builtin{
-				Type: p.Builtin_CONCATMAP.Enum(),
-				ConcatMap: &p.Builtin_ConcatMap{
-					Mapping: mapping,
-				},
-			}
-		}
-
-	case reduceKind:
-		reduceArgs := operand.(reduceArgs)
-		base := ctx.toTerm(reduceArgs.base)
-
-		return &p.Builtin{
-			Type:   p.Builtin_REDUCE.Enum(),
-			Reduce: ctx.toReduction(reduceArgs.reduction, base),
-		}
-
-	case groupedMapReduceKind:
-		groupedMapreduceArgs := operand.(groupedMapReduceArgs)
-		base := ctx.toTerm(groupedMapreduceArgs.base)
-
-		return &p.Builtin{
-			Type: p.Builtin_GROUPEDMAPREDUCE.Enum(),
-			GroupedMapReduce: &p.Builtin_GroupedMapReduce{
-				GroupMapping: ctx.toMapping(groupedMapreduceArgs.grouping),
-				ValueMapping: ctx.toMapping(groupedMapreduceArgs.mapping),
-				Reduction:    ctx.toReduction(groupedMapreduceArgs.reduction, base),
-			},
-		}
-
-	case rangeKind:
-		rangeArgs := operand.(rangeArgs)
-
-		return &p.Builtin{
-			Type: p.Builtin_RANGE.Enum(),
-			Range: &p.Builtin_Range{
-				Attrname:   proto.String(rangeArgs.attribute),
-				Lowerbound: ctx.toTerm(rangeArgs.lowerbound),
-				Upperbound: ctx.toTerm(rangeArgs.upperbound),
-			},
-		}
-
-	default:
-		return ctx.toComparisonBuiltin(kind)
+func (ctx context) compileExpressionFunc(e Exp, requiredArgs int) *p.Term {
+	// an expression that takes no args, e.g. Row.Attr("name")
+	params := []int64{}
+	for requiredArgs > 0 {
+		params = append(params, nextVariableNumber())
+		requiredArgs--
 	}
 
-	return &p.Builtin{
-		Type: t.Enum(),
+	paramsTerm := ctx.toTerm(params)
+	funcTerm := ctx.toTerm(e)
+
+	return &p.Term{
+		Type: p.Term_FUNC.Enum(),
+		Args: []*p.Term{paramsTerm, funcTerm},
 	}
 }
 
-func (ctx context) toComparisonBuiltin(kind expressionKind) *p.Builtin {
-	var c p.Builtin_Comparison
-
-	switch kind {
-	case equalityKind:
-		c = p.Builtin_EQ
-	case inequalityKind:
-		c = p.Builtin_NE
-	case greaterThanKind:
-		c = p.Builtin_GT
-	case greaterThanOrEqualKind:
-		c = p.Builtin_GE
-	case lessThanKind:
-		c = p.Builtin_LT
-	case lessThanOrEqualKind:
-		c = p.Builtin_LE
-	default:
-		panic("Unknown expression kind")
-	}
-
-	return &p.Builtin{
-		Type:       p.Builtin_COMPARE.Enum(),
-		Comparison: c.Enum(),
-	}
-}
-
-var variableNameCounter = 0
-
-func nextVariableName() string {
-	variableNameCounter++
-	return fmt.Sprintf("arg_%v", variableNameCounter)
-}
-
-func (ctx context) compileGoFunc(f interface{}, requiredArgs int) (params []string, body *p.Term) {
+func (ctx context) compileGoFunc(f interface{}, requiredArgs int) *p.Term {
 	// presumably if we're here, the user has supplied a go func to be
 	// converted to an expression
 	value := reflect.ValueOf(f)
 	valueType := value.Type()
 
-	if valueType.NumIn() != requiredArgs {
+	if requiredArgs != -1 && valueType.NumIn() != requiredArgs {
 		panic("Function expression has incorrect number of arguments")
 	}
 
 	// check input types and generate the variables to pass to the function
 	// the args have generated names because when the function is serialized,
 	// the server can't figure out which variable is which in a closure
+	var params []int64
 	var args []reflect.Value
 	for i := 0; i < valueType.NumIn(); i++ {
-		name := nextVariableName()
-		args = append(args, reflect.ValueOf(LetVar(name)))
-		params = append(params, name)
+		number := nextVariableNumber()
+		e := naryOperator(variableKind, number)
+		args = append(args, reflect.ValueOf(e))
+		params = append(params, number)
 
 		// make sure all input arguments are of type Exp
 		if !valueType.In(i).AssignableTo(reflect.TypeOf(Exp{})) {
@@ -391,101 +311,46 @@ func (ctx context) compileGoFunc(f interface{}, requiredArgs int) (params []stri
 	}
 
 	outValue := value.Call(args)[0]
-	body = ctx.toTerm(outValue.Interface())
-	return
-}
+	paramsTerm := ctx.toTerm(params)
+	funcTerm := ctx.toTerm(outValue.Interface())
 
-func (ctx context) compileExpressionFunc(e Exp, requiredArgs int) (params []string, body *p.Term) {
-	// an expression that takes no args, e.g. Row.Attr("name") or
-	// possibly a Javascript function Js(`row.key`) which does take args
-	body = ctx.toTerm(e)
-	switch requiredArgs {
-	case 0:
-		// do nothing
-	case 1:
-		params = []string{"row"}
-	case 2:
-		params = []string{"acc", "row"}
-	default:
-		panic("This should never happen")
-	}
-	return
-}
-
-func (ctx context) compileFunction(o interface{}, requiredArgs int) ([]string, *p.Term) {
-	e := Expr(o)
-
-	if e.kind == literalKind && reflect.ValueOf(e.value).Kind() == reflect.Func {
-		return ctx.compileGoFunc(e.value, requiredArgs)
-	}
-
-	return ctx.compileExpressionFunc(e, requiredArgs)
-}
-
-func (ctx context) toMapping(o interface{}) *p.Mapping {
-	args, body := ctx.compileFunction(o, 1)
-
-	return &p.Mapping{
-		Arg:  proto.String(args[0]),
-		Body: body,
-	}
-}
-
-func (ctx context) toPredicate(o interface{}) *p.Predicate {
-	args, body := ctx.compileFunction(o, 1)
-
-	return &p.Predicate{
-		Arg:  proto.String(args[0]),
-		Body: body,
-	}
-}
-
-func (ctx context) toReduction(o interface{}, base *p.Term) *p.Reduction {
-	args, body := ctx.compileFunction(o, 2)
-
-	return &p.Reduction{
-		Base: base,
-		Var1: proto.String(args[0]),
-		Var2: proto.String(args[1]),
-		Body: body,
+	return &p.Term{
+		Type: p.Term_FUNC.Enum(),
+		Args: []*p.Term{paramsTerm, funcTerm},
 	}
 }
 
 func (ctx context) literalToTerm(literal interface{}) *p.Term {
 	value := reflect.ValueOf(literal)
+	var datum *p.Datum
 
 	switch value.Kind() {
 	case reflect.Array, reflect.Slice:
-		return &p.Term{
-			Type:  p.Term_ARRAY.Enum(),
-			Array: ctx.sliceToTerms(literal),
+		terms := []*p.Term{}
+		for _, arg := range toArray(literal) {
+			terms = append(terms, ctx.toTerm(arg))
 		}
 
+		return &p.Term{
+			Type: p.Term_MAKE_ARRAY.Enum(),
+			Args: terms,
+		}
 	case reflect.Map:
 		return &p.Term{
-			Type:   p.Term_OBJECT.Enum(),
-			Object: ctx.mapToVarTermTuples(literal),
+			Type:    p.Term_MAKE_OBJ.Enum(),
+			Optargs: ctx.mapToAssocPairs(literal),
 		}
 	}
 
-	// hopefully it's JSONable
-	buf, err := json.Marshal(literal)
+	datum, err := datumMarshal(literal)
 	if err != nil {
-		panic(err.Error())
+		panic(err)
 	}
 
 	return &p.Term{
-		Type:       p.Term_JSON.Enum(),
-		Jsonstring: proto.String(string(buf)),
+		Type:  p.Term_DATUM.Enum(),
+		Datum: datum,
 	}
-}
-
-func (ctx context) sliceToTerms(a interface{}) []*p.Term {
-	terms := []*p.Term{}
-	for _, arg := range toArray(a) {
-		terms = append(terms, ctx.toTerm(arg))
-	}
-	return terms
 }
 
 // toArray and toObject seem overly complicated, like maybe some sort
@@ -521,239 +386,27 @@ func toObject(m interface{}) map[string]interface{} {
 	return object
 }
 
-func (ctx context) mapToPredicate(m interface{}) *p.Predicate {
-	expr := Expr(true)
-	// And all these terms together
+func (ctx context) mapToAssocPairs(m interface{}) (pairs []*p.Term_AssocPair) {
 	for key, value := range toObject(m) {
-		expr = expr.And(Row.Attr(key).Eq(value))
-	}
-
-	return ctx.toPredicate(expr)
-}
-
-func (ctx context) mapToVarTermTuples(m interface{}) []*p.VarTermTuple {
-	var tuples []*p.VarTermTuple
-	for key, value := range toObject(m) {
-		tuple := &p.VarTermTuple{
-			Var:  proto.String(key),
-			Term: ctx.toTerm(value),
+		pair := &p.Term_AssocPair{
+			Key: proto.String(key),
+			Val: ctx.toTerm(value),
 		}
-		tuples = append(tuples, tuple)
+		pairs = append(pairs, pair)
 	}
-	return tuples
+	return pairs
 }
 
-func (ctx context) toTableRef(table tableInfo) *p.TableRef {
-	// Use the context's database name if we didn't specify one
-	databaseName := table.database.name
-	if databaseName == "" {
-		databaseName = ctx.databaseName
-	}
-	return &p.TableRef{
-		TableName:   proto.String(table.name),
-		DbName:      proto.String(databaseName),
-		UseOutdated: proto.Bool(ctx.useOutdated),
-	}
-}
-
-// toProtobuf converts a bare Exp directly to a read query protobuf
 func (e Exp) toProtobuf(ctx context) *p.Query {
 	return &p.Query{
-		Type: p.Query_READ.Enum(),
-		ReadQuery: &p.ReadQuery{
-			Term: ctx.toTerm(e),
-		},
-	}
-}
-
-// toProtobuf converts a complete query to a protobuf
-func (q MetaQuery) toProtobuf(ctx context) *p.Query {
-	var metaQueryProto *p.MetaQuery
-
-	switch v := q.query.(type) {
-	case createDatabaseQuery:
-		metaQueryProto = &p.MetaQuery{
-			Type:   p.MetaQuery_CREATE_DB.Enum(),
-			DbName: proto.String(v.name),
-		}
-
-	case dropDatabaseQuery:
-		metaQueryProto = &p.MetaQuery{
-			Type:   p.MetaQuery_DROP_DB.Enum(),
-			DbName: proto.String(v.name),
-		}
-
-	case listDatabasesQuery:
-		metaQueryProto = &p.MetaQuery{
-			Type: p.MetaQuery_LIST_DBS.Enum(),
-		}
-
-	case tableCreateQuery:
-		table := tableInfo{name: v.spec.Name, database: v.database}
-
-		metaQueryProto = &p.MetaQuery{
-			Type: p.MetaQuery_CREATE_TABLE.Enum(),
-			CreateTable: &p.MetaQuery_CreateTable{
-				PrimaryKey: protoStringOrNil(v.spec.PrimaryKey),
-				Datacenter: protoStringOrNil(v.spec.PrimaryDatacenter),
-				TableRef:   ctx.toTableRef(table),
-				CacheSize:  protoInt64OrNil(v.spec.CacheSize),
-			},
-		}
-
-	case tableListQuery:
-		dbName := v.database.name
-		if dbName == "" {
-			dbName = ctx.databaseName
-		}
-
-		metaQueryProto = &p.MetaQuery{
-			Type:   p.MetaQuery_LIST_TABLES.Enum(),
-			DbName: proto.String(dbName),
-		}
-
-	case tableDropQuery:
-		metaQueryProto = &p.MetaQuery{
-			Type:      p.MetaQuery_DROP_TABLE.Enum(),
-			DropTable: ctx.toTableRef(v.table),
-		}
-	default:
-		panic("Unknown MetaQuery type")
-	}
-
-	return &p.Query{
-		Type:      p.Query_META.Enum(),
-		MetaQuery: metaQueryProto,
-	}
-}
-
-func (q WriteQuery) toProtobuf(ctx context) *p.Query {
-	var writeQueryProto *p.WriteQuery
-
-	switch v := q.query.(type) {
-	case insertQuery:
-		var terms []*p.Term
-		for _, row := range v.rows {
-			terms = append(terms, ctx.toTerm(row))
-		}
-
-		table, ok := v.tableExpr.value.(tableInfo)
-		if !ok {
-			panic("Inserts can only be performed on tables :(")
-		}
-
-		writeQueryProto = &p.WriteQuery{
-			Type: p.WriteQuery_INSERT.Enum(),
-			Insert: &p.WriteQuery_Insert{
-				TableRef:  ctx.toTableRef(table),
-				Terms:     terms,
-				Overwrite: proto.Bool(q.overwrite),
-			},
-		}
-
-	case updateQuery:
-		view := ctx.toTerm(v.view)
-		mapping := ctx.toMapping(v.mapping)
-
-		if view.GetType() == p.Term_GETBYKEY {
-			// this is chained off of a .Get(), do a POINTUPDATE
-			writeQueryProto = &p.WriteQuery{
-				Type: p.WriteQuery_POINTUPDATE.Enum(),
-				PointUpdate: &p.WriteQuery_PointUpdate{
-					TableRef: view.GetByKey.TableRef,
-					Attrname: view.GetByKey.Attrname,
-					Key:      view.GetByKey.Key,
-					Mapping:  mapping,
-				},
-			}
-		} else {
-			writeQueryProto = &p.WriteQuery{
-				Type: p.WriteQuery_UPDATE.Enum(),
-				Update: &p.WriteQuery_Update{
-					View:    view,
-					Mapping: mapping,
-				},
-			}
-		}
-
-	case replaceQuery:
-		view := ctx.toTerm(v.view)
-		mapping := ctx.toMapping(v.mapping)
-
-		if view.GetType() == p.Term_GETBYKEY {
-			writeQueryProto = &p.WriteQuery{
-				Type: p.WriteQuery_POINTMUTATE.Enum(),
-				PointMutate: &p.WriteQuery_PointMutate{
-					TableRef: view.GetByKey.TableRef,
-					Attrname: view.GetByKey.Attrname,
-					Key:      view.GetByKey.Key,
-					Mapping:  mapping,
-				},
-			}
-		} else {
-			writeQueryProto = &p.WriteQuery{
-				Type: p.WriteQuery_MUTATE.Enum(),
-				Mutate: &p.WriteQuery_Mutate{
-					View:    view,
-					Mapping: mapping,
-				},
-			}
-		}
-
-	case deleteQuery:
-		view := ctx.toTerm(v.view)
-
-		if view.GetType() == p.Term_GETBYKEY {
-			writeQueryProto = &p.WriteQuery{
-				Type: p.WriteQuery_POINTDELETE.Enum(),
-				PointDelete: &p.WriteQuery_PointDelete{
-					TableRef: view.GetByKey.TableRef,
-					Attrname: view.GetByKey.Attrname,
-					Key:      view.GetByKey.Key,
-				},
-			}
-		} else {
-			writeQueryProto = &p.WriteQuery{
-				Type: p.WriteQuery_DELETE.Enum(),
-				Delete: &p.WriteQuery_Delete{
-					View: view,
-				},
-			}
-		}
-
-	case forEachQuery:
-		stream := ctx.toTerm(v.stream)
-		name := nextVariableName()
-		generatedQuery := v.queryFunc(LetVar(name))
-		innerQuery := generatedQuery.toProtobuf(ctx)
-
-		if innerQuery.WriteQuery == nil {
-			panic("ForEach query function must generate a write query")
-		}
-
-		writeQueryProto = &p.WriteQuery{
-			Type: p.WriteQuery_FOREACH.Enum(),
-			ForEach: &p.WriteQuery_ForEach{
-				Stream:  stream,
-				Var:     proto.String(name),
-				Queries: []*p.WriteQuery{innerQuery.WriteQuery},
-			},
-		}
-	default:
-		panic("Unknown writequery type")
-	}
-
-	writeQueryProto.Atomic = proto.Bool(!q.nonatomic)
-
-	return &p.Query{
-		Type:       p.Query_WRITE.Enum(),
-		WriteQuery: writeQueryProto,
+		Type:  p.Query_START.Enum(),
+		Query: ctx.toTerm(e),
 	}
 }
 
 // buildProtobuf converts a query to a protobuf and catches any panics raised
 // by the toProtobuf() functions.
-func (ctx context) buildProtobuf(query Query) (queryProto *p.Query, err error) {
+func (ctx context) buildProtobuf(query Exp) (queryProto *p.Query, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			if _, ok := r.(runtime.Error); ok {
@@ -771,15 +424,5 @@ func (ctx context) buildProtobuf(query Query) (queryProto *p.Query, err error) {
 // There is one .Check() method for each query type.
 func (e Exp) Check(s *Session) error {
 	_, err := s.getContext().buildProtobuf(e)
-	return err
-}
-
-func (q MetaQuery) Check(s *Session) error {
-	_, err := s.getContext().buildProtobuf(q)
-	return err
-}
-
-func (q WriteQuery) Check(s *Session) error {
-	_, err := s.getContext().buildProtobuf(q)
 	return err
 }

@@ -2,17 +2,16 @@ package rethinkgo
 
 import (
 	"code.google.com/p/goprotobuf/proto"
-	"encoding/json"
 	"errors"
 	"fmt"
-	p "github.com/christopherhesse/rethinkgo/query_language"
 	"io"
 	"reflect"
+	p "github.com/christopherhesse/rethinkgo/ql2"
 )
 
 // Rows is an interator to move through the rows returned by the database, call
-// rows.Next(&dest) in a loop to scan a row into the variable `dest`, returns
-// false when there is an error or no more rows left.
+// rows.Scan(&dest) in a loop to scan a row into the variable `dest`,
+// rows.Next() returns false when there is an error or no more rows left.
 //
 // There are three methods on the rows object that can be used to avoid
 // iterating in this manner. These three methods correspond to the return types
@@ -27,26 +26,26 @@ import (
 //  var response string
 //  err := r.Table("heroes").Get("Omega Red", "name").Run(session).One(&response)
 //
-// .Collect(&dest) for a list of results:
+// .All(&dest) for a list of results:
 //
 //  var response []string
-//  err := r.Db("marvel").TableList().Run(session).Collect(&response)
+//  err := r.Db("marvel").TableList().Run(session).All(&response)
 //
-// .Collect() may perform multiple network requests to get all of the results of
+// .All() may perform multiple network requests to get all of the results of
 // the query.  Use .Limit() if you only need a certain number.
 //
 // All three of these methods will return errors if used on a query response
 // that does not match the expected type (ErrWrongResponseType).
 type Rows struct {
-	session  *Session
-	conn     *connection
-	closed   bool
-	buffer   []string
-	current  *string
-	complete bool
-	lasterr  error
-	token    int64
-	status   p.Response_StatusCode
+	session      *Session
+	conn         *connection
+	closed       bool
+	buffer       []*p.Datum
+	current      *p.Datum
+	complete     bool
+	lasterr      error
+	token        int64
+	responseType p.Response_ResponseType
 }
 
 // continueQuery creates a query that will cause this query to continue
@@ -55,16 +54,16 @@ func (rows *Rows) continueQuery() error {
 		Type:  p.Query_CONTINUE.Enum(),
 		Token: proto.Int64(rows.token),
 	}
-	buffer, status, err := rows.conn.executeQuery(queryProto, rows.session.timeout)
+	buffer, responseType, err := rows.conn.executeQuery(queryProto, rows.session.timeout)
 	if err != nil {
 		return err
 	}
 
-	switch status {
+	switch responseType {
 	case p.Response_SUCCESS_PARTIAL:
 		// continuation of a stream of rows
 		rows.buffer = buffer
-	case p.Response_SUCCESS_STREAM:
+	case p.Response_SUCCESS_SEQUENCE:
 		// end of a stream of rows, there's no more after this
 		rows.buffer = buffer
 		rows.complete = true
@@ -72,7 +71,7 @@ func (rows *Rows) continueQuery() error {
 		// iterator, if the user closes it again, it won't hurt it
 		rows.Close()
 	default:
-		return fmt.Errorf("rethinkdb: Unexpected status code: %v", status)
+		return fmt.Errorf("rethinkdb: Unexpected response type: %v", responseType)
 	}
 	return nil
 }
@@ -84,14 +83,15 @@ func (rows *Rows) continueQuery() error {
 // Example usage:
 //
 //  rows := r.Table("heroes").Run(session)
-//  var hero interface{}
-//  for rows.Next(&hero) {
+//  for rows.Next() {
+//      var hero interface{}
+//      rows.Scan(&hero)
 //      fmt.Println("hero:", hero)
 //  }
 //  if rows.Err() != nil {
 //      ...
 //  }
-func (rows *Rows) Next(dest interface{}) bool {
+func (rows *Rows) Next() bool {
 	if rows.closed {
 		return false
 	}
@@ -114,12 +114,8 @@ func (rows *Rows) Next(dest interface{}) bool {
 	}
 
 	if len(rows.buffer) > 0 {
-		rows.current = &rows.buffer[0]
+		rows.current = rows.buffer[0]
 		rows.buffer = rows.buffer[1:len(rows.buffer)]
-		err := json.Unmarshal([]byte(*rows.current), dest)
-		if err != nil {
-			rows.lasterr = err
-		}
 	}
 
 	if rows.lasterr == io.EOF {
@@ -128,8 +124,18 @@ func (rows *Rows) Next(dest interface{}) bool {
 	return rows.lasterr == nil
 }
 
+// Scan writes the current row into the provided variable, which must be passed
+// by reference.
+//
+// NOTE: Scan uses json.Unmarshal internally and will not clear the destination
+// before writing the next row.  Make sure to create a new destination or clear
+// it before calling .Scan(&dest).
+func (rows *Rows) Scan(dest interface{}) error {
+	return datumUnmarshal(rows.current, dest)
+}
+
 // Err returns the last error encountered, for example, a network error while
-// contacting the database server, or while parsing JSON.
+// contacting the database server, or while parsing.
 //
 // Example usage:
 //
@@ -143,15 +149,17 @@ func (rows *Rows) Err() error {
 	return rows.lasterr
 }
 
-// Collect gets all results from the iterator into a reference to a slice.  It
+// All gets all results from the iterator into a reference to a slice.  It
 // may perform multiple network requests to the server until it has retrieved
 // all results.
 //
 // Example usage:
 //
 //  var result []interface{}
-//  err := r.Table("heroes").Run(session).Collect(&result)
-func (rows *Rows) Collect(slice interface{}) error {
+//  err := r.Table("heroes").Run(session).All(&result)
+func (rows *Rows) All(slice interface{}) error {
+	defer rows.Close()
+
 	if rows.Err() != nil {
 		return rows.Err()
 	}
@@ -166,7 +174,7 @@ func (rows *Rows) Collect(slice interface{}) error {
 		return errors.New("rethinkdb: A slice type must be provided")
 	}
 
-	if rows.status != p.Response_SUCCESS_PARTIAL && rows.status != p.Response_SUCCESS_STREAM {
+	if rows.responseType != p.Response_SUCCESS_PARTIAL && rows.responseType != p.Response_SUCCESS_SEQUENCE {
 		return ErrWrongResponseType{}
 	}
 
@@ -175,9 +183,9 @@ func (rows *Rows) Collect(slice interface{}) error {
 	// create a new element of the kind that the slice holds so we can scan
 	// into it
 	elemValue := reflect.New(sliceValue.Type().Elem())
-	for rows.Next(elemValue.Interface()) {
-		if rows.Err() != nil {
-			return rows.Err()
+	for rows.Next() {
+		if err := rows.Scan(elemValue.Interface()); err != nil {
+			return err
 		}
 		newSliceValue = reflect.Append(newSliceValue, elemValue.Elem())
 	}
@@ -197,11 +205,13 @@ func (rows *Rows) Collect(slice interface{}) error {
 //  var result interface{}
 //  err := r.Table("villains").Get("Galactus", "name").Run(session).One(&result)
 func (rows *Rows) One(row interface{}) error {
+	defer rows.Close()
+
 	if rows.Err() != nil {
 		return rows.Err()
 	}
 
-	if rows.status != p.Response_SUCCESS_JSON {
+	if rows.responseType != p.Response_SUCCESS_ATOM {
 		return ErrWrongResponseType{}
 	}
 
@@ -209,27 +219,25 @@ func (rows *Rows) One(row interface{}) error {
 		return ErrNoSuchRow{}
 	}
 
-	rows.Next(row)
-
-	rows.Close()
+	rows.Next()
+	if err := rows.Scan(row); err != nil {
+		return err
+	}
 
 	return rows.Err()
 }
 
-// Exec is for queries that return no result.  For instance, creating a table.
+// Exec is for queries for which you wish to ignore the result.  For instance,
+// creating a table.
 //
 // Example usage:
 //
 //  err := r.TableCreate("villains").Run(session).Exec()
 func (rows *Rows) Exec() error {
+	defer rows.Close()
+
 	if rows.Err() != nil {
 		return rows.Err()
-	}
-
-	rows.Close()
-
-	if rows.status != p.Response_SUCCESS_EMPTY {
-		return ErrWrongResponseType{}
 	}
 
 	return nil
@@ -237,7 +245,7 @@ func (rows *Rows) Exec() error {
 
 // Close frees up the connection associated with this iterator, if any.  Just
 // use defer rows.Close() after retrieving a Rows iterator.  Not required with
-// .Exec(), .One(), or .Collect().
+// .Exec(), .One(), or .All().
 //
 // Only stream responses will have an associated connection.
 //
@@ -246,8 +254,9 @@ func (rows *Rows) Exec() error {
 //  rows := r.Table("villains").Run(session)
 //  defer rows.Close()
 //
-//  var result interface{}
-//  for rows.Next(&result) {
+//  for rows.Next() {
+//      var result interface{}
+//      rows.Scan(&result)
 //      fmt.Println("result:", result)
 //  }
 func (rows *Rows) Close() (err error) {

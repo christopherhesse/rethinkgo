@@ -5,8 +5,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	p "github.com/christopherhesse/rethinkgo/query_language"
 	"net"
+	p "github.com/christopherhesse/rethinkgo/ql2"
 	"time"
 )
 
@@ -20,15 +20,13 @@ type connection struct {
 
 var debugMode bool = false
 
-const clientHello uint32 = 0xaf61ba35
-
 func serverConnect(address string) (*connection, error) {
 	conn, err := net.Dial("tcp", address)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := binary.Write(conn, binary.LittleEndian, clientHello); err != nil {
+	if err := binary.Write(conn, binary.LittleEndian, p.VersionDummy_V0_1); err != nil {
 		return nil, err
 	}
 	return &connection{conn}, nil
@@ -125,7 +123,7 @@ func (c *connection) executeQueryProtobuf(protobuf *p.Query) (responseProto *p.R
 // executeQuery is an internal function, shared by Rows iterator and the normal
 // Run() call. Runs a protocol buffer formatted query, returns a list of strings
 // and a status code.
-func (c *connection) executeQuery(queryProto *p.Query, timeout time.Duration) (result []string, status p.Response_StatusCode, err error) {
+func (c *connection) executeQuery(queryProto *p.Query, timeout time.Duration) (result []*p.Datum, responseType p.Response_ResponseType, err error) {
 	if debugMode {
 		fmt.Printf("rethinkdb: queryProto:\n%v", protobufToString(queryProto, 1))
 	}
@@ -151,22 +149,21 @@ func (c *connection) executeQuery(queryProto *p.Query, timeout time.Duration) (r
 		fmt.Printf("rethinkdb: responseProto:\n%v", protobufToString(r, 1))
 	}
 
-	status = r.GetStatusCode()
-	switch status {
-	case p.Response_SUCCESS_JSON, p.Response_SUCCESS_STREAM, p.Response_SUCCESS_PARTIAL, p.Response_SUCCESS_EMPTY:
-		// response is []string, and is empty in the case of SUCCESS_EMPTY
+	responseType = r.GetType()
+	switch responseType {
+	case p.Response_SUCCESS_ATOM, p.Response_SUCCESS_SEQUENCE, p.Response_SUCCESS_PARTIAL:
 		result = r.Response
 	default:
 		// some sort of error
-		switch status {
+		switch responseType {
+		case p.Response_CLIENT_ERROR:
+			err = ErrBrokenClient{response: r}
+		case p.Response_COMPILE_ERROR:
+			err = ErrBadQuery{response: r}
 		case p.Response_RUNTIME_ERROR:
 			err = ErrRuntime{response: r}
-		case p.Response_BAD_QUERY:
-			err = ErrBadQuery{response: r}
-		case p.Response_BROKEN_CLIENT:
-			err = ErrBrokenClient{response: r}
 		default:
-			err = fmt.Errorf("rethinkdb: Unexpected status code from server: %v", status)
+			err = fmt.Errorf("rethinkdb: Unexpected response type from server: %v", responseType)
 		}
 	}
 	return
