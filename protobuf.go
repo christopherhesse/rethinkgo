@@ -7,8 +7,8 @@ package rethinkgo
 import (
 	"code.google.com/p/goprotobuf/proto"
 	"fmt"
-	"reflect"
 	p "github.com/christopherhesse/rethinkgo/ql2"
+	"reflect"
 	"runtime"
 	"sync/atomic"
 )
@@ -191,6 +191,10 @@ func (ctx context) toTerm(o interface{}) *p.Term {
 		termType = p.Term_TABLE_DROP
 	case tableListKind:
 		termType = p.Term_TABLE_LIST
+		if len(arguments) == 0 {
+			dbExpr := naryOperator(databaseKind, ctx.databaseName)
+			arguments = append(arguments, dbExpr)
+		}
 
 	case funcallKind:
 		termType = p.Term_FUNCALL
