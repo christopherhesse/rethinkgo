@@ -26,16 +26,26 @@ Example
 
     func main() {
         session, _ := r.Connect("localhost:28015", "test")
-        rows := r.Expr(1, 2, 3).ArrayToStream().Map(r.Row.Mul(2)).Run(session)
+
+        err := r.TableCreate("characters").Run(session).Exec()
+        err = r.Table("characters").Insert(
+            r.List{r.Map{ "name": "Worf", "show": "Star Trek TNG" },
+            r.Map{ "name": "Data", "show": "Star Trek TNG" },
+            r.Map{ "name": "William Adama", "show": "Battlestar Galactica" },
+            r.Map{ "name": "Homer Simpson", "show": "The Simpsons" }},
+        ).Run(session).Exec()
+
+        rows := r.Table("characters").Run(session)
         defer rows.Close()
 
         for rows.Next() {
-            var result int
+            var result map[string]string
             rows.Scan(&result)
             fmt.Println("result:", result)
         }
 
-        if err := rows.Err(); err != nil {
+        err = rows.Err()
+        if err != nil {
             fmt.Println("error:", err)
         }
     }
