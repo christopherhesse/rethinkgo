@@ -6,7 +6,16 @@ import (
 )
 
 func formatError(message string, response *p.Response) string {
-	return fmt.Sprintf("rethinkdb: %v: %v %v", message, response.GetResponse(), getBacktraceFrames(response))
+	datums := response.GetResponse()
+	var responseString string
+	if len(datums) == 1 {
+		datumUnmarshal(datums[0], &responseString)
+	}
+
+	if responseString == "" {
+		responseString = fmt.Sprintf("%v", datums)
+	}
+	return fmt.Sprintf("rethinkdb: %v: %v", message, responseString)
 }
 
 func getBacktraceFrames(response *p.Response) []string {

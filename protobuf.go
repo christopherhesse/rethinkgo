@@ -189,9 +189,15 @@ func (ctx context) toTerm(o interface{}) *p.Term {
 		}
 	case tableDropKind:
 		termType = p.Term_TABLE_DROP
+		if len(arguments) == 1 {
+			// no database specified, use the session database
+			dbExpr := naryOperator(databaseKind, ctx.databaseName)
+			arguments = []interface{}{dbExpr, arguments[0]}
+		}
 	case tableListKind:
 		termType = p.Term_TABLE_LIST
 		if len(arguments) == 0 {
+			// no database specified, use the session database
 			dbExpr := naryOperator(databaseKind, ctx.databaseName)
 			arguments = append(arguments, dbExpr)
 		}
