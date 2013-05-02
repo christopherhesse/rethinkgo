@@ -36,6 +36,16 @@ type Session struct {
 	closed    bool
 }
 
+// SetMaxIdleConnections sets the maximum number of connections that will sit
+// around in the connection pool at a time.
+//
+// Example usage:
+//
+//   SetMaxIdleConnections(100)
+func SetMaxIdleConnections(connections int) {
+	maxIdleConnections = connections
+}
+
 // Connect creates a new database session.
 //
 // Example usage:
