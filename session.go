@@ -11,8 +11,11 @@ import (
 	"time"
 )
 
-// maximum number of connections to a server to keep laying around, should add
-// a function to change this if there is any demand
+// maximum number of connections to a server to keep laying around
+// rethinkgo will do some connection pooling for you and save some connections
+// so that it doesn't have to setup new connections each time
+// if you don't want to use rethinkgo's connection pooling, make a new session
+// for each goroutine
 var maxIdleConnections int = 5
 
 // Session represents a connection to a server, use it to run queries against a
