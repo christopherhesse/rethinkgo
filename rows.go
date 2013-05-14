@@ -174,28 +174,39 @@ func (rows *Rows) All(slice interface{}) error {
 		return errors.New("rethinkdb: A slice type must be provided")
 	}
 
-	if rows.responseType != p.Response_SUCCESS_PARTIAL && rows.responseType != p.Response_SUCCESS_SEQUENCE {
-		return ErrWrongResponseType{}
-	}
-
-	// create a new slice to hold the results
-	newSliceValue := reflect.MakeSlice(sliceValue.Type(), 0, 0)
-	// create a new element of the kind that the slice holds so we can scan
-	// into it
-	elemValue := reflect.New(sliceValue.Type().Elem())
-	for rows.Next() {
-		if err := rows.Scan(elemValue.Interface()); err != nil {
-			return err
+	if rows.responseType == p.Response_SUCCESS_PARTIAL || rows.responseType == p.Response_SUCCESS_SEQUENCE {
+		// create a new slice to hold the results
+		newSliceValue := reflect.MakeSlice(sliceValue.Type(), 0, 0)
+		// create a new element of the kind that the slice holds so we can scan
+		// into it
+		elemValue := reflect.New(sliceValue.Type().Elem())
+		for rows.Next() {
+			if err := rows.Scan(elemValue.Interface()); err != nil {
+				return err
+			}
+			newSliceValue = reflect.Append(newSliceValue, elemValue.Elem())
 		}
-		newSliceValue = reflect.Append(newSliceValue, elemValue.Elem())
-	}
 
-	if rows.Err() != nil {
-		return rows.Err()
-	}
+		if rows.Err() != nil {
+			return rows.Err()
+		}
 
-	sliceValue.Set(newSliceValue)
-	return nil
+		sliceValue.Set(newSliceValue)
+		return nil
+	} else if rows.responseType == p.Response_SUCCESS_ATOM {
+		// if we got a single datum from the server, try to read it into the slice we got
+		if rows.Next() {
+			if err := rows.Scan(slicePointerValue.Interface()); err != nil {
+				return err
+			}
+		}
+
+		if rows.Err() != nil {
+			return rows.Err()
+		}
+		return nil
+	}
+	return ErrWrongResponseType{}
 }
 
 // One gets the first result from a query response.
