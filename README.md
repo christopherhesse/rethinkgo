@@ -8,7 +8,7 @@ Installation
 
     go get -u github.com/christopherhesse/rethinkgo
 
-If you do not have [goprotobuf](https://code.google.com/p/goprotobuf/) runtime installed, it is required:
+If you do not have the [goprotobuf](https://code.google.com/p/goprotobuf/) runtime installed, it is required:
 
     brew install mercurial  # if you do not have mercurial installed
     go get code.google.com/p/goprotobuf/{proto,protoc-gen-go}
