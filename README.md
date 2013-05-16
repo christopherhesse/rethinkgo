@@ -67,7 +67,8 @@ The important types are r.Exp (for RethinkDB expressions), r.Query (interface fo
 The function r.Expr() can take arbitrary structs and uses the "json" module to serialize them.  This means that structs can use the json.Marshaler interface (define a method MarshalJSON() on the struct).  Also, struct fields can also be annotated to specify their JSON equivalents:
 
     type MyStruct struct {
-        MyField int `json:"my_field"`
+        MyField int `json:"my_field"` // (will appear in json as my_field)
+        OtherField int // (will appear in json as OtherField)
     }
 
 See the [json docs](http://golang.org/pkg/encoding/json/) for more information.
