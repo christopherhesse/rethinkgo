@@ -3,6 +3,8 @@ rethinkgo
 
 [Go language](http://golang.org/) driver for [RethinkDB](http://www.rethinkdb.com/) made by [Christopher Hesse](http://www.christopherhesse.com/)
 
+Current supported RethinkDB version: 1.5.1
+
 Installation
 ============
 
@@ -85,7 +87,7 @@ Differences from official RethinkDB drivers
 * No errors are generated when creating queries, only when running them, so Table(string) returns only an Exp instance, but sess.Run(Query).Err() will tell you if your query could not be serialized for the server.  To check just the serialization of the query before calling .Run(*Session), use .Check(*Session)
 * Go does not have optional args, most optional args are either require or separate methods.
     * .Atomic(bool), .Overwrite(bool), .UseOutdated(bool) are methods on any Table() or other Exp (will apply to all tables, inserts, etc that have already been specified)
-    * .TableCreate(string) has a variant called TableCreateSpec(TableSpec) which takes a TableSpec instance specifying the parameters for the table
+    * .TableCreate(string) has a variant called TableCreateWithSpec(TableSpec) which takes a TableSpec instance specifying the parameters for the table
 * There's no r(attributeName) or row[attributeName] function call / item indexing to get attributes of the "current" row or a specific row respectively.  Instead, there is a .Attr() method on the global "Row" object (r.Row) and any row Expressions that can be used to access attributes.  Examples:
 
         r.Table("marvel").OuterJoin(r.Table("dc"),

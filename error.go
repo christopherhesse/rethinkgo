@@ -69,21 +69,6 @@ func (e ErrBrokenClient) Error() string {
 	return formatError("Whoops, looks like there's a bug in this client library, please report it at https://github.com/christopherhesse/rethinkgo/issues/new", e.response)
 }
 
-// ErrNoSuchRow is returned when there is an empty response from the server and
-// .One() is being used.
-//
-// Example usage:
-//
-//  var row interface{}
-//  err := r.Table("heroes").Get("Apocalypse", "name").Run(session).One(&row)
-type ErrNoSuchRow struct {
-	response *p.Response
-}
-
-func (e ErrNoSuchRow) Error() string {
-	return "rethinkdb: No such row found"
-}
-
 // ErrWrongResponseType is returned when .Exec(), .One(). or .All() have
 // been used, but the expected response type does not match the type we got
 // from the server.

@@ -222,8 +222,9 @@ func (s *Session) Run(query Exp) *Rows {
 	buffer, responseType, err := conn.executeQuery(queryProto, s.timeout)
 	if err != nil {
 		// see if we got a timeout error, close the connection if we did, since
-		// the connection may not be idle for quite some time and we don't
-		// want to try multiplexing queries over a rethinkdb connection
+		// the connection may not be idle for quite some time (while the query is
+		// executing) and we don't want to try multiplexing queries over a rethinkdb
+		// connection
 		netErr, ok := err.(net.Error)
 		if ok && netErr.Timeout() {
 			conn.Close()
@@ -237,6 +238,7 @@ func (s *Session) Run(query Exp) *Rows {
 		// if we have a success stream response, the connection needs to be tied to
 		// the iterator, since the iterator can only get more results from the same
 		// connection it was originally started on
+		// in all other cases, return the connection to the pool
 		s.putConn(conn)
 	}
 

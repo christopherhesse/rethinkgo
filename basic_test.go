@@ -68,14 +68,14 @@ func resetDatabase(c *test.C) {
 	err = Db("test").TableCreate("table1").Run(session).Err()
 	c.Assert(err, test.IsNil)
 
-	pair := ExpectPair{tbl.Insert(Map{"id": 0, "num": 20}), Map{"inserted": 1}}
+	pair := ExpectPair{tbl.Insert(Map{"id": 0, "num": 20}), MatchMap{"inserted": 1}}
 	runQuery(c, pair)
 
 	var others []Map
 	for i := 1; i < 10; i++ {
 		others = append(others, Map{"id": i, "num": 20 - i})
 	}
-	pair = ExpectPair{tbl.Insert(others), Map{"inserted": 9}}
+	pair = ExpectPair{tbl.Insert(others), MatchMap{"inserted": 9}}
 	runQuery(c, pair)
 
 	err = Db("test").TableCreate("table2").Run(session).Err()
@@ -85,7 +85,7 @@ func resetDatabase(c *test.C) {
 		Map{"id": 20, "name": "bob"},
 		Map{"id": 19, "name": "tom"},
 		Map{"id": 18, "name": "joe"},
-	}), Map{"inserted": 3}}
+	}), MatchMap{"inserted": 3}}
 	runQuery(c, pair)
 
 	// det
@@ -118,7 +118,7 @@ func resetDatabase(c *test.C) {
 	Db("test").TableCreate("joins2").Run(session)
 	j2.Insert(s2).Run(session)
 	spec := TableSpec{Name: "joins3", PrimaryKey: "it"}
-	Db("test").TableCreateSpec(spec).Run(session)
+	Db("test").TableCreateWithSpec(spec).Run(session)
 	j3.Insert(s3).Run(session)
 }
 
@@ -161,10 +161,10 @@ type MatchMap map[string]interface{}
 type ErrorResponse struct{}
 
 func runQuery(c *test.C, pair ExpectPair) {
-	var result interface{}
 	fmt.Println("query:", pair.query)
+	var result interface{}
 	err := pair.query.Run(session).One(&result)
-	fmt.Printf("result: %v %T\n", result, result)
+	fmt.Printf("result: %v %T %v\n", result, result, err)
 	_, ok := pair.expected.(ErrorResponse)
 	if ok {
 		c.Assert(err, test.NotNil)
@@ -354,8 +354,8 @@ var testGroups = map[string][]ExpectPair{
 		},
 	},
 	"between": {
-		{tbl.Between(2, 3).Count(), 2},
-		{tbl.Between(2, 3).OrderBy("id").Nth(0), Map{"id": 2, "num": 18}},
+		{tbl.Between("id", 2, 3).Count(), 2},
+		{tbl.Between("id", 2, 3).OrderBy("id").Nth(0), Map{"id": 2, "num": 18}},
 	},
 	"groupedmapreduce": {
 		{tbl.GroupedMapReduce(
@@ -412,14 +412,14 @@ var testGroups = map[string][]ExpectPair{
 		}).Update(func(a Exp) Exp {
 			return a.Merge(Map{"replaced": true})
 		}),
-			Map{"replaced": 5},
+			MatchMap{"replaced": 5},
 		},
 		{tbl.Filter(func(row Exp) Exp {
 			return row.Attr("id").Lt(5)
 		}).Update(func(a Exp) Exp {
 			return a.Merge(Map{"replaced": true})
 		}),
-			Map{"replaced": 5},
+			MatchMap{"replaced": 5},
 		},
 		{tbl.Filter(func(row Exp) Exp {
 			return row.Attr("replaced").Eq(true)
@@ -429,7 +429,7 @@ var testGroups = map[string][]ExpectPair{
 		{tbl.Get(0).Update(func(row Exp) Exp {
 			return row.Merge(Map{"pointupdated": true})
 		}),
-			Map{"replaced": 1},
+			MatchMap{"replaced": 1},
 		},
 		{tbl.Get(0).Attr("pointupdated"), true},
 	},
@@ -437,7 +437,7 @@ var testGroups = map[string][]ExpectPair{
 		{tbl.Replace(func(row Exp) Exp {
 			return row.Pluck("id").Merge(Map{"mutated": true})
 		}),
-			Map{"replaced": 10},
+			MatchMap{"replaced": 10},
 		},
 		{tbl.Filter(func(row Exp) Exp {
 			return row.Attr("mutated").Eq(true)
@@ -449,7 +449,7 @@ var testGroups = map[string][]ExpectPair{
 		{tbl.Get(0).Replace(func(row Exp) Exp {
 			return row.Pluck("id").Merge(Map{"pointmutated": true})
 		}),
-			Map{"replaced": 1},
+			MatchMap{"replaced": 1},
 		},
 		{tbl.Get(0).Attr("pointmutated"), true},
 	},
@@ -524,11 +524,12 @@ var testGroups = map[string][]ExpectPair{
 		}, 0),
 			11,
 		},
-		{tbl3.Update(func(row Exp) interface{} {
-			return Map{"x": Js(`x`)}
-		}).Atomic(false),
-			MatchMap{"errors": 10},
-		},
+		// This currently crashes rethinkdb, so disable it for now
+		// {tbl3.Update(func(row Exp) interface{} {
+		// 	return Map{"x": Js(`x`)}
+		// }).Atomic(false),
+		// 	MatchMap{"errors": 10},
+		// },
 		{tbl3.Map(func(a Exp) Exp {
 			return a.Attr("x")
 		}).Reduce(func(a, b Exp) Exp {
@@ -615,7 +616,7 @@ var testGroups = map[string][]ExpectPair{
 	"join": {
 		{j1.InnerJoin(j2, func(one, two Exp) Exp {
 			return one.Attr("id").Eq(two.Attr("id"))
-		}).Zip().OrderBy("id"),
+		}).Zip().OrderBy("id").CoerceTo("array"),
 			List{
 				Map{"id": 0, "name": "bob", "title": "goof"},
 				Map{"id": 2, "name": "joe", "title": "lmoe"},
@@ -623,20 +624,20 @@ var testGroups = map[string][]ExpectPair{
 		},
 		{j1.OuterJoin(j2, func(one, two Exp) Exp {
 			return one.Attr("id").Eq(two.Attr("id"))
-		}).Zip().OrderBy("id"),
+		}).Zip().OrderBy("id").CoerceTo("array"),
 			List{
 				Map{"id": 0, "name": "bob", "title": "goof"},
 				Map{"id": 1, "name": "tom"},
 				Map{"id": 2, "name": "joe", "title": "lmoe"},
 			},
 		},
-		{j1.EqJoin("id", j2).Zip().OrderBy("id"),
+		{j1.EqJoin("id", j2, "id").Zip().OrderBy("id").CoerceTo("array"),
 			List{
 				Map{"id": 0, "name": "bob", "title": "goof"},
 				Map{"id": 2, "name": "joe", "title": "lmoe"},
 			},
 		},
-		{j1.EqJoin("id", j3).Zip().OrderBy("id"),
+		{j1.EqJoin("id", j3, "it").Zip().OrderBy("id").CoerceTo("array"),
 			List{
 				Map{"id": 0, "it": 0, "name": "bob", "title": "goof"},
 				Map{"id": 2, "it": 2, "name": "joe", "title": "lmoe"},

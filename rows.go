@@ -4,7 +4,6 @@ import (
 	"code.google.com/p/goprotobuf/proto"
 	"errors"
 	"fmt"
-	"io"
 	"reflect"
 	p "github.com/christopherhesse/rethinkgo/ql2"
 )
@@ -42,7 +41,7 @@ type Rows struct {
 	closed       bool
 	buffer       []*p.Datum
 	current      *p.Datum
-	complete     bool
+	complete     bool // We have retrieved all the results for a query
 	lasterr      error
 	token        int64
 	responseType p.Response_ResponseType
@@ -67,9 +66,6 @@ func (rows *Rows) continueQuery() error {
 		// end of a stream of rows, there's no more after this
 		rows.buffer = buffer
 		rows.complete = true
-		// since we won't be needing this connection anymore, we can close the
-		// iterator, if the user closes it again, it won't hurt it
-		rows.Close()
 	default:
 		return fmt.Errorf("rethinkdb: Unexpected response type: %v", responseType)
 	}
@@ -102,13 +98,14 @@ func (rows *Rows) Next() bool {
 	if len(rows.buffer) == 0 {
 		// we're out of results, may need to fetch some more
 		if rows.complete {
-			// no more rows left to fetch
-			rows.lasterr = io.EOF
+			rows.Close()
+			return false
 		} else {
 			// more rows to get, fetch 'em
 			err := rows.continueQuery()
 			if err != nil {
 				rows.lasterr = err
+				return false
 			}
 		}
 	}
@@ -118,10 +115,7 @@ func (rows *Rows) Next() bool {
 		rows.buffer = rows.buffer[1:len(rows.buffer)]
 	}
 
-	if rows.lasterr == io.EOF {
-		rows.closed = true
-	}
-	return rows.lasterr == nil
+	return true
 }
 
 // Scan writes the current row into the provided variable, which must be passed
@@ -141,11 +135,6 @@ func (rows *Rows) Scan(dest interface{}) error {
 //
 //  err := r.Table("heroes").Run(session).Err()
 func (rows *Rows) Err() error {
-	if rows.lasterr == io.EOF {
-		// this represents a normal termination of the iterator, so it doesn't really
-		// count as an error
-		return nil
-	}
 	return rows.lasterr
 }
 
@@ -226,10 +215,6 @@ func (rows *Rows) One(row interface{}) error {
 		return ErrWrongResponseType{}
 	}
 
-	if rows.lasterr == io.EOF {
-		return ErrNoSuchRow{}
-	}
-
 	rows.Next()
 	if err := rows.Scan(row); err != nil {
 		return err
@@ -273,7 +258,8 @@ func (rows *Rows) Exec() error {
 func (rows *Rows) Close() (err error) {
 	if !rows.closed {
 		if rows.conn != nil {
-			// if rows.conn is not nil, that means this is a stream response
+			// if rows.conn is not nil, that is, a connection is attached to the rows
+			// object, which means this is a stream response
 
 			// if this Rows iterator was closed before retrieving all results, send a
 			// stop query to the server to discard any remaining results

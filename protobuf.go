@@ -38,6 +38,10 @@ func (ctx context) toTerm(o interface{}) *p.Term {
 		termType = p.Term_VAR
 	case javascriptKind:
 		termType = p.Term_JAVASCRIPT
+		if len(arguments) == 2 {
+			options["timeout"] = arguments[1]
+			arguments = arguments[:1]
+		}
 	case errorKind:
 		termType = p.Term_ERROR
 	case implicitVariableKind:
@@ -104,9 +108,11 @@ func (ctx context) toTerm(o interface{}) *p.Term {
 
 	case betweenKind:
 		termType = p.Term_BETWEEN
-		options["left_bound"] = arguments[1]
-		options["right_bound"] = arguments[2]
-		arguments = arguments[:1]
+		if len(arguments) == 4 {
+			// last argument is an index
+			options["index"] = arguments[3]
+			arguments = arguments[:3]
+		}
 	case reduceKind:
 		termType = p.Term_REDUCE
 		options["base"] = arguments[2]
@@ -139,6 +145,8 @@ func (ctx context) toTerm(o interface{}) *p.Term {
 		termType = p.Term_OUTER_JOIN
 	case eqJoinKind:
 		termType = p.Term_EQ_JOIN
+		options["index"] = arguments[3]
+		arguments = arguments[:3]
 	case zipKind:
 		termType = p.Term_ZIP
 
@@ -146,6 +154,8 @@ func (ctx context) toTerm(o interface{}) *p.Term {
 		termType = p.Term_COERCE_TO
 	case typeOfKind:
 		termType = p.Term_TYPEOF
+	case infoKind:
+		termType = p.Term_INFO
 
 	case updateKind:
 		termType = p.Term_UPDATE
@@ -187,6 +197,9 @@ func (ctx context) toTerm(o interface{}) *p.Term {
 		if spec.CacheSize != 0 {
 			options["cache_size"] = spec.CacheSize
 		}
+		if spec.SoftDurability == true {
+			options["hard_durability"] = false
+		}
 	case tableDropKind:
 		termType = p.Term_TABLE_DROP
 		if len(arguments) == 1 {
@@ -202,6 +215,13 @@ func (ctx context) toTerm(o interface{}) *p.Term {
 			arguments = append(arguments, dbExpr)
 		}
 
+	case indexCreateKind:
+		termType = p.Term_INDEX_CREATE
+	case indexListKind:
+		termType = p.Term_INDEX_LIST
+	case indexDropKind:
+		termType = p.Term_INDEX_DROP
+
 	case funcallKind:
 		termType = p.Term_FUNCALL
 	case branchKind:
@@ -212,6 +232,10 @@ func (ctx context) toTerm(o interface{}) *p.Term {
 		termType = p.Term_ALL
 	case forEachKind:
 		termType = p.Term_FOREACH
+	case getAllKind:
+		termType = p.Term_GET_ALL
+		options["index"] = arguments[2]
+		arguments = arguments[:2]
 
 	case funcKind:
 		return ctx.toFuncTerm(arguments[0], arguments[1].(int))

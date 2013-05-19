@@ -230,6 +230,7 @@ const (
 	Term_DB                 Term_TermType = 14
 	Term_TABLE              Term_TermType = 15
 	Term_GET                Term_TermType = 16
+	Term_GET_ALL            Term_TermType = 78
 	Term_EQ                 Term_TermType = 17
 	Term_NE                 Term_TermType = 18
 	Term_LT                 Term_TermType = 19
@@ -279,6 +280,9 @@ const (
 	Term_TABLE_CREATE       Term_TermType = 60
 	Term_TABLE_DROP         Term_TermType = 61
 	Term_TABLE_LIST         Term_TermType = 62
+	Term_INDEX_CREATE       Term_TermType = 75
+	Term_INDEX_DROP         Term_TermType = 76
+	Term_INDEX_LIST         Term_TermType = 77
 	Term_FUNCALL            Term_TermType = 64
 	Term_BRANCH             Term_TermType = 65
 	Term_ANY                Term_TermType = 66
@@ -287,6 +291,7 @@ const (
 	Term_FUNC               Term_TermType = 69
 	Term_ASC                Term_TermType = 73
 	Term_DESC               Term_TermType = 74
+	Term_INFO               Term_TermType = 79
 )
 
 var Term_TermType_name = map[int32]string{
@@ -300,6 +305,7 @@ var Term_TermType_name = map[int32]string{
 	14: "DB",
 	15: "TABLE",
 	16: "GET",
+	78: "GET_ALL",
 	17: "EQ",
 	18: "NE",
 	19: "LT",
@@ -349,6 +355,9 @@ var Term_TermType_name = map[int32]string{
 	60: "TABLE_CREATE",
 	61: "TABLE_DROP",
 	62: "TABLE_LIST",
+	75: "INDEX_CREATE",
+	76: "INDEX_DROP",
+	77: "INDEX_LIST",
 	64: "FUNCALL",
 	65: "BRANCH",
 	66: "ANY",
@@ -357,6 +366,7 @@ var Term_TermType_name = map[int32]string{
 	69: "FUNC",
 	73: "ASC",
 	74: "DESC",
+	79: "INFO",
 }
 var Term_TermType_value = map[string]int32{
 	"DATUM":              1,
@@ -369,6 +379,7 @@ var Term_TermType_value = map[string]int32{
 	"DB":                 14,
 	"TABLE":              15,
 	"GET":                16,
+	"GET_ALL":            78,
 	"EQ":                 17,
 	"NE":                 18,
 	"LT":                 19,
@@ -418,6 +429,9 @@ var Term_TermType_value = map[string]int32{
 	"TABLE_CREATE":       60,
 	"TABLE_DROP":         61,
 	"TABLE_LIST":         62,
+	"INDEX_CREATE":       75,
+	"INDEX_DROP":         76,
+	"INDEX_LIST":         77,
 	"FUNCALL":            64,
 	"BRANCH":             65,
 	"ANY":                66,
@@ -426,6 +440,7 @@ var Term_TermType_value = map[string]int32{
 	"FUNC":               69,
 	"ASC":                73,
 	"DESC":               74,
+	"INFO":               79,
 }
 
 func (x Term_TermType) Enum() *Term_TermType {
@@ -452,56 +467,56 @@ type VersionDummy struct {
 	XXX_unrecognized []byte `json:"-"`
 }
 
-func (this *VersionDummy) Reset()         { *this = VersionDummy{} }
-func (this *VersionDummy) String() string { return proto.CompactTextString(this) }
-func (*VersionDummy) ProtoMessage()       {}
+func (m *VersionDummy) Reset()         { *m = VersionDummy{} }
+func (m *VersionDummy) String() string { return proto.CompactTextString(m) }
+func (*VersionDummy) ProtoMessage()    {}
 
 type Query struct {
 	Type             *Query_QueryType   `protobuf:"varint,1,opt,name=type,enum=Query_QueryType" json:"type,omitempty"`
 	Query            *Term              `protobuf:"bytes,2,opt,name=query" json:"query,omitempty"`
 	Token            *int64             `protobuf:"varint,3,opt,name=token" json:"token,omitempty"`
-	Noreply          *bool              `protobuf:"varint,4,opt,name=noreply,def=0" json:"noreply,omitempty"`
+	OBSOLETENoreply  *bool              `protobuf:"varint,4,opt,name=OBSOLETE_noreply,def=0" json:"OBSOLETE_noreply,omitempty"`
 	GlobalOptargs    []*Query_AssocPair `protobuf:"bytes,6,rep,name=global_optargs" json:"global_optargs,omitempty"`
 	XXX_unrecognized []byte             `json:"-"`
 }
 
-func (this *Query) Reset()         { *this = Query{} }
-func (this *Query) String() string { return proto.CompactTextString(this) }
-func (*Query) ProtoMessage()       {}
+func (m *Query) Reset()         { *m = Query{} }
+func (m *Query) String() string { return proto.CompactTextString(m) }
+func (*Query) ProtoMessage()    {}
 
-const Default_Query_Noreply bool = false
+const Default_Query_OBSOLETENoreply bool = false
 
-func (this *Query) GetType() Query_QueryType {
-	if this != nil && this.Type != nil {
-		return *this.Type
+func (m *Query) GetType() Query_QueryType {
+	if m != nil && m.Type != nil {
+		return *m.Type
 	}
 	return 0
 }
 
-func (this *Query) GetQuery() *Term {
-	if this != nil {
-		return this.Query
+func (m *Query) GetQuery() *Term {
+	if m != nil {
+		return m.Query
 	}
 	return nil
 }
 
-func (this *Query) GetToken() int64 {
-	if this != nil && this.Token != nil {
-		return *this.Token
+func (m *Query) GetToken() int64 {
+	if m != nil && m.Token != nil {
+		return *m.Token
 	}
 	return 0
 }
 
-func (this *Query) GetNoreply() bool {
-	if this != nil && this.Noreply != nil {
-		return *this.Noreply
+func (m *Query) GetOBSOLETENoreply() bool {
+	if m != nil && m.OBSOLETENoreply != nil {
+		return *m.OBSOLETENoreply
 	}
-	return Default_Query_Noreply
+	return Default_Query_OBSOLETENoreply
 }
 
-func (this *Query) GetGlobalOptargs() []*Query_AssocPair {
-	if this != nil {
-		return this.GlobalOptargs
+func (m *Query) GetGlobalOptargs() []*Query_AssocPair {
+	if m != nil {
+		return m.GlobalOptargs
 	}
 	return nil
 }
@@ -512,20 +527,20 @@ type Query_AssocPair struct {
 	XXX_unrecognized []byte  `json:"-"`
 }
 
-func (this *Query_AssocPair) Reset()         { *this = Query_AssocPair{} }
-func (this *Query_AssocPair) String() string { return proto.CompactTextString(this) }
-func (*Query_AssocPair) ProtoMessage()       {}
+func (m *Query_AssocPair) Reset()         { *m = Query_AssocPair{} }
+func (m *Query_AssocPair) String() string { return proto.CompactTextString(m) }
+func (*Query_AssocPair) ProtoMessage()    {}
 
-func (this *Query_AssocPair) GetKey() string {
-	if this != nil && this.Key != nil {
-		return *this.Key
+func (m *Query_AssocPair) GetKey() string {
+	if m != nil && m.Key != nil {
+		return *m.Key
 	}
 	return ""
 }
 
-func (this *Query_AssocPair) GetVal() *Term {
-	if this != nil {
-		return this.Val
+func (m *Query_AssocPair) GetVal() *Term {
+	if m != nil {
+		return m.Val
 	}
 	return nil
 }
@@ -537,27 +552,27 @@ type Frame struct {
 	XXX_unrecognized []byte           `json:"-"`
 }
 
-func (this *Frame) Reset()         { *this = Frame{} }
-func (this *Frame) String() string { return proto.CompactTextString(this) }
-func (*Frame) ProtoMessage()       {}
+func (m *Frame) Reset()         { *m = Frame{} }
+func (m *Frame) String() string { return proto.CompactTextString(m) }
+func (*Frame) ProtoMessage()    {}
 
-func (this *Frame) GetType() Frame_FrameType {
-	if this != nil && this.Type != nil {
-		return *this.Type
+func (m *Frame) GetType() Frame_FrameType {
+	if m != nil && m.Type != nil {
+		return *m.Type
 	}
 	return 0
 }
 
-func (this *Frame) GetPos() int64 {
-	if this != nil && this.Pos != nil {
-		return *this.Pos
+func (m *Frame) GetPos() int64 {
+	if m != nil && m.Pos != nil {
+		return *m.Pos
 	}
 	return 0
 }
 
-func (this *Frame) GetOpt() string {
-	if this != nil && this.Opt != nil {
-		return *this.Opt
+func (m *Frame) GetOpt() string {
+	if m != nil && m.Opt != nil {
+		return *m.Opt
 	}
 	return ""
 }
@@ -567,13 +582,13 @@ type Backtrace struct {
 	XXX_unrecognized []byte   `json:"-"`
 }
 
-func (this *Backtrace) Reset()         { *this = Backtrace{} }
-func (this *Backtrace) String() string { return proto.CompactTextString(this) }
-func (*Backtrace) ProtoMessage()       {}
+func (m *Backtrace) Reset()         { *m = Backtrace{} }
+func (m *Backtrace) String() string { return proto.CompactTextString(m) }
+func (*Backtrace) ProtoMessage()    {}
 
-func (this *Backtrace) GetFrames() []*Frame {
-	if this != nil {
-		return this.Frames
+func (m *Backtrace) GetFrames() []*Frame {
+	if m != nil {
+		return m.Frames
 	}
 	return nil
 }
@@ -586,34 +601,34 @@ type Response struct {
 	XXX_unrecognized []byte                 `json:"-"`
 }
 
-func (this *Response) Reset()         { *this = Response{} }
-func (this *Response) String() string { return proto.CompactTextString(this) }
-func (*Response) ProtoMessage()       {}
+func (m *Response) Reset()         { *m = Response{} }
+func (m *Response) String() string { return proto.CompactTextString(m) }
+func (*Response) ProtoMessage()    {}
 
-func (this *Response) GetType() Response_ResponseType {
-	if this != nil && this.Type != nil {
-		return *this.Type
+func (m *Response) GetType() Response_ResponseType {
+	if m != nil && m.Type != nil {
+		return *m.Type
 	}
 	return 0
 }
 
-func (this *Response) GetToken() int64 {
-	if this != nil && this.Token != nil {
-		return *this.Token
+func (m *Response) GetToken() int64 {
+	if m != nil && m.Token != nil {
+		return *m.Token
 	}
 	return 0
 }
 
-func (this *Response) GetResponse() []*Datum {
-	if this != nil {
-		return this.Response
+func (m *Response) GetResponse() []*Datum {
+	if m != nil {
+		return m.Response
 	}
 	return nil
 }
 
-func (this *Response) GetBacktrace() *Backtrace {
-	if this != nil {
-		return this.Backtrace
+func (m *Response) GetBacktrace() *Backtrace {
+	if m != nil {
+		return m.Backtrace
 	}
 	return nil
 }
@@ -629,9 +644,9 @@ type Datum struct {
 	XXX_unrecognized []byte                    `json:"-"`
 }
 
-func (this *Datum) Reset()         { *this = Datum{} }
-func (this *Datum) String() string { return proto.CompactTextString(this) }
-func (*Datum) ProtoMessage()       {}
+func (m *Datum) Reset()         { *m = Datum{} }
+func (m *Datum) String() string { return proto.CompactTextString(m) }
+func (*Datum) ProtoMessage()    {}
 
 var extRange_Datum = []proto.ExtensionRange{
 	{10000, 20000},
@@ -640,51 +655,51 @@ var extRange_Datum = []proto.ExtensionRange{
 func (*Datum) ExtensionRangeArray() []proto.ExtensionRange {
 	return extRange_Datum
 }
-func (this *Datum) ExtensionMap() map[int32]proto.Extension {
-	if this.XXX_extensions == nil {
-		this.XXX_extensions = make(map[int32]proto.Extension)
+func (m *Datum) ExtensionMap() map[int32]proto.Extension {
+	if m.XXX_extensions == nil {
+		m.XXX_extensions = make(map[int32]proto.Extension)
 	}
-	return this.XXX_extensions
+	return m.XXX_extensions
 }
 
-func (this *Datum) GetType() Datum_DatumType {
-	if this != nil && this.Type != nil {
-		return *this.Type
+func (m *Datum) GetType() Datum_DatumType {
+	if m != nil && m.Type != nil {
+		return *m.Type
 	}
 	return 0
 }
 
-func (this *Datum) GetRBool() bool {
-	if this != nil && this.RBool != nil {
-		return *this.RBool
+func (m *Datum) GetRBool() bool {
+	if m != nil && m.RBool != nil {
+		return *m.RBool
 	}
 	return false
 }
 
-func (this *Datum) GetRNum() float64 {
-	if this != nil && this.RNum != nil {
-		return *this.RNum
+func (m *Datum) GetRNum() float64 {
+	if m != nil && m.RNum != nil {
+		return *m.RNum
 	}
 	return 0
 }
 
-func (this *Datum) GetRStr() string {
-	if this != nil && this.RStr != nil {
-		return *this.RStr
+func (m *Datum) GetRStr() string {
+	if m != nil && m.RStr != nil {
+		return *m.RStr
 	}
 	return ""
 }
 
-func (this *Datum) GetRArray() []*Datum {
-	if this != nil {
-		return this.RArray
+func (m *Datum) GetRArray() []*Datum {
+	if m != nil {
+		return m.RArray
 	}
 	return nil
 }
 
-func (this *Datum) GetRObject() []*Datum_AssocPair {
-	if this != nil {
-		return this.RObject
+func (m *Datum) GetRObject() []*Datum_AssocPair {
+	if m != nil {
+		return m.RObject
 	}
 	return nil
 }
@@ -695,20 +710,20 @@ type Datum_AssocPair struct {
 	XXX_unrecognized []byte  `json:"-"`
 }
 
-func (this *Datum_AssocPair) Reset()         { *this = Datum_AssocPair{} }
-func (this *Datum_AssocPair) String() string { return proto.CompactTextString(this) }
-func (*Datum_AssocPair) ProtoMessage()       {}
+func (m *Datum_AssocPair) Reset()         { *m = Datum_AssocPair{} }
+func (m *Datum_AssocPair) String() string { return proto.CompactTextString(m) }
+func (*Datum_AssocPair) ProtoMessage()    {}
 
-func (this *Datum_AssocPair) GetKey() string {
-	if this != nil && this.Key != nil {
-		return *this.Key
+func (m *Datum_AssocPair) GetKey() string {
+	if m != nil && m.Key != nil {
+		return *m.Key
 	}
 	return ""
 }
 
-func (this *Datum_AssocPair) GetVal() *Datum {
-	if this != nil {
-		return this.Val
+func (m *Datum_AssocPair) GetVal() *Datum {
+	if m != nil {
+		return m.Val
 	}
 	return nil
 }
@@ -722,9 +737,9 @@ type Term struct {
 	XXX_unrecognized []byte                    `json:"-"`
 }
 
-func (this *Term) Reset()         { *this = Term{} }
-func (this *Term) String() string { return proto.CompactTextString(this) }
-func (*Term) ProtoMessage()       {}
+func (m *Term) Reset()         { *m = Term{} }
+func (m *Term) String() string { return proto.CompactTextString(m) }
+func (*Term) ProtoMessage()    {}
 
 var extRange_Term = []proto.ExtensionRange{
 	{10000, 20000},
@@ -733,37 +748,37 @@ var extRange_Term = []proto.ExtensionRange{
 func (*Term) ExtensionRangeArray() []proto.ExtensionRange {
 	return extRange_Term
 }
-func (this *Term) ExtensionMap() map[int32]proto.Extension {
-	if this.XXX_extensions == nil {
-		this.XXX_extensions = make(map[int32]proto.Extension)
+func (m *Term) ExtensionMap() map[int32]proto.Extension {
+	if m.XXX_extensions == nil {
+		m.XXX_extensions = make(map[int32]proto.Extension)
 	}
-	return this.XXX_extensions
+	return m.XXX_extensions
 }
 
-func (this *Term) GetType() Term_TermType {
-	if this != nil && this.Type != nil {
-		return *this.Type
+func (m *Term) GetType() Term_TermType {
+	if m != nil && m.Type != nil {
+		return *m.Type
 	}
 	return 0
 }
 
-func (this *Term) GetDatum() *Datum {
-	if this != nil {
-		return this.Datum
+func (m *Term) GetDatum() *Datum {
+	if m != nil {
+		return m.Datum
 	}
 	return nil
 }
 
-func (this *Term) GetArgs() []*Term {
-	if this != nil {
-		return this.Args
+func (m *Term) GetArgs() []*Term {
+	if m != nil {
+		return m.Args
 	}
 	return nil
 }
 
-func (this *Term) GetOptargs() []*Term_AssocPair {
-	if this != nil {
-		return this.Optargs
+func (m *Term) GetOptargs() []*Term_AssocPair {
+	if m != nil {
+		return m.Optargs
 	}
 	return nil
 }
@@ -774,20 +789,20 @@ type Term_AssocPair struct {
 	XXX_unrecognized []byte  `json:"-"`
 }
 
-func (this *Term_AssocPair) Reset()         { *this = Term_AssocPair{} }
-func (this *Term_AssocPair) String() string { return proto.CompactTextString(this) }
-func (*Term_AssocPair) ProtoMessage()       {}
+func (m *Term_AssocPair) Reset()         { *m = Term_AssocPair{} }
+func (m *Term_AssocPair) String() string { return proto.CompactTextString(m) }
+func (*Term_AssocPair) ProtoMessage()    {}
 
-func (this *Term_AssocPair) GetKey() string {
-	if this != nil && this.Key != nil {
-		return *this.Key
+func (m *Term_AssocPair) GetKey() string {
+	if m != nil && m.Key != nil {
+		return *m.Key
 	}
 	return ""
 }
 
-func (this *Term_AssocPair) GetVal() *Term {
-	if this != nil {
-		return this.Val
+func (m *Term_AssocPair) GetVal() *Term {
+	if m != nil {
+		return m.Val
 	}
 	return nil
 }

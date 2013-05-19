@@ -67,8 +67,9 @@ const (
 	eqJoinKind
 	zipKind
 
-	coerceToKind
 	typeOfKind
+	infoKind
+	coerceToKind
 
 	updateKind
 	deleteKind
@@ -82,11 +83,16 @@ const (
 	tableDropKind
 	tableListKind
 
+	indexCreateKind
+	indexDropKind
+	indexListKind
+
 	funcallKind
 	branchKind
 	anyKind
 	allKind
 	forEachKind
+	getAllKind
 
 	funcKind
 	ascendingKind
@@ -116,8 +122,8 @@ func stringsToInterfaces(strings []string) []interface{} {
 	return interfaces
 }
 
-func funcWrapper(f interface{}, requiredArgs int) Exp {
-	return naryOperator(funcKind, f, requiredArgs)
+func funcWrapper(f interface{}, arity int) Exp {
+	return naryOperator(funcKind, f, arity)
 }
 
 // Exp represents an RQL expression, such as the return value of
@@ -220,6 +226,8 @@ func Expr(value interface{}) Exp {
 // as a function, it receives two named arguments, 'row' and/or 'acc' (used for
 // reductions).
 //
+// JsWithTimeout lets you specify a timeout for the javascript expression.
+//
 // The value of the 'this' object inside Javascript code is the current row.
 //
 // Example usages:
@@ -251,7 +259,13 @@ func Expr(value interface{}) Exp {
 //
 //  [11, 6, 9, 11, ...]
 func Js(body string) Exp {
-	return Exp{kind: javascriptKind, args: List{body}}
+	return naryOperator(javascriptKind, body)
+}
+
+// JsWithTimeout lets you specify the timeout for a javascript expression to run
+// (in seconds). The default value is 5 seconds.
+func JsWithTimeout(body string, timeout float64) Exp {
+	return naryOperator(javascriptKind, body, timeout)
 }
 
 // RuntimeError tells the server to respond with a ErrRuntime, useful for
@@ -275,8 +289,7 @@ func Branch(test, trueBranch, falseBranch interface{}) Exp {
 	return naryOperator(branchKind, test, trueBranch, falseBranch)
 }
 
-// Get retrieves a single row by primary key (secondary key indexes are not
-// supported yet by RethinkDB).
+// Get retrieves a single row by primary key.
 //
 // Example usage:
 //
@@ -298,6 +311,31 @@ func Branch(test, trueBranch, falseBranch interface{}) Exp {
 //  }
 func (e Exp) Get(key interface{}) Exp {
 	return naryOperator(getKind, e, key)
+}
+
+// GetAll retrieves all documents where the given value matches the requested
+// index.
+//
+// Example usage:
+//
+//  var response []interface{}
+//  err := r.Table("heroes").GetAll("awesomeness", 10).Run(session).All(&response)
+//
+// Example response:
+//
+//  {
+//    "strength": 2,
+//    "name": "Storm",
+//    "durability": 3,
+//    "intelligence": 5,
+//    "energy": 6,
+//    "fighting": 5,
+//    "real_name": "Ororo Munroe",
+//    "speed": 5,
+//    "id": "59d1ad55-a61e-49d9-a375-0fb014b0e6ea"
+//  }
+func (e Exp) GetAll(index string, value interface{}) Exp {
+	return naryOperator(getAllKind, e, value, index)
 }
 
 // GroupBy does a sort of grouped map reduce.  First the server groups all rows
@@ -765,14 +803,16 @@ func (e Exp) Contains(keys ...string) Exp {
 	return naryOperator(containsKind, e, stringsToInterfaces(keys)...)
 }
 
-// Between gets all rows where the primary key attribute's value falls between
-// the lowerbound and upperbound (inclusive).
+// Between gets all rows where the key attribute's value falls between the
+// lowerbound and upperbound (inclusive).  Use nil to represent no upper or
+// lower bound.  Requires an index on the key (primary keys already have an
+// index with the name of the primary key).
 //
 // Example usage:
 //
 //   var response []interface{}
-//   // Retrieve all heroes with names between "E" and "F" ("name" is the primary key)
-//   err := r.Table("heroes").Between("E", "F").Run(session).All(&response)
+//   // Retrieve all heroes with names between "E" and "F"
+//   err := r.Table("heroes").Between("name", "E", "F").Run(session).All(&response)
 //
 // Example response:
 //
@@ -786,8 +826,8 @@ func (e Exp) Contains(keys ...string) Exp {
 //    "real_name": "Elektra Natchios",
 //    "speed": 6,
 //  }
-func (e Exp) Between(lowerbound, upperbound interface{}) Exp {
-	return naryOperator(betweenKind, e, lowerbound, upperbound)
+func (e Exp) Between(index string, lowerbound, upperbound interface{}) Exp {
+	return naryOperator(betweenKind, e, lowerbound, upperbound, index)
 }
 
 // OrderBy sort the sequence by the values of the given key(s) in each row. The
@@ -1088,9 +1128,8 @@ func (leftExpr Exp) OuterJoin(rightExpr Exp, predicate interface{}) Exp {
 // Example usage:
 //
 //  var response []interface{}
-//  // Get each hero and their associated lair, in this case, "villain_id" is
-//  // the primary key for the "lairs" table
-//  query := r.Table("villains").EqJoin("id", r.Table("lairs"))
+//  // Get each hero and their associated lair
+//  query := r.Table("villains").EqJoin("id", r.Table("lairs"), "villain_id")
 //  err := query.Run(session).All(&response)
 //
 // Example response:
@@ -1115,8 +1154,8 @@ func (leftExpr Exp) OuterJoin(rightExpr Exp, predicate interface{}) Exp {
 //    },
 //    ...
 //  ]
-func (leftExpr Exp) EqJoin(leftAttribute string, rightExpr Exp) Exp {
-	return naryOperator(eqJoinKind, leftExpr, leftAttribute, rightExpr)
+func (leftExpr Exp) EqJoin(leftAttribute string, rightExpr Exp, index string) Exp {
+	return naryOperator(eqJoinKind, leftExpr, leftAttribute, rightExpr, index)
 }
 
 // Zip flattens the results of a join by merging the "left" and "right" fields
@@ -1324,12 +1363,13 @@ func Db(name string) Exp {
 }
 
 // TableSpec lets you specify the various parameters for a table, then create it
-// with TableCreateSpec().  See that function for documentation.
+// with TableCreateWithSpec().  See that function for documentation.
 type TableSpec struct {
 	Name       string
 	PrimaryKey string
 	Datacenter string
 	CacheSize  int64
+	SoftDurability bool
 }
 
 // TableCreate creates a table with the specified name.
@@ -1347,17 +1387,17 @@ func (e Exp) TableCreate(name string) Exp {
 	return naryOperator(tableCreateKind, e, spec)
 }
 
-// TableCreateSpec creates a table with the specified attributes.
+// TableCreateWithSpec creates a table with the specified attributes.
 //
 // Example usage:
 //
 //  spec := TableSpec{Name: "heroes", PrimaryKey: "name"}
-//  err := r.TableCreateSpec(spec).Run(session).Exec()
-func TableCreateSpec(spec TableSpec) Exp {
+//  err := r.TableCreateWithSpec(spec).Run(session).Exec()
+func TableCreateWithSpec(spec TableSpec) Exp {
 	return naryOperator(tableCreateKind, spec)
 }
 
-func (e Exp) TableCreateSpec(spec TableSpec) Exp {
+func (e Exp) TableCreateWithSpec(spec TableSpec) Exp {
 	return naryOperator(tableCreateKind, e, spec)
 }
 
@@ -1422,6 +1462,71 @@ func Table(name string) Exp {
 
 func (e Exp) Table(name string) Exp {
 	return naryOperator(tableKind, e, name)
+}
+
+// IndexCreate creates a secondary index on the specified table with the given
+// name.  If the function for the index is nil, the index is created for an attribute
+// with the same name as the index.
+//
+// Example usage:
+//
+//  var response map[string]int
+//  err := r.Table("heroes").IndexCreate("name", nil).Run(session).All(&response)
+//
+// Example response:
+//
+//  {
+//    "created": 1,
+//  }
+//
+// Example usage with function:
+//
+//  var response map[string]int
+//  awesomeness_f := func(hero r.Exp) r.Exp {
+//    return hero.Attr("speed").Mul(hero.Attr("strength"))
+//  }
+//  err := r.Table("heroes").IndexCreate("name", awesomeness_f).Run(session).All(&response)
+//
+// Example response:
+//
+//  {
+//    "created": 1,
+//  }
+func (e Exp) IndexCreate(name string, function interface{}) Exp {
+	if function == nil {
+		return naryOperator(indexCreateKind, e, name)
+	}
+	return naryOperator(indexCreateKind, e, name, funcWrapper(function, 1))
+}
+
+// IndexList lists all secondary indexes on a specified table.
+//
+// Example usage:
+//
+//  var response []string
+//  err := r.Table("heroes").IndexList().Run(session).One(&response)
+//
+// Example response:
+//
+//  ["name", "speed"]
+func (e Exp) IndexList() Exp {
+	return naryOperator(indexListKind, e)
+}
+
+// IndexDrop deletes a secondary index from a table.
+//
+// Example usage:
+//
+//  var response map[string]int
+//  err := r.Table("heroes").IndexDrop("name").Run(session).One(&response)
+//
+// Example response:
+//
+//  {
+//    "dropped": 1,
+//  }
+func (e Exp) IndexDrop(name string) Exp {
+	return naryOperator(indexDropKind, e, name)
 }
 
 // Insert inserts rows into the database.  If no value is specified for the
@@ -1579,6 +1684,20 @@ func (e Exp) TypeOf() Exp {
 	return naryOperator(typeOfKind, e)
 }
 
+// Info returns information about the expression.  Often used on tables.
+//
+// Example usage:
+//
+//  var response string
+//  err := r.Table("heroes").Info().Run(session).One(&response)
+//
+// Example response:
+//
+//  "NUMBER"
+func (e Exp) Info() Exp {
+	return naryOperator(infoKind, e)
+}
+
 // CoerceTo converts a value of one type to another type.
 //
 // You can convert: a selection, sequence, or object into an ARRAY, an array of pairs into an OBJECT, and any DATUM into a STRING.
@@ -1586,7 +1705,7 @@ func (e Exp) TypeOf() Exp {
 // Example usage:
 //
 //  var response string
-//  err := Expr(1).CoerceTo("string").Run(session).One(&response)
+//  err := r.Expr(1).CoerceTo("string").Run(session).One(&response)
 //
 // Example response:
 //
