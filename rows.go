@@ -166,10 +166,10 @@ func (rows *Rows) All(slice interface{}) error {
 	if rows.responseType == p.Response_SUCCESS_PARTIAL || rows.responseType == p.Response_SUCCESS_SEQUENCE {
 		// create a new slice to hold the results
 		newSliceValue := reflect.MakeSlice(sliceValue.Type(), 0, 0)
-		// create a new element of the kind that the slice holds so we can scan
-		// into it
-		elemValue := reflect.New(sliceValue.Type().Elem())
 		for rows.Next() {
+			// create a new element of the kind that the slice holds so we can scan
+			// into it
+			elemValue := reflect.New(sliceValue.Type().Elem())
 			if err := rows.Scan(elemValue.Interface()); err != nil {
 				return err
 			}
