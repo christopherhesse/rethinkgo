@@ -26,32 +26,41 @@ Example
         r "github.com/christopherhesse/rethinkgo"
     )
 
-    func main() {
-        session, _ := r.Connect("localhost:28015", "test")
-
-        err := r.TableCreate("characters").Run(session).Exec()
-        err = r.Table("characters").Insert(
-            r.List{r.Map{ "name": "Worf", "show": "Star Trek TNG" },
-            r.Map{ "name": "Data", "show": "Star Trek TNG" },
-            r.Map{ "name": "William Adama", "show": "Battlestar Galactica" },
-            r.Map{ "name": "Homer Simpson", "show": "The Simpsons" }},
-        ).Run(session).Exec()
-
-        rows := r.Table("characters").Run(session)
-        defer rows.Close()
-
-        for rows.Next() {
-            var result map[string]string
-            rows.Scan(&result)
-            fmt.Println("result:", result)
-        }
-
-        err = rows.Err()
-        if err != nil {
-            fmt.Println("error:", err)
-        }
+    type Employee struct {
+        FirstName string
+        LastName  string
+        Job       string
+        Id        string `json:"id"` // (will appear in json as "id")
     }
 
+    func main() {
+        // To access a RethinkDB database, you connect to it with the Connect function
+        session, err := r.Connect("localhost:28015", "company_info")
+        if err != nil {
+            fmt.Println("error connecting:", err)
+            return
+        }
+
+        // This creates a database session 'session' that may be used to run
+        // queries on the server.  Queries let you read, insert, update, and
+        // delete JSON objects ("rows") on the server, as well as manage tables.
+        query := r.Table("employees")
+        rows := query.Run(session)
+
+        // 'rows' is an iterator that can be used to iterate over the
+        // results.  If there was an error, it is available in rows.Err()
+        for rows.Next() {
+            var row Employee
+            if err = rows.Scan(&row); err != nil {
+                fmt.Println("err:", err)
+                break
+            }
+            fmt.Println("row:", row)
+        }
+        if err = rows.Err(); err != nil {
+            fmt.Println("err:", err)
+        }
+    }
 
 Overview
 ========
@@ -80,7 +89,7 @@ Differences from official RethinkDB drivers
 ===========================================
 
 * When running queries, getting results is a little different from the more dynamic languages.  .Run(*Session) returns a *Rows iterator object with the following methods that put the response into a variable `dest`, here's when you should use the different methods:
-    * You want to iterate through the results of the query individually: rows.Next() and rows.Scan(&dest) (you should defer rows.Close() when using this)
+    * You want to iterate through the results of the query individually: rows.Next() and rows.Scan(&dest)
     * The query always returns a single response: .One(&dest)
     * The query returns a list of responses: .All(&dest)
     * The query returns an empty response: .Exec()

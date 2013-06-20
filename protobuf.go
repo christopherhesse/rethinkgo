@@ -1,8 +1,8 @@
 package rethinkgo
 
-// // Convert Exp trees and queries into protocol buffer form.
-// // Functions in this file will panic on failure, the caller is expected to
-// // recover().
+// Convert Exp trees and queries into protocol buffer form.
+// Functions in this file will panic on failure, the caller is expected to
+// recover().
 
 import (
 	"code.google.com/p/goprotobuf/proto"

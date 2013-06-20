@@ -10,8 +10,7 @@ import (
 	"time"
 )
 
-// connection is a connection to a rethinkdb database, it is not shared between
-// goroutines.
+// connection is a connection to a rethinkdb database
 type connection struct {
 	// embed the net.Conn type, so that we can effectively define new methods on
 	// it (interfaces do not allow that)

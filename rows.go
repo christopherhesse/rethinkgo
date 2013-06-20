@@ -8,7 +8,7 @@ import (
 	p "github.com/christopherhesse/rethinkgo/ql2"
 )
 
-// Rows is an interator to move through the rows returned by the database, call
+// Rows is an iterator to move through the rows returned by the database, call
 // rows.Scan(&dest) in a loop to scan a row into the variable `dest`,
 // rows.Next() returns false when there is an error or no more rows left.
 //
@@ -37,7 +37,6 @@ import (
 // that does not match the expected type (ErrWrongResponseType).
 type Rows struct {
 	session      *Session
-	conn         *connection
 	closed       bool
 	buffer       []*p.Datum
 	current      *p.Datum
@@ -53,7 +52,7 @@ func (rows *Rows) continueQuery() error {
 		Type:  p.Query_CONTINUE.Enum(),
 		Token: proto.Int64(rows.token),
 	}
-	buffer, responseType, err := rows.conn.executeQuery(queryProto, rows.session.timeout)
+	buffer, responseType, err := rows.session.conn.executeQuery(queryProto, rows.session.timeout)
 	if err != nil {
 		return err
 	}
@@ -91,6 +90,7 @@ func (rows *Rows) Next() bool {
 	if rows.closed {
 		return false
 	}
+
 	if rows.lasterr != nil {
 		return false
 	}
@@ -98,7 +98,7 @@ func (rows *Rows) Next() bool {
 	if len(rows.buffer) == 0 {
 		// we're out of results, may need to fetch some more
 		if rows.complete {
-			rows.Close()
+			rows.closed = true
 			return false
 		} else {
 			// more rows to get, fetch 'em
@@ -138,7 +138,7 @@ func (rows *Rows) Err() error {
 	return rows.lasterr
 }
 
-// All gets all results from the iterator into a reference to a slice.  It
+// All fetches all the results from an iterator into a reference to a slice.  It
 // may perform multiple network requests to the server until it has retrieved
 // all results.
 //
@@ -147,8 +147,6 @@ func (rows *Rows) Err() error {
 //  var result []interface{}
 //  err := r.Table("heroes").Run(session).All(&result)
 func (rows *Rows) All(slice interface{}) error {
-	defer rows.Close()
-
 	if rows.Err() != nil {
 		return rows.Err()
 	}
@@ -205,8 +203,6 @@ func (rows *Rows) All(slice interface{}) error {
 //  var result interface{}
 //  err := r.Table("villains").Get("Galactus", "name").Run(session).One(&result)
 func (rows *Rows) One(row interface{}) error {
-	defer rows.Close()
-
 	if rows.Err() != nil {
 		return rows.Err()
 	}
@@ -230,51 +226,9 @@ func (rows *Rows) One(row interface{}) error {
 //
 //  err := r.TableCreate("villains").Run(session).Exec()
 func (rows *Rows) Exec() error {
-	defer rows.Close()
-
 	if rows.Err() != nil {
 		return rows.Err()
 	}
 
 	return nil
-}
-
-// Close frees up the connection associated with this iterator, if any.  Just
-// use defer rows.Close() after retrieving a Rows iterator.  Not required with
-// .Exec(), .One(), or .All().
-//
-// Only stream responses will have an associated connection.
-//
-// Example usage:
-//
-//  rows := r.Table("villains").Run(session)
-//  defer rows.Close()
-//
-//  for rows.Next() {
-//      var result interface{}
-//      rows.Scan(&result)
-//      fmt.Println("result:", result)
-//  }
-func (rows *Rows) Close() (err error) {
-	if !rows.closed {
-		if rows.conn != nil {
-			// if rows.conn is not nil, that is, a connection is attached to the rows
-			// object, which means this is a stream response
-
-			// if this Rows iterator was closed before retrieving all results, send a
-			// stop query to the server to discard any remaining results
-			if !rows.complete {
-				queryProto := &p.Query{
-					Type:  p.Query_STOP.Enum(),
-					Token: proto.Int64(rows.token),
-				}
-				_, _, err = rows.conn.executeQuery(queryProto, rows.session.timeout)
-			}
-
-			// return this connection to the pool
-			rows.session.putConn(rows.conn)
-		}
-		rows.closed = true
-	}
-	return
 }

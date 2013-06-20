@@ -2,25 +2,15 @@ package rethinkgo
 
 import (
 	"code.google.com/p/goprotobuf/proto"
-	"errors"
 	"fmt"
-	"net"
 	p "github.com/christopherhesse/rethinkgo/ql2"
-	"sync"
 	"sync/atomic"
 	"time"
 )
 
-// maximum number of connections to a server to keep laying around
-// rethinkgo will do some connection pooling for you and save some connections
-// so that it doesn't have to setup new connections each time
-// if you don't want to use rethinkgo's connection pooling, make a new session
-// for each goroutine
-var maxIdleConnections int = 5
-
 // Session represents a connection to a server, use it to run queries against a
-// database, with either sess.Run(query) or query.Run(session).  It is safe to
-// use from multiple goroutines.
+// database, with either sess.Run(query) or query.Run(session).  Do not share a
+// session between goroutines, create a new one for each goroutine.
 type Session struct {
 	// current query identifier, just needs to be unique for each query, so we
 	// can match queries with responses, e.g. 4782371
@@ -32,24 +22,13 @@ type Session struct {
 	// maximum duration of a single query
 	timeout time.Duration
 
-	// protects idleConns and closed, because this lock is here, the session
-	// should not be copied according to the "sync" module
-	mutex     sync.Mutex
-	idleConns []*connection
+	conn *connection
 	closed    bool
 }
 
-// SetMaxIdleConnections sets the maximum number of connections that will sit
-// around in the connection pool at a time.
-//
-// Example usage:
-//
-//   SetMaxIdleConnections(100)
-func SetMaxIdleConnections(connections int) {
-	maxIdleConnections = connections
-}
-
 // Connect creates a new database session.
+//
+// NOTE: You probably should not share sessions between goroutines.
 //
 // Example usage:
 //
@@ -67,7 +46,7 @@ func Connect(address, database string) (*Session, error) {
 }
 
 // Reconnect closes and re-opens a session.
-//[
+//
 // Example usage:
 //
 //  err := sess.Reconnect()
@@ -76,20 +55,10 @@ func (s *Session) Reconnect() error {
 		return err
 	}
 
-	s.mutex.Lock()
 	s.closed = false
-	s.mutex.Unlock()
-
-	// create a connection to make sure the server works, then immediately put it
-	// in the idle connection pool
-	conn, err := s.getConn()
-	if err != nil {
-		return err
-	}
-
-	s.putConn(conn)
-
-	return nil
+	var err error
+	s.conn, err = serverConnect(s.address)
+	return err
 }
 
 // Close closes the session, freeing any associated resources.
@@ -98,77 +67,23 @@ func (s *Session) Reconnect() error {
 //
 //  err := sess.Close()
 func (s *Session) Close() error {
-	s.mutex.Lock()
-	defer s.mutex.Unlock()
-
 	if s.closed {
 		return nil
 	}
 
-	var lastError error
-	for _, conn := range s.idleConns {
-		err := conn.Close()
-		if err != nil {
-			lastError = err
-		}
-	}
-	s.idleConns = nil
+	err := s.conn.Close()
 	s.closed = true
 
-	return lastError
+	return err
 }
 
 // SetTimeout causes any future queries that are run on this session to timeout
 // after the given duration, returning a timeout error.  Set to zero to disable.
 //
 // The timeout is global to all queries run on a single Session and does not
-// apply to queries currently in progress.  The timeout does not cover the
-// time taken to connect to the server in the case that there is no idle
-// connection available.
-//
-// If a timeout occurs, the individual connection handling that query will be
-// closed instead of being returned to the connection pool.
+// apply to any query currently in progress.
 func (s *Session) SetTimeout(timeout time.Duration) {
 	s.timeout = timeout
-}
-
-// return a connection from the free connections list if available, otherwise,
-// create a new connection
-func (s *Session) getConn() (*connection, error) {
-	s.mutex.Lock()
-	if s.closed {
-		s.mutex.Unlock()
-		return nil, errors.New("rethinkdb: session is closed")
-	}
-	if n := len(s.idleConns); n > 0 {
-		// grab from end of slice so that underlying array does not need to be
-		// resized when appending idle connections later
-		conn := s.idleConns[n-1]
-		s.idleConns = s.idleConns[:n-1]
-		s.mutex.Unlock()
-		return conn, nil
-	}
-	s.mutex.Unlock()
-
-	conn, err := serverConnect(s.address)
-	if err != nil {
-		return nil, err
-	}
-
-	return conn, nil
-}
-
-// return a connection to the free list, or close it if we already have enough
-func (s *Session) putConn(conn *connection) {
-	s.mutex.Lock()
-	if len(s.idleConns) < maxIdleConnections {
-		s.idleConns = append(s.idleConns, conn)
-		s.mutex.Unlock()
-		return
-	}
-	s.mutex.Unlock()
-
-	conn.Close()
 }
 
 // Use changes the default database for a connection.  This is the database that
@@ -213,33 +128,9 @@ func (s *Session) Run(query Exp) *Rows {
 	}
 
 	queryProto.Token = proto.Int64(s.getToken())
-
-	conn, err := s.getConn()
+	buffer, responseType, err := s.conn.executeQuery(queryProto, s.timeout)
 	if err != nil {
 		return &Rows{lasterr: err}
-	}
-
-	buffer, responseType, err := conn.executeQuery(queryProto, s.timeout)
-	if err != nil {
-		// see if we got a timeout error, close the connection if we did, since
-		// the connection may not be idle for quite some time (while the query is
-		// executing) and we don't want to try multiplexing queries over a rethinkdb
-		// connection
-		netErr, ok := err.(net.Error)
-		if ok && netErr.Timeout() {
-			conn.Close()
-		} else {
-			s.putConn(conn)
-		}
-		return &Rows{lasterr: err}
-	}
-
-	if responseType != p.Response_SUCCESS_PARTIAL {
-		// if we have a success stream response, the connection needs to be tied to
-		// the iterator, since the iterator can only get more results from the same
-		// connection it was originally started on
-		// in all other cases, return the connection to the pool
-		s.putConn(conn)
 	}
 
 	switch responseType {
@@ -253,13 +144,11 @@ func (s *Session) Run(query Exp) *Rows {
 		}
 	case p.Response_SUCCESS_PARTIAL:
 		// beginning of stream of rows, there are more results available from the
-		// server than the ones we just received, so save the connection we used in
+		// server than the ones we just received, so save the session we used in
 		// case the user wants more
 		return &Rows{
 			session:      s,
-			conn:         conn,
 			buffer:       buffer,
-			complete:     false,
 			token:        queryProto.GetToken(),
 			responseType: responseType,
 		}
