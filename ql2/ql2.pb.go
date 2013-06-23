@@ -17,13 +17,16 @@ type VersionDummy_Version int32
 
 const (
 	VersionDummy_V0_1 VersionDummy_Version = 1063369270
+	VersionDummy_V0_2 VersionDummy_Version = 1915781601
 )
 
 var VersionDummy_Version_name = map[int32]string{
 	1063369270: "V0_1",
+	1915781601: "V0_2",
 }
 var VersionDummy_Version_value = map[string]int32{
 	"V0_1": 1063369270,
+	"V0_2": 1915781601,
 }
 
 func (x VersionDummy_Version) Enum() *VersionDummy_Version {
@@ -244,11 +247,21 @@ const (
 	Term_DIV                Term_TermType = 27
 	Term_MOD                Term_TermType = 28
 	Term_APPEND             Term_TermType = 29
+	Term_PREPEND            Term_TermType = 80
+	Term_DIFFERENCE         Term_TermType = 95
+	Term_SET_INSERT         Term_TermType = 88
+	Term_SET_INTERSECTION   Term_TermType = 89
+	Term_SET_UNION          Term_TermType = 90
+	Term_SET_DIFFERENCE     Term_TermType = 91
 	Term_SLICE              Term_TermType = 30
 	Term_SKIP               Term_TermType = 70
 	Term_LIMIT              Term_TermType = 71
+	Term_INDEXES_OF         Term_TermType = 87
+	Term_CONTAINS           Term_TermType = 93
 	Term_GETATTR            Term_TermType = 31
-	Term_CONTAINS           Term_TermType = 32
+	Term_KEYS               Term_TermType = 94
+	Term_HAS_FIELDS         Term_TermType = 32
+	Term_WITH_FIELDS        Term_TermType = 96
 	Term_PLUCK              Term_TermType = 33
 	Term_WITHOUT            Term_TermType = 34
 	Term_MERGE              Term_TermType = 35
@@ -260,6 +273,7 @@ const (
 	Term_ORDERBY            Term_TermType = 41
 	Term_DISTINCT           Term_TermType = 42
 	Term_COUNT              Term_TermType = 43
+	Term_IS_EMPTY           Term_TermType = 86
 	Term_UNION              Term_TermType = 44
 	Term_NTH                Term_TermType = 45
 	Term_GROUPED_MAP_REDUCE Term_TermType = 46
@@ -268,6 +282,10 @@ const (
 	Term_OUTER_JOIN         Term_TermType = 49
 	Term_EQ_JOIN            Term_TermType = 50
 	Term_ZIP                Term_TermType = 72
+	Term_INSERT_AT          Term_TermType = 82
+	Term_DELETE_AT          Term_TermType = 83
+	Term_CHANGE_AT          Term_TermType = 84
+	Term_SPLICE_AT          Term_TermType = 85
 	Term_COERCE_TO          Term_TermType = 51
 	Term_TYPEOF             Term_TermType = 52
 	Term_UPDATE             Term_TermType = 53
@@ -292,6 +310,9 @@ const (
 	Term_ASC                Term_TermType = 73
 	Term_DESC               Term_TermType = 74
 	Term_INFO               Term_TermType = 79
+	Term_MATCH              Term_TermType = 97
+	Term_SAMPLE             Term_TermType = 81
+	Term_DEFAULT            Term_TermType = 92
 )
 
 var Term_TermType_name = map[int32]string{
@@ -319,11 +340,21 @@ var Term_TermType_name = map[int32]string{
 	27: "DIV",
 	28: "MOD",
 	29: "APPEND",
+	80: "PREPEND",
+	95: "DIFFERENCE",
+	88: "SET_INSERT",
+	89: "SET_INTERSECTION",
+	90: "SET_UNION",
+	91: "SET_DIFFERENCE",
 	30: "SLICE",
 	70: "SKIP",
 	71: "LIMIT",
+	87: "INDEXES_OF",
+	93: "CONTAINS",
 	31: "GETATTR",
-	32: "CONTAINS",
+	94: "KEYS",
+	32: "HAS_FIELDS",
+	96: "WITH_FIELDS",
 	33: "PLUCK",
 	34: "WITHOUT",
 	35: "MERGE",
@@ -335,6 +366,7 @@ var Term_TermType_name = map[int32]string{
 	41: "ORDERBY",
 	42: "DISTINCT",
 	43: "COUNT",
+	86: "IS_EMPTY",
 	44: "UNION",
 	45: "NTH",
 	46: "GROUPED_MAP_REDUCE",
@@ -343,6 +375,10 @@ var Term_TermType_name = map[int32]string{
 	49: "OUTER_JOIN",
 	50: "EQ_JOIN",
 	72: "ZIP",
+	82: "INSERT_AT",
+	83: "DELETE_AT",
+	84: "CHANGE_AT",
+	85: "SPLICE_AT",
 	51: "COERCE_TO",
 	52: "TYPEOF",
 	53: "UPDATE",
@@ -367,6 +403,9 @@ var Term_TermType_name = map[int32]string{
 	73: "ASC",
 	74: "DESC",
 	79: "INFO",
+	97: "MATCH",
+	81: "SAMPLE",
+	92: "DEFAULT",
 }
 var Term_TermType_value = map[string]int32{
 	"DATUM":              1,
@@ -393,11 +432,21 @@ var Term_TermType_value = map[string]int32{
 	"DIV":                27,
 	"MOD":                28,
 	"APPEND":             29,
+	"PREPEND":            80,
+	"DIFFERENCE":         95,
+	"SET_INSERT":         88,
+	"SET_INTERSECTION":   89,
+	"SET_UNION":          90,
+	"SET_DIFFERENCE":     91,
 	"SLICE":              30,
 	"SKIP":               70,
 	"LIMIT":              71,
+	"INDEXES_OF":         87,
+	"CONTAINS":           93,
 	"GETATTR":            31,
-	"CONTAINS":           32,
+	"KEYS":               94,
+	"HAS_FIELDS":         32,
+	"WITH_FIELDS":        96,
 	"PLUCK":              33,
 	"WITHOUT":            34,
 	"MERGE":              35,
@@ -409,6 +458,7 @@ var Term_TermType_value = map[string]int32{
 	"ORDERBY":            41,
 	"DISTINCT":           42,
 	"COUNT":              43,
+	"IS_EMPTY":           86,
 	"UNION":              44,
 	"NTH":                45,
 	"GROUPED_MAP_REDUCE": 46,
@@ -417,6 +467,10 @@ var Term_TermType_value = map[string]int32{
 	"OUTER_JOIN":         49,
 	"EQ_JOIN":            50,
 	"ZIP":                72,
+	"INSERT_AT":          82,
+	"DELETE_AT":          83,
+	"CHANGE_AT":          84,
+	"SPLICE_AT":          85,
 	"COERCE_TO":          51,
 	"TYPEOF":             52,
 	"UPDATE":             53,
@@ -441,6 +495,9 @@ var Term_TermType_value = map[string]int32{
 	"ASC":                73,
 	"DESC":               74,
 	"INFO":               79,
+	"MATCH":              97,
+	"SAMPLE":             81,
+	"DEFAULT":            92,
 }
 
 func (x Term_TermType) Enum() *Term_TermType {

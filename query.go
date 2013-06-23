@@ -14,94 +14,100 @@ type List []interface{}
 type expressionKind int
 
 const (
-	literalKind expressionKind = iota
-
-	variableKind
-	javascriptKind
-	errorKind
-	implicitVariableKind
-
-	databaseKind
-	tableKind
-	getKind
-
-	equalityKind
-	inequalityKind
-	lessThanKind
-	lessThanOrEqualKind
-	greaterThanKind
-	greaterThanOrEqualKind
-
-	logicalNotKind
-	addKind
-	subtractKind
-	multiplyKind
-	divideKind
-	moduloKind
-
+	addKind expressionKind = iota
+	allKind
+	anyKind
 	appendKind
-	sliceKind
-	skipKind
-	limitKind
-
-	getAttributeKind
-	containsKind
-	pluckKind
-	withoutKind
-	mergeKind
-
+	ascendingKind
 	betweenKind
-	reduceKind
-	mapKind
-	filterKind
-	concatMapKind
-	orderByKind
-	distinctKind
-	countKind
-	unionKind
-	nthKind
-	groupedMapReduceKind
-	groupByKind
-	innerJoinKind
-	outerJoinKind
-	eqJoinKind
-	zipKind
-
-	typeOfKind
-	infoKind
+	branchKind
+	changeAtKind
 	coerceToKind
-
-	updateKind
-	deleteKind
-	replaceKind
-	insertKind
-
+	concatMapKind
+	containsKind
+	countKind
 	databaseCreateKind
 	databaseDropKind
+	databaseKind
 	databaseListKind
-	tableCreateKind
-	tableDropKind
-	tableListKind
-
+	deleteAtKind
+	deleteKind
+	descendingKind
+	differenceKind
+	distinctKind
+	divideKind
+	defaultKind
+	eqJoinKind
+	equalityKind
+	errorKind
+	filterKind
+	forEachKind
+	funcallKind
+	funcKind
+	getAllKind
+	getAttributeKind
+	getKind
+	greaterThanKind
+	greaterThanOrEqualKind
+	groupByKind
+	groupedMapReduceKind
+	hasFieldsKind
+	implicitVariableKind
 	indexCreateKind
 	indexDropKind
+	indexesOfKind
 	indexListKind
+	inequalityKind
+	infoKind
+	innerJoinKind
+	insertAtKind
+	insertKind
+	isEmptyKind
+	javascriptKind
+	keysKind
+	lessThanKind
+	lessThanOrEqualKind
+	limitKind
+	logicalNotKind
+	mapKind
+	matchKind
+	mergeKind
+	moduloKind
+	multiplyKind
+	nthKind
+	orderByKind
+	outerJoinKind
+	pluckKind
+	prependKind
+	reduceKind
+	replaceKind
+	sampleKind
+	setDifferenceKind
+	setInsertKind
+	setIntersectionKind
+	setUnionKind
+	skipKind
+	sliceKind
+	spliceAtKind
+	subtractKind
+	tableCreateKind
+	tableDropKind
+	tableKind
+	tableListKind
+	typeOfKind
+	unionKind
+	updateKind
+	variableKind
+	withFieldsKind
+	withoutKind
+	zipKind
 
-	funcallKind
-	branchKind
-	anyKind
-	allKind
-	forEachKind
-	getAllKind
-
-	funcKind
-	ascendingKind
-	descendingKind
-
-	// added by me
+	// custom rethinkgo ones
 	upsertKind
 	atomicKind
 	useOutdatedKind
+	durabilityKind
+	literalKind
 )
 
 func nullaryOperator(kind expressionKind) Exp {
@@ -393,7 +399,20 @@ func (e Exp) GroupBy(attribute, groupedMapReduce interface{}) Exp {
 //  compareFunc := r.Row.Attr("strength").Eq(villain_strength)
 //  rows := r.Table("heroes").Filter(compareFunc).UseOutdated(true).Run(session)
 func (e Exp) UseOutdated(useOutdated bool) Exp {
-	return Exp{kind: useOutdatedKind, args: List{e, useOutdated}}
+	return naryOperator(useOutdatedKind, e, useOutdated)
+}
+
+// Durability sets the durability for the expression, this can be set to either
+// "soft" or "hard".
+//
+// Example usage:
+//
+//  var response r.WriteResponse
+//  r.Table("heroes").Insert(r.Map{"superhero": "Iron Man"}).Durability("soft").Run(session).One(&response)
+//
+// Example response:
+func (e Exp) Durability(durability string) Exp {
+	return naryOperator(durabilityKind, e, durability)
 }
 
 // Attr gets an attribute's value from the row.
@@ -592,8 +611,8 @@ func (e Exp) Merge(operand interface{}) Exp {
 // Example response:
 //
 //  [1, 2, 3, 4, 5]
-func (e Exp) Append(operand interface{}) Exp {
-	return naryOperator(appendKind, e, operand)
+func (e Exp) Append(value interface{}) Exp {
+	return naryOperator(appendKind, e, value)
 }
 
 // Union concatenates two sequences.
@@ -792,15 +811,15 @@ func (e Exp) Filter(operand interface{}) Exp {
 	return naryOperator(filterKind, e, funcWrapper(operand, 1))
 }
 
-// Contains returns true if an object has all the given attributes.
+// HasFields returns true if an object has all the given attributes.
 //
 // Example usage:
 //
 //  hero := r.Map{"name": "Iron Man", "energy": 6, "speed": 5}
-//  r.Expr(hero).Contains("energy", "speed") => true
-//  r.Expr(hero).Contains("energy", "guns") => false
-func (e Exp) Contains(keys ...string) Exp {
-	return naryOperator(containsKind, e, stringsToInterfaces(keys)...)
+//  r.Expr(hero).HasFields("energy", "speed") => true
+//  r.Expr(hero).HasFields("energy", "guns") => false
+func (e Exp) HasFields(keys ...string) Exp {
+	return naryOperator(hasFieldsKind, e, stringsToInterfaces(keys)...)
 }
 
 // Between gets all rows where the key attribute's value falls between the
@@ -1369,7 +1388,7 @@ type TableSpec struct {
 	PrimaryKey string
 	Datacenter string
 	CacheSize  int64
-	SoftDurability bool
+	Durability string // either "soft" or "hard"
 }
 
 // TableCreate creates a table with the specified name.
@@ -1700,7 +1719,8 @@ func (e Exp) Info() Exp {
 
 // CoerceTo converts a value of one type to another type.
 //
-// You can convert: a selection, sequence, or object into an ARRAY, an array of pairs into an OBJECT, and any DATUM into a STRING.
+// You can convert: a selection, sequence, or object into an ARRAY, an array of
+// pairs into an OBJECT, and any DATUM into a STRING.
 //
 // Example usage:
 //
@@ -1712,4 +1732,275 @@ func (e Exp) Info() Exp {
 //  "1"
 func (e Exp) CoerceTo(typename string) Exp {
 	return naryOperator(coerceToKind, e, typename)
+}
+
+// WithFields filters an array to only include objects with all specified
+// fields, then removes all extra fields from each object.
+//
+// Example usage:
+//
+//  objects := r.List{
+//  	r.Map{"name": "Mono", "sexiness": "maximum"},
+//  	r.Map{"name": "Agro", "horseyness": "maximum"},
+//  }
+//  var response []interface{}
+//  r.Expr(objects).WithFields("name", "horseyness").Run(session).One(&response)
+//
+// Example response:
+//
+//  {"name": "Agro", "horseyness": "maximum"}
+func (e Exp) WithFields(fields ...string) Exp {
+	return naryOperator(withFieldsKind, e, stringsToInterfaces(fields)...)
+}
+
+// Prepend inserts a value at the beginning of an array.
+//
+// Example usage:
+//
+//  var response []string
+//  r.Expr(r.List{"a", "b"}).Prepend("z").Run(session).One(&response)
+//
+// Example response:
+//
+//  ["z", "a", "b"]
+func (e Exp) Prepend(value interface{}) Exp {
+	return naryOperator(prependKind, e, value)
+}
+
+// InsertAt inserts a single value into an array at the given index.
+//
+// Example usage:
+//
+//  var response []string
+//  r.Expr(r.List{"a", "b"}).InsertAt(1, "c").Run(session).One(&response)
+//
+// Example response:
+//
+//  ["a", "c", "b"]
+func (e Exp) InsertAt(index int, value interface{}) Exp {
+	return naryOperator(insertAtKind, e, index, value)
+}
+
+// SpliceAt inserts multiple values into an array at the given index
+//
+// Example usage:
+//
+//  var response []string
+//  r.Expr(r.List{"a", "b"}).SpliceAt(1, r.List{"c", "a", "t"}).Run(session).One(&response)
+//
+// Example response:
+//
+//  ["a", "c", "a", "t", "b"]
+func (e Exp) SpliceAt(index int, value interface{}) Exp {
+	return naryOperator(spliceAtKind, e, index, value)
+}
+
+// DeleteAt removes an element from an array from the given start index to the
+// end index.
+//
+// Example usage:
+//
+//  var response []string
+//  r.Expr(r.List{"a", "b", "c"}).DeleteAt(1, 1).Run(session).One(&response)
+//
+// Example response:
+//
+//  ["a", "c"]
+func (e Exp) DeleteAt(startIndex, endIndex int) Exp {
+	return naryOperator(deleteAtKind, e, startIndex, endIndex)
+}
+
+// ChangeAt replaces an element of an array at a given index.
+//
+// Example usage:
+//
+//  var response []string
+//  r.Expr(r.List{"a", "b", "c"}).ChangeAt(1, "x").Run(session).One(&response)
+//
+// Example response:
+//
+//  ["a", "x", "c"]
+func (e Exp) ChangeAt(index int, value interface{}) Exp {
+	return naryOperator(changeAtKind, e, index, value)
+}
+
+// Difference removes values from an array.
+//
+// Example usage:
+//
+//  var response []string
+//  r.Expr(r.List{"a", "b", "b", "c"}).Difference(r.List{"a", "b", "d"}).Run(session).One(&response)
+//
+// Example response:
+//
+//  ["c"]
+func (e Exp) Difference(value interface{}) Exp {
+	return naryOperator(differenceKind, e, value)
+}
+
+// IndexesOf gets the indexes where either a specific value appears, or else all
+// indexes where the given function returns true.
+//
+// Example usage:
+//
+//  var response []int
+//  r.Expr(r.List{"a", "b", "b", "a"}).IndexesOf("b").Run(session).One(&response)
+//
+// Example response:
+//
+//  [1, 2]
+//
+// Example usage with function:
+//  var response []int
+//  r.Expr(r.List{"a", "b", "b", "a"}).IndexesOf(func(row r.Exp) r.Exp {
+//  	return r.Expr(row.Eq("b"))
+//  }).Run(session).One(&response)
+func (e Exp) IndexesOf(operand interface{}) Exp {
+	return naryOperator(indexesOfKind, e, funcWrapper(operand, 1))
+}
+
+// Keys returns an array of all the keys on an object.
+//
+// Example usage:
+//
+//  var response []string
+//  expr := r.Expr(r.Map{"name": "rethinkdb", "type": "database"})
+//  expr.Keys().Run(session).One(&response)
+//
+// Example response:
+//
+//  ["name", "type"]
+func (e Exp) Keys() Exp {
+	return naryOperator(keysKind, e)
+}
+
+// IsEmpty returns true if the sequence is empty.
+//
+// Example usage:
+//
+//  var response bool
+//  r.Expr(r.List{}).IsEmpty().Run(session).One(&response)
+//
+// Example response:
+//
+//  true
+func (e Exp) IsEmpty() Exp {
+	return naryOperator(isEmptyKind, e)
+}
+
+// SetInsert adds a value to an array and returns the unique values of the resulting array.
+//
+// Example usage:
+//
+//  var response []string
+//  err = r.Expr(r.List{"a", "b", "b"}).SetInsert("b").SetInsert("c").Run(session).One(&response)
+//
+// Example response:
+//
+//  ["a", "b", "c"]
+func (e Exp) SetInsert(value interface{}) Exp {
+	return naryOperator(setInsertKind, e, value)
+}
+
+// SetUnion adds multiple values to an array and returns the unique values of the resulting array.
+//
+// Example usage:
+//
+//  var response []string
+//  err = r.Expr(r.List{"a", "b", "b"}).SetUnion(r.List{"b", "c"}).Run(session).One(&response)
+//
+// Example response:
+//
+//  ["a", "b", "c"]
+func (e Exp) SetUnion(values interface{}) Exp {
+	return naryOperator(setUnionKind, e, values)
+}
+
+// SetDifference removes the given values from an array and returns the unique values of the resulting array.
+//
+// Example usage:
+//
+//  var response []string
+//  err = r.Expr(r.List{"a", "b", "b"}).SetDifference(r.List{"b", "c"}).Run(session).One(&response)
+//
+// Example response:
+//
+//  ["a"]
+func (e Exp) SetDifference(values interface{}) Exp {
+	return naryOperator(setDifferenceKind, e, values)
+}
+
+// SetIntersection returns all the unique values that appear in both arrays.
+//
+// Example usage:
+//
+//  var response []string
+//  err = r.Expr(r.List{"a", "b", "b"}).SetIntersection(r.List{"b", "c"}).Run(session).One(&response)
+//
+// Example response:
+//
+//  ["b"]
+func (e Exp) SetIntersection(values interface{}) Exp {
+	return naryOperator(setIntersectionKind, e, values)
+}
+
+// Contains returns true if all the specified values appear in the array, false
+// otherwise.
+//
+// Example usage:
+//
+//  var response bool
+//  err = r.Expr(r.List{"a", "b", "c"}).Contains("a", "b").Run(session).One(&response)
+//
+// Example response:
+//
+//  true
+func (e Exp) Contains(values ...interface{}) Exp {
+	return naryOperator(containsKind, e, values...)
+}
+
+// Sample selects a given number of elements from an array randomly with a
+// uniform distribution.
+//
+// Example usage:
+//
+//  var response []string
+//  err = r.Expr(r.List{"a", "b", "c"}).Sample(1).Run(session).One(&response)
+//
+// Example response:
+//
+//  ["a"] (maybe)
+func (e Exp) Sample(count int) Exp {
+	return naryOperator(sampleKind, e, count)
+}
+
+// Match matches a regular expression against a string.  The regular expression
+// syntax is RE2, which is the same used by the "regexp" package.
+//
+// Example usage:
+//
+//  var response interface{}
+//  err = r.Expr("3.14159").Match("[0-9]+").Run(session).One(&response)
+//
+// Example response:
+//
+//  {"str": "3", "start": 0, "end": 1, "groups": []}
+func (e Exp) Match(regularExpression string) Exp {
+	return naryOperator(matchKind, e, regularExpression)
+}
+
+// Default specifies the default value for an expression if the expression
+// evaluates to null or if it raises an error (for instance, a non-existent
+// property is accessed).
+//
+// Example usage:
+//
+//  var response interface{}
+//  r.Expr(r.Map{"a": "b"}).Attr("c").Default("oops").Run(session).One(&response)
+//
+// Example response:
+//
+//  "oops"
+func (e Exp) Default(value interface{}) Exp {
+	return naryOperator(defaultKind, e, value)
 }

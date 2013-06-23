@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"bufio"
 	p "github.com/christopherhesse/rethinkgo/ql2"
 	"time"
 )
@@ -19,15 +20,38 @@ type connection struct {
 
 var debugMode bool = false
 
-func serverConnect(address string) (*connection, error) {
+func serverConnect(address string, authkey string) (*connection, error) {
 	conn, err := net.Dial("tcp", address)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := binary.Write(conn, binary.LittleEndian, p.VersionDummy_V0_1); err != nil {
+	if err := binary.Write(conn, binary.LittleEndian, p.VersionDummy_V0_2); err != nil {
 		return nil, err
 	}
+
+	// authorization key
+	if err := binary.Write(conn, binary.LittleEndian, uint32(len(authkey))); err != nil {
+		return nil, err
+	}
+
+	if err := binary.Write(conn, binary.BigEndian, []byte(authkey)); err != nil {
+		return nil, err
+	}
+
+	// read server response to authorization key (terminated by NUL)
+	reader := bufio.NewReader(conn)
+	line, err := reader.ReadBytes('\x00')
+	if err != nil {
+		return nil, err
+	}
+	// convert to string and remove trailing NUL byte
+	response := string(line[:len(line)-1])
+	if response != "SUCCESS" {
+		// we failed authorization or something else terrible happened
+		return nil, fmt.Errorf("Failed to connect to server: %v", response)
+	}
+
 	return &connection{conn}, nil
 }
 
@@ -71,6 +95,7 @@ func (c *connection) readMessage() ([]byte, error) {
 		return nil, err
 	}
 
+	// TODO: switch to io.ReadFull
 	var result []byte
 	buf := make([]byte, messageLength)
 	for {

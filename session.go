@@ -21,6 +21,8 @@ type Session struct {
 	database string
 	// maximum duration of a single query
 	timeout time.Duration
+	// authorization key for servers configured to check this
+	authkey string
 
 	conn *connection
 	closed    bool
@@ -35,14 +37,16 @@ type Session struct {
 //  sess, err := r.Connect("localhost:28015", "test")
 func Connect(address, database string) (*Session, error) {
 	s := &Session{address: address, database: database, closed: true}
-
 	err := s.Reconnect()
+	return s, err
+}
 
-	if err != nil {
-		return nil, err
-	}
-
-	return s, nil
+// ConnectWithAuth is the same as Connect, but also sets the authorization key
+// used to connect to the server.
+func ConnectWithAuth(address, database, authkey string) (*Session, error)  {
+	s := &Session{address: address, database: database, authkey: authkey, closed: true}
+	err := s.Reconnect()
+	return s, err
 }
 
 // Reconnect closes and re-opens a session.
@@ -57,7 +61,7 @@ func (s *Session) Reconnect() error {
 
 	s.closed = false
 	var err error
-	s.conn, err = serverConnect(s.address)
+	s.conn, err = serverConnect(s.address, s.authkey)
 	return err
 }
 
@@ -82,6 +86,10 @@ func (s *Session) Close() error {
 //
 // The timeout is global to all queries run on a single Session and does not
 // apply to any query currently in progress.
+//
+// Example usage:
+//
+//  sess.SetTimeout(1 * time.Second)
 func (s *Session) SetTimeout(timeout time.Duration) {
 	s.timeout = timeout
 }

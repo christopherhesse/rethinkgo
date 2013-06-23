@@ -18,6 +18,7 @@ import (
 type context struct {
 	databaseName string
 	useOutdated  bool
+	durability   string
 	overwrite    bool
 	atomic       bool
 }
@@ -34,21 +35,13 @@ func (ctx context) toTerm(o interface{}) *p.Term {
 	switch e.kind {
 	case literalKind:
 		return ctx.literalToTerm(e.args[0])
-	case variableKind:
-		termType = p.Term_VAR
 	case javascriptKind:
 		termType = p.Term_JAVASCRIPT
 		if len(arguments) == 2 {
 			options["timeout"] = arguments[1]
 			arguments = arguments[:1]
 		}
-	case errorKind:
-		termType = p.Term_ERROR
-	case implicitVariableKind:
-		termType = p.Term_IMPLICIT_VAR
 
-	case databaseKind:
-		termType = p.Term_DB
 	case tableKind:
 		termType = p.Term_TABLE
 		// first arg to table must be the database
@@ -57,54 +50,6 @@ func (ctx context) toTerm(o interface{}) *p.Term {
 			arguments = []interface{}{dbExpr, arguments[0]}
 		}
 		options["use_outdated"] = ctx.useOutdated
-	case getKind:
-		termType = p.Term_GET
-
-	case equalityKind:
-		termType = p.Term_EQ
-	case inequalityKind:
-		termType = p.Term_NE
-	case lessThanKind:
-		termType = p.Term_LT
-	case lessThanOrEqualKind:
-		termType = p.Term_LE
-	case greaterThanKind:
-		termType = p.Term_GT
-	case greaterThanOrEqualKind:
-		termType = p.Term_GE
-
-	case logicalNotKind:
-		termType = p.Term_NOT
-	case addKind:
-		termType = p.Term_ADD
-	case subtractKind:
-		termType = p.Term_SUB
-	case multiplyKind:
-		termType = p.Term_MUL
-	case divideKind:
-		termType = p.Term_DIV
-	case moduloKind:
-		termType = p.Term_MOD
-
-	case appendKind:
-		termType = p.Term_APPEND
-	case sliceKind:
-		termType = p.Term_SLICE
-	case skipKind:
-		termType = p.Term_SKIP
-	case limitKind:
-		termType = p.Term_LIMIT
-
-	case getAttributeKind:
-		termType = p.Term_GETATTR
-	case containsKind:
-		termType = p.Term_CONTAINS
-	case pluckKind:
-		termType = p.Term_PLUCK
-	case withoutKind:
-		termType = p.Term_WITHOUT
-	case mergeKind:
-		termType = p.Term_MERGE
 
 	case betweenKind:
 		termType = p.Term_BETWEEN
@@ -117,64 +62,33 @@ func (ctx context) toTerm(o interface{}) *p.Term {
 		termType = p.Term_REDUCE
 		options["base"] = arguments[2]
 		arguments = arguments[:2]
-	case mapKind:
-		termType = p.Term_MAP
-	case filterKind:
-		termType = p.Term_FILTER
-	case concatMapKind:
-		termType = p.Term_CONCATMAP
-	case orderByKind:
-		termType = p.Term_ORDERBY
-	case distinctKind:
-		termType = p.Term_DISTINCT
-	case countKind:
-		termType = p.Term_COUNT
-	case unionKind:
-		termType = p.Term_UNION
-	case nthKind:
-		termType = p.Term_NTH
 	case groupedMapReduceKind:
 		termType = p.Term_GROUPED_MAP_REDUCE
 		options["base"] = arguments[4]
 		arguments = arguments[:4]
-	case groupByKind:
-		termType = p.Term_GROUPBY
-	case innerJoinKind:
-		termType = p.Term_INNER_JOIN
-	case outerJoinKind:
-		termType = p.Term_OUTER_JOIN
 	case eqJoinKind:
 		termType = p.Term_EQ_JOIN
 		options["index"] = arguments[3]
 		arguments = arguments[:3]
-	case zipKind:
-		termType = p.Term_ZIP
 
-	case coerceToKind:
-		termType = p.Term_COERCE_TO
-	case typeOfKind:
-		termType = p.Term_TYPEOF
-	case infoKind:
-		termType = p.Term_INFO
+	case updateKind, deleteKind, replaceKind, insertKind:
+		if ctx.durability != "" {
+			options["durability"] = ctx.durability
+		}
+		switch e.kind {
+			case updateKind:
+				termType = p.Term_UPDATE
+				options["non_atomic"] = !ctx.atomic
+			case deleteKind:
+				termType = p.Term_DELETE
+			case replaceKind:
+				termType = p.Term_REPLACE
+				options["non_atomic"] = !ctx.atomic
+			case insertKind:
+				termType = p.Term_INSERT
+				options["upsert"] = ctx.overwrite
+		}
 
-	case updateKind:
-		termType = p.Term_UPDATE
-		options["non_atomic"] = !ctx.atomic
-	case deleteKind:
-		termType = p.Term_DELETE
-	case replaceKind:
-		termType = p.Term_REPLACE
-		options["non_atomic"] = !ctx.atomic
-	case insertKind:
-		termType = p.Term_INSERT
-		options["upsert"] = ctx.overwrite
-
-	case databaseCreateKind:
-		termType = p.Term_DB_CREATE
-	case databaseDropKind:
-		termType = p.Term_DB_DROP
-	case databaseListKind:
-		termType = p.Term_DB_LIST
 	case tableCreateKind:
 		termType = p.Term_TABLE_CREATE
 		// last argument is the table spec
@@ -197,8 +111,8 @@ func (ctx context) toTerm(o interface{}) *p.Term {
 		if spec.CacheSize != 0 {
 			options["cache_size"] = spec.CacheSize
 		}
-		if spec.SoftDurability == true {
-			options["hard_durability"] = false
+		if spec.Durability != "" {
+			options["durability"] = spec.Durability
 		}
 	case tableDropKind:
 		termType = p.Term_TABLE_DROP
@@ -214,24 +128,6 @@ func (ctx context) toTerm(o interface{}) *p.Term {
 			dbExpr := naryOperator(databaseKind, ctx.databaseName)
 			arguments = append(arguments, dbExpr)
 		}
-
-	case indexCreateKind:
-		termType = p.Term_INDEX_CREATE
-	case indexListKind:
-		termType = p.Term_INDEX_LIST
-	case indexDropKind:
-		termType = p.Term_INDEX_DROP
-
-	case funcallKind:
-		termType = p.Term_FUNCALL
-	case branchKind:
-		termType = p.Term_BRANCH
-	case anyKind:
-		termType = p.Term_ANY
-	case allKind:
-		termType = p.Term_ALL
-	case forEachKind:
-		termType = p.Term_FOREACH
 	case getAllKind:
 		termType = p.Term_GET_ALL
 		options["index"] = arguments[2]
@@ -239,10 +135,6 @@ func (ctx context) toTerm(o interface{}) *p.Term {
 
 	case funcKind:
 		return ctx.toFuncTerm(arguments[0], arguments[1].(int))
-	case ascendingKind:
-		termType = p.Term_ASC
-	case descendingKind:
-		termType = p.Term_DESC
 
 	// special made-up kind to set options on the query
 	case upsertKind:
@@ -254,6 +146,155 @@ func (ctx context) toTerm(o interface{}) *p.Term {
 	case useOutdatedKind:
 		ctx.useOutdated = e.args[1].(bool)
 		return ctx.toTerm(e.args[0])
+	case durabilityKind:
+		ctx.durability = e.args[1].(string)
+		return ctx.toTerm(e.args[0])
+
+	case mapKind:
+		termType = p.Term_MAP
+	case filterKind:
+		termType = p.Term_FILTER
+	case concatMapKind:
+		termType = p.Term_CONCATMAP
+	case orderByKind:
+		termType = p.Term_ORDERBY
+	case distinctKind:
+		termType = p.Term_DISTINCT
+	case countKind:
+		termType = p.Term_COUNT
+	case unionKind:
+		termType = p.Term_UNION
+	case nthKind:
+		termType = p.Term_NTH
+	case groupByKind:
+		termType = p.Term_GROUPBY
+	case innerJoinKind:
+		termType = p.Term_INNER_JOIN
+	case outerJoinKind:
+		termType = p.Term_OUTER_JOIN
+	case zipKind:
+		termType = p.Term_ZIP
+	case coerceToKind:
+		termType = p.Term_COERCE_TO
+	case typeOfKind:
+		termType = p.Term_TYPEOF
+	case infoKind:
+		termType = p.Term_INFO
+	case keysKind:
+		termType = p.Term_KEYS
+	case getKind:
+		termType = p.Term_GET
+	case equalityKind:
+		termType = p.Term_EQ
+	case inequalityKind:
+		termType = p.Term_NE
+	case lessThanKind:
+		termType = p.Term_LT
+	case lessThanOrEqualKind:
+		termType = p.Term_LE
+	case greaterThanKind:
+		termType = p.Term_GT
+	case greaterThanOrEqualKind:
+		termType = p.Term_GE
+	case logicalNotKind:
+		termType = p.Term_NOT
+	case addKind:
+		termType = p.Term_ADD
+	case subtractKind:
+		termType = p.Term_SUB
+	case multiplyKind:
+		termType = p.Term_MUL
+	case divideKind:
+		termType = p.Term_DIV
+	case moduloKind:
+		termType = p.Term_MOD
+	case appendKind:
+		termType = p.Term_APPEND
+	case prependKind:
+		termType = p.Term_PREPEND
+	case insertAtKind:
+		termType = p.Term_INSERT_AT
+	case spliceAtKind:
+		termType = p.Term_SPLICE_AT
+	case deleteAtKind:
+		termType = p.Term_DELETE_AT
+	case changeAtKind:
+		termType = p.Term_CHANGE_AT
+	case differenceKind:
+		termType = p.Term_DIFFERENCE
+	case indexesOfKind:
+		termType = p.Term_INDEXES_OF
+	case isEmptyKind:
+		termType = p.Term_IS_EMPTY
+	case setInsertKind:
+		termType = p.Term_SET_INSERT
+	case setUnionKind:
+		termType = p.Term_SET_UNION
+	case setDifferenceKind:
+		termType = p.Term_SET_DIFFERENCE
+	case setIntersectionKind:
+		termType = p.Term_SET_INTERSECTION
+	case containsKind:
+		termType = p.Term_CONTAINS
+	case sliceKind:
+		termType = p.Term_SLICE
+	case skipKind:
+		termType = p.Term_SKIP
+	case limitKind:
+		termType = p.Term_LIMIT
+	case sampleKind:
+		termType = p.Term_SAMPLE
+	case matchKind:
+		termType = p.Term_MATCH
+	case getAttributeKind:
+		termType = p.Term_GETATTR
+	case hasFieldsKind:
+		termType = p.Term_HAS_FIELDS
+	case withFieldsKind:
+		termType = p.Term_WITH_FIELDS
+	case pluckKind:
+		termType = p.Term_PLUCK
+	case withoutKind:
+		termType = p.Term_WITHOUT
+	case mergeKind:
+		termType = p.Term_MERGE
+	case indexCreateKind:
+		termType = p.Term_INDEX_CREATE
+	case indexListKind:
+		termType = p.Term_INDEX_LIST
+	case indexDropKind:
+		termType = p.Term_INDEX_DROP
+	case funcallKind:
+		termType = p.Term_FUNCALL
+	case branchKind:
+		termType = p.Term_BRANCH
+	case anyKind:
+		termType = p.Term_ANY
+	case allKind:
+		termType = p.Term_ALL
+	case forEachKind:
+		termType = p.Term_FOREACH
+	case databaseCreateKind:
+		termType = p.Term_DB_CREATE
+	case databaseDropKind:
+		termType = p.Term_DB_DROP
+	case databaseListKind:
+		termType = p.Term_DB_LIST
+	case errorKind:
+		termType = p.Term_ERROR
+	case implicitVariableKind:
+		termType = p.Term_IMPLICIT_VAR
+	case databaseKind:
+		termType = p.Term_DB
+	case variableKind:
+		termType = p.Term_VAR
+	case ascendingKind:
+		termType = p.Term_ASC
+	case descendingKind:
+		termType = p.Term_DESC
+	case defaultKind:
+		termType = p.Term_DEFAULT
+
 	default:
 		panic("invalid term kind")
 	}
@@ -290,7 +331,7 @@ func (ctx context) toFuncTerm(f interface{}, requiredArgs int) *p.Term {
 		return ctx.compileGoFunc(f, requiredArgs)
 	}
 	e := Expr(f)
-	if e.kind == javascriptKind {
+	if e.kind == javascriptKind || e.kind == literalKind {
 		return ctx.toTerm(e)
 	}
 	return ctx.compileExpressionFunc(e, requiredArgs)
