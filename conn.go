@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"io"
 	"bufio"
 	p "github.com/christopherhesse/rethinkgo/ql2"
 	"time"
@@ -95,20 +96,12 @@ func (c *connection) readMessage() ([]byte, error) {
 		return nil, err
 	}
 
-	// TODO: switch to io.ReadFull
-	var result []byte
-	buf := make([]byte, messageLength)
-	for {
-		n, err := c.Read(buf[0:])
-		if err != nil {
-			return nil, err
-		}
-		result = append(result, buf[0:n]...)
-		if len(result) == int(messageLength) {
-			break
-		}
+	buffer := make([]byte, messageLength)
+	_, err := io.ReadFull(c, buffer)
+	if err != nil {
+		return nil, err
 	}
-	return result, nil
+	return buffer, nil
 }
 
 // readResponse reads a protobuf message from a connection and parses it.
