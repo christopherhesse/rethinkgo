@@ -24,6 +24,7 @@
 //      FirstName string
 //      LastName  string
 //      Job       string
+//      Id        string `json:"id"` // (will appear in json as "id")
 //  }
 //
 //  func main() {
@@ -34,14 +35,18 @@
 //          return
 //      }
 //
-//      // This creates a database session 'session' that may be used to run
-//      // queries on the server.  Queries let you read, insert, update, and
-//      // delete JSON objects ("rows") on the server, as well as manage tables.
-//      query := r.Table("employees")
-//      rows := query.Run(session)
+//      var response []Employee
+//      // Using .All(), we can read the entire response into a slice, without iteration
+//      err = r.Table("employees").Run(session).All(&response)
+//      if err != nil {
+//          fmt.Println("err:", err)
+//      } else {
+//          fmt.Println("response:", response)
+//      }
 //
-//      // 'rows' is an iterator that can be used to iterate over the
-//      // results.  If there was an error, it is available in rows.Err()
+//      // If we want to iterate over each result individually, we can use the rows
+//      // object as an iterator
+//      rows := r.Table("employees").Run(session)
 //      for rows.Next() {
 //          var row Employee
 //          if err = rows.Scan(&row); err != nil {

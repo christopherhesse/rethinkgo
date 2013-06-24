@@ -3,7 +3,7 @@ rethinkgo
 
 [Go language](http://golang.org/) driver for [RethinkDB](http://www.rethinkdb.com/) made by [Christopher Hesse](http://www.christopherhesse.com/)
 
-Current supported RethinkDB version: 1.5.1
+Current supported RethinkDB version: 1.6.1
 
 Installation
 ============
@@ -41,14 +41,18 @@ Example
             return
         }
 
-        // This creates a database session 'session' that may be used to run
-        // queries on the server.  Queries let you read, insert, update, and
-        // delete JSON objects ("rows") on the server, as well as manage tables.
-        query := r.Table("employees")
-        rows := query.Run(session)
+        var response []Employee
+        // Using .All(), we can read the entire response into a slice, without iteration
+        err = r.Table("employees").Run(session).All(&response)
+        if err != nil {
+            fmt.Println("err:", err)
+        } else {
+            fmt.Println("response:", response)
+        }
 
-        // 'rows' is an iterator that can be used to iterate over the
-        // results.  If there was an error, it is available in rows.Err()
+        // If we want to iterate over each result individually, we can use the rows
+        // object as an iterator
+        rows := r.Table("employees").Run(session)
         for rows.Next() {
             var row Employee
             if err = rows.Scan(&row); err != nil {
@@ -61,6 +65,7 @@ Example
             fmt.Println("err:", err)
         }
     }
+
 
 Overview
 ========
@@ -84,6 +89,12 @@ The function r.Expr() can take arbitrary structs and uses the "json" module to s
 
 See the [json docs](http://golang.org/pkg/encoding/json/) for more information.
 
+Changelog
+=========
+
+Changes for RethinkDB 1.6.1:
+* Added a number of new functions, auth support etc, see http://rethinkdb.com/blog/1.6-release/
+* Removed connection pooling (this didn't seem that helpful and may have caused problems for some users) you no longer need to use rows.Close(), and sessions should not be shared between goroutines.
 
 Differences from official RethinkDB drivers
 ===========================================
