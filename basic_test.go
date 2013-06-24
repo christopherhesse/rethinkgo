@@ -279,11 +279,11 @@ var testGroups = map[string][]ExpectPair{
 			2,
 		},
 	},
-	"contains": {
-		{tobj.Contains("a"), true},
-		{tobj.Contains("d"), false},
-		{tobj.Contains("a", "c"), true},
-		{tobj.Contains("a", "d"), false},
+	"has_fields": {
+		{tobj.HasFields("a"), true},
+		{tobj.HasFields("d"), false},
+		{tobj.HasFields("a", "c"), true},
+		{tobj.HasFields("a", "d"), false},
 	},
 	"getattr": {
 		{tobj.Attr("a"), 1},
@@ -404,7 +404,7 @@ var testGroups = map[string][]ExpectPair{
 		},
 	},
 	"concatmap": {
-		{tbl.ConcatMap(List{1, 2}).Count(), 20},
+		{tbl.ConcatMap(func(row Exp) Exp {return Expr(List{1, 2})}).Count(), 20},
 	},
 	"update": {
 		{tbl.Filter(func(row Exp) Exp {

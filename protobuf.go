@@ -49,7 +49,9 @@ func (ctx context) toTerm(o interface{}) *p.Term {
 			dbExpr := naryOperator(databaseKind, ctx.databaseName)
 			arguments = []interface{}{dbExpr, arguments[0]}
 		}
-		options["use_outdated"] = ctx.useOutdated
+		if ctx.useOutdated {
+			options["use_outdated"] = ctx.useOutdated
+		}
 
 	case betweenKind:
 		termType = p.Term_BETWEEN
@@ -326,13 +328,42 @@ func nextVariableNumber() int64 {
 	return atomic.AddInt64(&variableCounter, 1)
 }
 
+func containsImplicitVariable(term *p.Term) bool {
+	if *term.Type == p.Term_IMPLICIT_VAR {
+		return true
+	}
+
+	for _, arg := range term.Args {
+		if containsImplicitVariable(arg) {
+			return true
+		}
+	}
+
+	for _, optarg := range term.Optargs {
+		if containsImplicitVariable(optarg.Val) {
+			return true
+		}
+	}
+
+	return false
+}
+
 func (ctx context) toFuncTerm(f interface{}, requiredArgs int) *p.Term {
 	if reflect.ValueOf(f).Kind() == reflect.Func {
 		return ctx.compileGoFunc(f, requiredArgs)
 	}
 	e := Expr(f)
-	if e.kind == javascriptKind || e.kind == literalKind {
-		return ctx.toTerm(e)
+	// the user may pass in a Map with r.Row elements, such as:
+	// 	r.Table("heroes").Filter(r.Map{"durability": r.Row.Attr("speed")})
+	// these have to be sent to the server as a function, but it looks a lot like a
+	// literal or other expression, so in order to determine if we should send it
+	// to the server as a function, we just check for the use of r.Row
+	// if we just convert all literals to functions, something like:
+	//  r.Expr(r.List{"a", "b", "b", "a"}).IndexesOf("a")
+	// won't work
+	term := ctx.toTerm(e)
+	if e.kind == javascriptKind || (e.kind == literalKind && !containsImplicitVariable(term)) {
+		return term
 	}
 	return ctx.compileExpressionFunc(e, requiredArgs)
 }
