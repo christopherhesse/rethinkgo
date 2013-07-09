@@ -285,7 +285,7 @@ var testGroups = map[string][]ExpectPair{
 		{tobj.HasFields("a", "c"), true},
 		{tobj.HasFields("a", "d"), false},
 	},
-	"getattr": {
+	"getfield": {
 		{tobj.Attr("a"), 1},
 		{tobj.Attr("b"), 2},
 		{tobj.Attr("c"), 3},

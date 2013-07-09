@@ -45,7 +45,7 @@ const (
 	funcallKind
 	funcKind
 	getAllKind
-	getAttributeKind
+	getFieldKind
 	getKind
 	greaterThanKind
 	greaterThanOrEqualKind
@@ -64,6 +64,7 @@ const (
 	insertKind
 	isEmptyKind
 	javascriptKind
+	jsonKind
 	keysKind
 	lessThanKind
 	lessThanOrEqualKind
@@ -80,6 +81,7 @@ const (
 	pluckKind
 	prependKind
 	reduceKind
+	returnValuesKind
 	replaceKind
 	sampleKind
 	setDifferenceKind
@@ -222,6 +224,20 @@ func Expr(value interface{}) Exp {
 	return naryOperator(literalKind, value)
 }
 
+// Json creates an object using a literal json string.
+//
+// Example usage:
+//
+//  var response interface{}
+//  rows := r.Json(`"go": "awesome", "rethinkdb": "awesomer"}`).Run(session).One(&response)
+//
+// Example response:
+//
+//  {"go": "awesome", "rethinkdb": "awesomer"}
+func Json(value string) Exp {
+	return naryOperator(jsonKind, value)
+}
+
 ///////////
 // Terms //
 ///////////
@@ -322,7 +338,7 @@ func (e Exp) Get(key interface{}) Exp {
 // GetAll retrieves all documents where the given value matches the requested
 // index.
 //
-// Example usage:
+// Example usage (awesomeness is a secondary index defined as speed * strength):
 //
 //  var response []interface{}
 //  err := r.Table("heroes").GetAll("awesomeness", 10).Run(session).All(&response)
@@ -340,8 +356,8 @@ func (e Exp) Get(key interface{}) Exp {
 //    "speed": 5,
 //    "id": "59d1ad55-a61e-49d9-a375-0fb014b0e6ea"
 //  }
-func (e Exp) GetAll(index string, value interface{}) Exp {
-	return naryOperator(getAllKind, e, value, index)
+func (e Exp) GetAll(index string, values ...interface{}) Exp {
+	return naryOperator(getAllKind, e, append(values, index)...)
 }
 
 // GroupBy does a sort of grouped map reduce.  First the server groups all rows
@@ -421,7 +437,7 @@ func (e Exp) Durability(durability string) Exp {
 //
 //  r.Expr(r.Map{"key": "value"}).Attr("key") => "value"
 func (e Exp) Attr(name string) Exp {
-	return naryOperator(getAttributeKind, e, name)
+	return naryOperator(getFieldKind, e, name)
 }
 
 // Add sums two numbers or concatenates two arrays.
@@ -1008,8 +1024,8 @@ func (e Exp) GroupedMapReduce(grouping, mapping, reduction, base interface{}) Ex
 //    },
 //    ...
 //  ]
-func (e Exp) Pluck(attributes ...string) Exp {
-	return naryOperator(pluckKind, e, stringsToInterfaces(attributes)...)
+func (e Exp) Pluck(attributes ...interface{}) Exp {
+	return naryOperator(pluckKind, e, attributes...)
 }
 
 // Without removes the given attributes from an object.  See also .Pluck().
@@ -2003,4 +2019,16 @@ func (e Exp) Match(regularExpression string) Exp {
 //  "oops"
 func (e Exp) Default(value interface{}) Exp {
 	return naryOperator(defaultKind, e, value)
+}
+
+// ReturnValues tells the server, when performing a single row insert/update/delete/upsert, to return the new and old values on single row
+//
+// Example usage:
+//
+//  var response interface{}
+//
+// Example response:
+//
+func (e Exp) ReturnValues() Exp {
+	return naryOperator(returnValuesKind, e)
 }

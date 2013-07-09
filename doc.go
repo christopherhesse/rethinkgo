@@ -24,7 +24,7 @@
 //      FirstName string
 //      LastName  string
 //      Job       string
-//      Id        string `json:"id"` // (will appear in json as "id")
+//      Id        string `json:"id,omitempty"` // (will appear in json as "id", and not be sent if empty)
 //  }
 //
 //  func main() {

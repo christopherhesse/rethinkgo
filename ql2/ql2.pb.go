@@ -258,7 +258,7 @@ const (
 	Term_LIMIT              Term_TermType = 71
 	Term_INDEXES_OF         Term_TermType = 87
 	Term_CONTAINS           Term_TermType = 93
-	Term_GETATTR            Term_TermType = 31
+	Term_GET_FIELD          Term_TermType = 31
 	Term_KEYS               Term_TermType = 94
 	Term_HAS_FIELDS         Term_TermType = 32
 	Term_WITH_FIELDS        Term_TermType = 96
@@ -313,6 +313,7 @@ const (
 	Term_MATCH              Term_TermType = 97
 	Term_SAMPLE             Term_TermType = 81
 	Term_DEFAULT            Term_TermType = 92
+	Term_JSON               Term_TermType = 98
 )
 
 var Term_TermType_name = map[int32]string{
@@ -351,7 +352,7 @@ var Term_TermType_name = map[int32]string{
 	71: "LIMIT",
 	87: "INDEXES_OF",
 	93: "CONTAINS",
-	31: "GETATTR",
+	31: "GET_FIELD",
 	94: "KEYS",
 	32: "HAS_FIELDS",
 	96: "WITH_FIELDS",
@@ -406,6 +407,7 @@ var Term_TermType_name = map[int32]string{
 	97: "MATCH",
 	81: "SAMPLE",
 	92: "DEFAULT",
+	98: "JSON",
 }
 var Term_TermType_value = map[string]int32{
 	"DATUM":              1,
@@ -443,7 +445,7 @@ var Term_TermType_value = map[string]int32{
 	"LIMIT":              71,
 	"INDEXES_OF":         87,
 	"CONTAINS":           93,
-	"GETATTR":            31,
+	"GET_FIELD":          31,
 	"KEYS":               94,
 	"HAS_FIELDS":         32,
 	"WITH_FIELDS":        96,
@@ -498,6 +500,7 @@ var Term_TermType_value = map[string]int32{
 	"MATCH":              97,
 	"SAMPLE":             81,
 	"DEFAULT":            92,
+	"JSON":               98,
 }
 
 func (x Term_TermType) Enum() *Term_TermType {

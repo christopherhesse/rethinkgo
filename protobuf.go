@@ -21,6 +21,7 @@ type context struct {
 	durability   string
 	overwrite    bool
 	atomic       bool
+	returnValues bool
 }
 
 // toTerm converts an arbitrary object to a Term, within the context that toTerm
@@ -77,6 +78,9 @@ func (ctx context) toTerm(o interface{}) *p.Term {
 		if ctx.durability != "" {
 			options["durability"] = ctx.durability
 		}
+		if ctx.returnValues {
+			options["return_vals"] = true
+		}
 		switch e.kind {
 			case updateKind:
 				termType = p.Term_UPDATE
@@ -132,8 +136,9 @@ func (ctx context) toTerm(o interface{}) *p.Term {
 		}
 	case getAllKind:
 		termType = p.Term_GET_ALL
-		options["index"] = arguments[2]
-		arguments = arguments[:2]
+		options["index"] = arguments[len(arguments) - 1]
+		arguments = arguments[:len(arguments)-1]
+		fmt.Println("arguments:", arguments)
 
 	case funcKind:
 		return ctx.toFuncTerm(arguments[0], arguments[1].(int))
@@ -151,7 +156,12 @@ func (ctx context) toTerm(o interface{}) *p.Term {
 	case durabilityKind:
 		ctx.durability = e.args[1].(string)
 		return ctx.toTerm(e.args[0])
+	case returnValuesKind:
+		ctx.returnValues = true
+		return ctx.toTerm(e.args[0])
 
+	case jsonKind:
+		termType = p.Term_JSON
 	case mapKind:
 		termType = p.Term_MAP
 	case filterKind:
@@ -248,8 +258,8 @@ func (ctx context) toTerm(o interface{}) *p.Term {
 		termType = p.Term_SAMPLE
 	case matchKind:
 		termType = p.Term_MATCH
-	case getAttributeKind:
-		termType = p.Term_GETATTR
+	case getFieldKind:
+		termType = p.Term_GET_FIELD
 	case hasFieldsKind:
 		termType = p.Term_HAS_FIELDS
 	case withFieldsKind:
