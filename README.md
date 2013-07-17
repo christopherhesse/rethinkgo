@@ -92,9 +92,12 @@ See the [json docs](http://golang.org/pkg/encoding/json/) for more information.
 Changelog
 =========
 
+Changes for RethinkDB 1.7.1:
+* Added Json() and a couple of changes, see http://rethinkdb.com/blog/1.7-release/
+
 Changes for RethinkDB 1.6.1:
 * Added a number of new functions, auth support etc, see http://rethinkdb.com/blog/1.6-release/
-* Removed connection pooling (this didn't seem that helpful and may have caused problems for some users) you no longer need to use rows.Close(), and sessions should not be shared between goroutines.
+* Removed connection pooling (this didn't seem that helpful and may have caused problems for some users) you no longer need to use rows.Close(), and sessions should not be shared between goroutines.  Either make a new connection inside each goroutine or create a pool (with some channels or maybe a sync.Mutex).
 
 Differences from official RethinkDB drivers
 ===========================================
