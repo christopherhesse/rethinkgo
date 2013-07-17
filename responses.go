@@ -14,8 +14,8 @@ type WriteResponse struct {
 	Unchanged     int
 	Replaced      int
 	Deleted       int
-	GeneratedKeys []string `json:"generated_keys"`
-	FirstError    string   `json:"first_error"` // populated if Errors > 0
-    NewValue      interface{} `json:"new_val"`
-    OldValue      interface{} `json:"new_val"`
+	GeneratedKeys []string    `json:"generated_keys"`
+	FirstError    string      `json:"first_error"` // populated if Errors > 0
+	NewValue      interface{} `json:"new_val"`
+	OldValue      interface{} `json:"old_val"`
 }
