@@ -3,7 +3,7 @@ rethinkgo
 
 [Go language](http://golang.org/) driver for [RethinkDB](http://www.rethinkdb.com/) made by [Christopher Hesse](http://www.christopherhesse.com/)
 
-Current supported RethinkDB version: 1.6.1
+Current supported RethinkDB version: 1.7.1
 
 Installation
 ============
