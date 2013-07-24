@@ -88,6 +88,10 @@ func datumUnmarshal(datum *p.Datum, v interface{}) error {
 	return json.Unmarshal(data, v)
 }
 
+func isNullDatum(datum *p.Datum) bool {
+	return datum.GetType() == p.Datum_R_NULL
+}
+
 func datumToJson(datum *p.Datum) ([]byte, error) {
 	switch datum.GetType() {
 	case p.Datum_R_NULL:

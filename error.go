@@ -84,3 +84,11 @@ type ErrWrongResponseType struct {
 func (e ErrWrongResponseType) Error() string {
 	return "rethinkdb: Wrong response type, you may have used the wrong one of: .Exec(), .One(), .All()"
 }
+
+// ErrNullResult is returned when .One returns nil
+type ErrNullResult struct {
+}
+
+func (e ErrNullResult) Error() string {
+	return "rethinkdb: Not found"
+}

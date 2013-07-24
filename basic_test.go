@@ -208,7 +208,7 @@ var testGroups = map[string][]ExpectPair{
 		{Expr(1), 1},
 		{Expr(true), true},
 		{Expr("bob"), "bob"},
-		{Expr(nil), nil},
+		{Expr(nil), ErrorResponse{}},
 	},
 	"arith": {
 		{Expr(1).Add(2), 3},

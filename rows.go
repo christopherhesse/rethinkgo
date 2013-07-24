@@ -115,6 +115,10 @@ func (rows *Rows) Next() bool {
 		rows.buffer = rows.buffer[1:len(rows.buffer)]
 	}
 
+	if isNullDatum(rows.current) {
+		return false
+	}
+
 	return true
 }
 
@@ -125,6 +129,9 @@ func (rows *Rows) Next() bool {
 // before writing the next row.  Make sure to create a new destination or clear
 // it before calling .Scan(&dest).
 func (rows *Rows) Scan(dest interface{}) error {
+	if isNullDatum(rows.current) {
+		return ErrNullResult{}
+	}
 	return datumUnmarshal(rows.current, dest)
 }
 
