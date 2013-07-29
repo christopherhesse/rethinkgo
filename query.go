@@ -1793,7 +1793,7 @@ func (e Exp) Prepend(value interface{}) Exp {
 // Example response:
 //
 //  ["a", "c", "b"]
-func (e Exp) InsertAt(index int, value interface{}) Exp {
+func (e Exp) InsertAt(index, value interface{}) Exp {
 	return naryOperator(insertAtKind, e, index, value)
 }
 
@@ -1807,7 +1807,7 @@ func (e Exp) InsertAt(index int, value interface{}) Exp {
 // Example response:
 //
 //  ["a", "c", "a", "t", "b"]
-func (e Exp) SpliceAt(index int, value interface{}) Exp {
+func (e Exp) SpliceAt(index, value interface{}) Exp {
 	return naryOperator(spliceAtKind, e, index, value)
 }
 
@@ -1822,7 +1822,7 @@ func (e Exp) SpliceAt(index int, value interface{}) Exp {
 // Example response:
 //
 //  ["a", "c"]
-func (e Exp) DeleteAt(startIndex, endIndex int) Exp {
+func (e Exp) DeleteAt(startIndex, endIndex interface{}) Exp {
 	return naryOperator(deleteAtKind, e, startIndex, endIndex)
 }
 
@@ -1836,7 +1836,7 @@ func (e Exp) DeleteAt(startIndex, endIndex int) Exp {
 // Example response:
 //
 //  ["a", "x", "c"]
-func (e Exp) ChangeAt(index int, value interface{}) Exp {
+func (e Exp) ChangeAt(index, value interface{}) Exp {
 	return naryOperator(changeAtKind, e, index, value)
 }
 
@@ -1986,7 +1986,7 @@ func (e Exp) Contains(values ...interface{}) Exp {
 // Example response:
 //
 //  ["a"] (maybe)
-func (e Exp) Sample(count int) Exp {
+func (e Exp) Sample(count interface{}) Exp {
 	return naryOperator(sampleKind, e, count)
 }
 
