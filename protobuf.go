@@ -82,17 +82,17 @@ func (ctx context) toTerm(o interface{}) *p.Term {
 			options["return_vals"] = true
 		}
 		switch e.kind {
-			case updateKind:
-				termType = p.Term_UPDATE
-				options["non_atomic"] = !ctx.atomic
-			case deleteKind:
-				termType = p.Term_DELETE
-			case replaceKind:
-				termType = p.Term_REPLACE
-				options["non_atomic"] = !ctx.atomic
-			case insertKind:
-				termType = p.Term_INSERT
-				options["upsert"] = ctx.overwrite
+		case updateKind:
+			termType = p.Term_UPDATE
+			options["non_atomic"] = !ctx.atomic
+		case deleteKind:
+			termType = p.Term_DELETE
+		case replaceKind:
+			termType = p.Term_REPLACE
+			options["non_atomic"] = !ctx.atomic
+		case insertKind:
+			termType = p.Term_INSERT
+			options["upsert"] = ctx.overwrite
 		}
 
 	case tableCreateKind:
@@ -136,7 +136,7 @@ func (ctx context) toTerm(o interface{}) *p.Term {
 		}
 	case getAllKind:
 		termType = p.Term_GET_ALL
-		options["index"] = arguments[len(arguments) - 1]
+		options["index"] = arguments[len(arguments)-1]
 		arguments = arguments[:len(arguments)-1]
 		fmt.Println("arguments:", arguments)
 
@@ -386,7 +386,7 @@ func (ctx context) compileExpressionFunc(e Exp, requiredArgs int) *p.Term {
 		requiredArgs--
 	}
 
-	paramsTerm := ctx.toTerm(params)
+	paramsTerm := paramsToTerm(params)
 	funcTerm := ctx.toTerm(e)
 
 	return &p.Term{
@@ -427,7 +427,7 @@ func (ctx context) compileGoFunc(f interface{}, requiredArgs int) *p.Term {
 	}
 
 	outValue := value.Call(args)[0]
-	paramsTerm := ctx.toTerm(params)
+	paramsTerm := paramsToTerm(params)
 	funcTerm := ctx.toTerm(outValue.Interface())
 
 	return &p.Term{
@@ -436,37 +436,42 @@ func (ctx context) compileGoFunc(f interface{}, requiredArgs int) *p.Term {
 	}
 }
 
+func paramsToTerm(params []int64) *p.Term {
+	terms := []*p.Term{}
+	for _, param := range params {
+		num := float64(param)
+		term := &p.Term{
+			Type: p.Term_DATUM.Enum(),
+			Datum: &p.Datum{
+				Type: p.Datum_R_NUM.Enum(),
+				RNum: &num,
+			},
+		}
+		terms = append(terms, term)
+	}
+
+	return &p.Term{
+		Type: p.Term_MAKE_ARRAY.Enum(),
+		Args: terms,
+	}
+}
+
 func (ctx context) literalToTerm(literal interface{}) *p.Term {
 	value := reflect.ValueOf(literal)
-	var datum *p.Datum
 
-	switch value.Kind() {
-	case reflect.Array, reflect.Slice:
-		terms := []*p.Term{}
-		for _, arg := range toArray(literal) {
-			terms = append(terms, ctx.toTerm(arg))
-		}
-
-		return &p.Term{
-			Type: p.Term_MAKE_ARRAY.Enum(),
-			Args: terms,
-		}
-	case reflect.Map:
+	if value.Kind() == reflect.Map {
 		return &p.Term{
 			Type:    p.Term_MAKE_OBJ.Enum(),
 			Optargs: ctx.mapToAssocPairs(literal),
 		}
 	}
 
-	datum, err := datumMarshal(literal)
+	term, err := datumMarshal(literal)
 	if err != nil {
 		panic(err)
 	}
 
-	return &p.Term{
-		Type:  p.Term_DATUM.Enum(),
-		Datum: datum,
-	}
+	return term
 }
 
 // toArray and toObject seem overly complicated, like maybe some sort

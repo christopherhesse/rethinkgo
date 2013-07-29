@@ -1,82 +1,34 @@
 package rethinkgo
 
 import (
-	"code.google.com/p/goprotobuf/proto"
 	"encoding/json"
-	"reflect"
 	p "github.com/christopherhesse/rethinkgo/ql2"
 	"strings"
 )
 
-func datumMarshal(v interface{}) (*p.Datum, error) {
+func datumMarshal(v interface{}) (*p.Term, error) {
 	// convert arbitrary types to a datum tree using the json module
 	data, err := json.Marshal(v)
 	if err != nil {
 		return nil, err
 	}
 
-	var w interface{}
-	err = json.Unmarshal(data, &w)
-	if err != nil {
-		return nil, err
-	}
-	return jsonToDatum(w), nil
-}
+	dataString := string(data)
 
-func jsonToDatum(v interface{}) *p.Datum {
-	value := reflect.ValueOf(v)
-	switch value.Kind() {
-	case reflect.Invalid:
-		return &p.Datum{
-			Type: p.Datum_R_NULL.Enum(),
-		}
-	case reflect.Bool:
-		r := value.Bool()
-		return &p.Datum{
-			Type:  p.Datum_R_BOOL.Enum(),
-			RBool: &r,
-		}
-	case reflect.Float64:
-		r := value.Float()
-		return &p.Datum{
-			Type: p.Datum_R_NUM.Enum(),
-			RNum: &r,
-		}
-	case reflect.String:
-		r := value.String()
-		return &p.Datum{
+	datumTerm := &p.Term{
+		Type:  p.Term_DATUM.Enum(),
+		Datum: &p.Datum{
 			Type: p.Datum_R_STR.Enum(),
-			RStr: &r,
-		}
-	case reflect.Slice:
-		datums := []*p.Datum{}
-		for i := 0; i < value.Len(); i++ {
-			itemValue := value.Index(i)
-			datums = append(datums, jsonToDatum(itemValue.Interface()))
-		}
-
-		return &p.Datum{
-			Type:   p.Datum_R_ARRAY.Enum(),
-			RArray: datums,
-		}
-	case reflect.Map:
-		pairs := []*p.Datum_AssocPair{}
-		for _, keyValue := range value.MapKeys() {
-			valueValue := value.MapIndex(keyValue)
-			// keys for objects must be strings
-			key := keyValue.Interface().(string)
-			pair := &p.Datum_AssocPair{
-				Key: proto.String(key),
-				Val: jsonToDatum(valueValue.Interface()),
-			}
-			pairs = append(pairs, pair)
-		}
-		return &p.Datum{
-			Type:    p.Datum_R_OBJECT.Enum(),
-			RObject: pairs,
-		}
+			RStr: &dataString,
+		},
 	}
-	panic("rethinkdb: could not convert to datum")
+
+	term := &p.Term{
+		Type: p.Term_JSON.Enum(),
+		Args: []*p.Term{datumTerm},
+	}
+
+	return term, nil
 }
 
 func datumUnmarshal(datum *p.Datum, v interface{}) error {
