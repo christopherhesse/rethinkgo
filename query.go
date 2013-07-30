@@ -1823,8 +1823,11 @@ func (e Exp) SpliceAt(index, value interface{}) Exp {
 // Example response:
 //
 //  ["a"]
-func (e Exp) DeleteAt(startIndex interface{}, endIndex ...interface{}) Exp {
-	return naryOperator(deleteAtKind, e, startIndex, endIndex)
+func (e Exp) DeleteAt(startIndex interface{}, endIndex interface{}) Exp {
+	if endIndex != nil {
+		return naryOperator(deleteAtKind, e, startIndex, endIndex)
+	}
+	return naryOperator(deleteAtKind, e, startIndex)
 }
 
 // ChangeAt replaces an element of an array at a given index.
