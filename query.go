@@ -1812,18 +1812,19 @@ func (e Exp) SpliceAt(index, value interface{}) Exp {
 }
 
 // DeleteAt removes an element from an array from the given start index to the
-// end index.
+// end index. End index is optional, if not provided DeleteAt will only delete
+// the element at start index.
 //
 // Example usage:
 //
 //  var response []string
-//  r.Expr(r.List{"a", "b", "c"}).DeleteAt(1, 1).Run(session).One(&response)
+//  r.Expr(r.List{"a", "b", "c"}).DeleteAt(1, 2).Run(session).One(&response)
 //
 // Example response:
 //
-//  ["a", "c"]
-func (e Exp) DeleteAt(startIndex, endIndex interface{}) Exp {
-	return naryOperator(deleteAtKind, e, startIndex, endIndex)
+//  ["a"]
+func (e Exp) DeleteAt(indexes ...interface{}) Exp {
+	return naryOperator(deleteAtKind, e, indexes)
 }
 
 // ChangeAt replaces an element of an array at a given index.
