@@ -1812,7 +1812,7 @@ func (e Exp) SpliceAt(index, value interface{}) Exp {
 }
 
 // DeleteAt removes an element from an array from the given start index to the
-// end index. End index is optional, if not provided DeleteAt will only delete
+// end index. If end index is set to nil DeleteAt will only delete
 // the element at start index.
 //
 // Example usage:
@@ -1823,11 +1823,11 @@ func (e Exp) SpliceAt(index, value interface{}) Exp {
 // Example response:
 //
 //  ["a"]
-func (e Exp) DeleteAt(startIndex interface{}, endIndex interface{}) Exp {
-	if endIndex != nil {
-		return naryOperator(deleteAtKind, e, startIndex, endIndex)
+func (e Exp) DeleteAt(startIndex, endIndex interface{}) Exp {
+	if endIndex == nil {
+		return naryOperator(deleteAtKind, e, startIndex)
 	}
-	return naryOperator(deleteAtKind, e, startIndex)
+	return naryOperator(deleteAtKind, e, startIndex, endIndex)
 }
 
 // ChangeAt replaces an element of an array at a given index.
