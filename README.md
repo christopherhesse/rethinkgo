@@ -106,7 +106,7 @@ Differences from official RethinkDB drivers
     * You want to iterate through the results of the query individually: rows.Next() and rows.Scan(&dest)
     * The query always returns a single response: .One(&dest)
     * The query returns a list of responses: .All(&dest)
-    * The query returns an empty response: .Exec()
+    * The query returns an empty response (or you want to ignore the result): .Exec()
 * No errors are generated when creating queries, only when running them, so Table(string) returns only an Exp instance, but sess.Run(Query).Err() will tell you if your query could not be serialized for the server.  To check just the serialization of the query before calling .Run(*Session), use .Check(*Session)
 * Go does not have optional args, most optional args are either require or separate methods.
     * .Atomic(bool), .Overwrite(bool), .UseOutdated(bool) are methods on any Table() or other Exp (will apply to all tables, inserts, etc that have already been specified)
