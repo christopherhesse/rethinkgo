@@ -76,7 +76,7 @@ Most of the functions have the same names as in the Javascript driver, only with
 
 To use RethinkDB with this driver, you build a query using r.Table(), for example, and then call query.Run(session) to execute the query on the server and return an iterator for the results.
 
-There are 3 convenience functions on the iterator if you don't want to iterate over the results, .One(&result) for a query that returns a single result, .All(&results) for multiple results, and .Exec() for a query that returns an empty response (for instance, r.TableCreate(string)).
+There are 3 convenience functions on the iterator if you don't want to iterate over the results, .One(&result) for a query that returns a single result, .All(&results) for multiple results, and .Exec() for a query that returns an empty response (for instance, r.TableCreate(string)) or to ignore the response.
 
 The important types are r.Exp (for RethinkDB expressions), r.Query (interface for all queries, including expressions), r.List (used for Arrays, an alias for []interface{}), and r.Map (used for Objects, an alias for map[string]interface{}).
 
