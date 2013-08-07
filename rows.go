@@ -16,7 +16,7 @@ import (
 // iterating in this manner. These three methods correspond to the return types
 // of a query:
 //
-// .Exec() for an empty response:
+// .Exec() for an empty response (or to ignore the response):
 //
 //  err := r.Db("marvel").TableCreate("heroes").Exec()
 //
