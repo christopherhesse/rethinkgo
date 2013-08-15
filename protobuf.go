@@ -138,7 +138,6 @@ func (ctx context) toTerm(o interface{}) *p.Term {
 		termType = p.Term_GET_ALL
 		options["index"] = arguments[len(arguments)-1]
 		arguments = arguments[:len(arguments)-1]
-		fmt.Println("arguments:", arguments)
 
 	case funcKind:
 		return ctx.toFuncTerm(arguments[0], arguments[1].(int))
