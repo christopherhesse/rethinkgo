@@ -47,12 +47,10 @@ func Test(t *testing.T) { test.TestingT(t) }
 type RethinkSuite struct{}
 
 func (s *RethinkSuite) SetUpSuite(c *test.C) {
-	SetDebug(true)
+	SetDebug(false)
 	var err error
 	session, err = Connect("localhost:28015", "test")
 	c.Assert(err, test.IsNil)
-
-	resetDatabase(c)
 }
 
 func (s *RethinkSuite) TearDownSuite(c *test.C) {
@@ -120,6 +118,7 @@ func resetDatabase(c *test.C) {
 	spec := TableSpec{Name: "joins3", PrimaryKey: "it"}
 	Db("test").TableCreateWithSpec(spec).Run(session)
 	j3.Insert(s3).Run(session)
+	fmt.Println("")
 }
 
 var _ = test.Suite(&RethinkSuite{})
@@ -241,7 +240,7 @@ var testGroups = map[string][]ExpectPair{
 		{arr.Limit(5).Count(), 5},
 		{arr.Skip(4).Count(), 2},
 		{arr.Skip(4).Nth(0), 5},
-		{arr.Slice(1, 4).Count(), 4},
+		{arr.Slice(1, 4).Count(), 3},
 		{arr.Nth(2), 3},
 	},
 	"append": {
@@ -379,32 +378,32 @@ var testGroups = map[string][]ExpectPair{
 	"groupby": {
 		{gobj.GroupBy("g1", Avg("num")),
 			List{
-				Map{"group": List{1}, "reduction": 5},
-				Map{"group": List{2}, "reduction": 50},
+				Map{"group": Map{"g1": 1}, "reduction": 5},
+				Map{"group": Map{"g1": 2}, "reduction": 50},
 			},
 		},
 		{gobj.GroupBy("g1", Count()),
 			List{
-				Map{"group": List{1}, "reduction": 3},
-				Map{"group": List{2}, "reduction": 2},
+				Map{"group": Map{"g1": 1}, "reduction": 3},
+				Map{"group": Map{"g1": 2}, "reduction": 2},
 			},
 		},
 		{gobj.GroupBy("g1", Sum("num")),
 			List{
-				Map{"group": List{1}, "reduction": 15},
-				Map{"group": List{2}, "reduction": 100},
+				Map{"group": Map{"g1": 1}, "reduction": 15},
+				Map{"group": Map{"g1": 2}, "reduction": 100},
 			},
 		},
 		{gobj.GroupBy([]string{"g1", "g2"}, Avg("num")),
 			List{
-				Map{"group": List{1, 1}, "reduction": 0},
-				Map{"group": List{1, 2}, "reduction": 7.5},
-				Map{"group": List{2, 3}, "reduction": 50},
+				Map{"group": Map{"g1": 1, "g2": 1}, "reduction": 0},
+				Map{"group": Map{"g1": 1, "g2": 2}, "reduction": 7.5},
+				Map{"group": Map{"g1": 2, "g2": 3}, "reduction": 50},
 			},
 		},
 	},
 	"concatmap": {
-		{tbl.ConcatMap(func(row Exp) Exp {return Expr(List{1, 2})}).Count(), 20},
+		{tbl.ConcatMap(func(row Exp) Exp { return Expr(List{1, 2}) }).Count(), 20},
 	},
 	"update": {
 		{tbl.Filter(func(row Exp) Exp {
@@ -656,24 +655,37 @@ var testGroups = map[string][]ExpectPair{
 	},
 }
 
-func (s *RethinkSuite) TestGroups(c *test.C) {
+func (s *RethinkSuite) TestAGroups(c *test.C) {
+	fmt.Println("\nStarting Test 'TestGroups'")
+
 	for group, pairs := range testGroups {
 		resetDatabase(c)
+
 		for index, pair := range pairs {
-			fmt.Println("group:", group, index)
+			fmt.Println("Group:", group, index)
 			runQuery(c, pair)
+			fmt.Println("")
 		}
 	}
+	fmt.Println("Finished Test")
 }
 
 func (s *RethinkSuite) TestGet(c *test.C) {
+	fmt.Println("\nStarting Test 'TestGet'")
+
+	resetDatabase(c)
 	for i := 0; i < 10; i++ {
 		pair := ExpectPair{tbl.Get(i), Map{"id": i, "num": 20 - i}}
 		runQuery(c, pair)
+		fmt.Println("")
 	}
+	fmt.Println("Finished Test")
 }
 
 func (s *RethinkSuite) TestOrderBy(c *test.C) {
+	fmt.Println("\nStarting Test 'TestOrderBy'")
+
+	resetDatabase(c)
 	var results1 []Map
 	var results2 []Map
 
@@ -681,11 +693,16 @@ func (s *RethinkSuite) TestOrderBy(c *test.C) {
 	tbl.OrderBy(Asc("num")).Run(session).All(&results2)
 
 	c.Assert(results1, JsonEquals, results2)
+	fmt.Println("Finished Test")
 }
 
 func (s *RethinkSuite) TestDropTable(c *test.C) {
+	fmt.Println("\nStarting Test 'TestDropTable'")
+
+	resetDatabase(c)
 	err := Db("test").TableCreate("tablex").Run(session).Err()
 	c.Assert(err, test.IsNil)
 	err = Db("test").TableDrop("tablex").Run(session).Err()
 	c.Assert(err, test.IsNil)
+	fmt.Println("Finished Test")
 }

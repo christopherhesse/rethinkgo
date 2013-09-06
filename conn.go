@@ -1,14 +1,14 @@
 package rethinkgo
 
 import (
+	"bufio"
 	"code.google.com/p/goprotobuf/proto"
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"net"
-	"io"
-	"bufio"
 	p "github.com/christopherhesse/rethinkgo/ql2"
+	"io"
+	"net"
 	"time"
 )
 
