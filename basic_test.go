@@ -251,6 +251,7 @@ var testGroups = map[string][]ExpectPair{
 	},
 	"merge": {
 		{Expr(Map{"a": 1}).Merge(Map{"b": 2}), Map{"a": 1, "b": 2}},
+		{Expr(Map{"a": Map{"b1": Map{"c": 1}}}).Merge(Map{"a": Literal(Map{"b2": Map{"c": 2}})}), Map{"a": Map{"b2": Map{"c": 2}}}},
 	},
 	"if": {
 		{Branch(true, 1, 2), 1},
@@ -672,7 +673,7 @@ func (s *RethinkSuite) TestAGroups(c *test.C) {
 	fmt.Println("\nStarting Test 'TestGroups'")
 
 	for group, pairs := range testGroups {
-		if group != "orderby" {
+		if group != "merge" {
 			continue
 		}
 

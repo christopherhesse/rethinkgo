@@ -1,5 +1,33 @@
 package rethinkgo
 
+// Literal is used to merge flat values
+//
+// Example usage:
+//
+//  var response []interface{}
+//  // Count all heroes in each superhero group
+//  err := r.Table("heroes").GroupBy("affiliation", r.Count()).Run(session).One(&response)
+//  weaponsmap := r.Map{weapons : r.Map{spectacular_graviton_beam : r.Map{dmg : 10, cooldown : 20}}}
+//  mergefunc := r.literal({repulsor_rays : {dmg : 3, cooldown : 0}})}
+//  err := r.Expr().merge(r.Map{weapons : r.literal({repulsor_rays : {dmg : 3, cooldown : 0}})}).Run(session).All(&response)
+//
+// Example response:
+//
+//  [
+//    {
+//      "group": "Avengers", // this is the affiliation attribute for every member of this group
+//      "reduction": 9  // this is the number of members in this group
+//    },
+//    {
+//      "group": "X-Men",
+//      "reduction": 12
+//    },
+//    ...
+//  ]
+func Literal(operand interface{}) Exp {
+	return naryOperator(mergeLiteralKind, operand)
+}
+
 // Attr gets an attribute's value from the row.
 //
 // Example usage:

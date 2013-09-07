@@ -73,6 +73,7 @@ const (
 	mapKind
 	matchKind
 	mergeKind
+	mergeLiteralKind
 	moduloKind
 	multiplyKind
 	nthKind

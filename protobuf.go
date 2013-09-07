@@ -283,6 +283,8 @@ func (ctx context) toTerm(o interface{}) *p.Term {
 		termType = p.Term_WITHOUT
 	case mergeKind:
 		termType = p.Term_MERGE
+	case mergeLiteralKind:
+		termType = p.Term_LITERAL
 	case indexCreateKind:
 		termType = p.Term_INDEX_CREATE
 	case indexListKind:
