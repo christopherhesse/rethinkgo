@@ -670,13 +670,16 @@ var testGroups = map[string][]ExpectPair{
 			1.2,
 		},
 	},
+	// "now": {
+	// 	{Now(), nil}, // ?? Cant test this with how tests are currently setup
+	// },
 }
 
 func (s *RethinkSuite) TestAGroups(c *test.C) {
 	fmt.Println("\nStarting Test 'TestGroups'")
 
 	for group, pairs := range testGroups {
-		if group != "coerceto" {
+		if group != "now" {
 			continue
 		}
 

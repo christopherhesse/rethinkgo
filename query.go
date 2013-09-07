@@ -77,6 +77,7 @@ const (
 	moduloKind
 	multiplyKind
 	nthKind
+	nowKind
 	orderByKind
 	outerJoinKind
 	pluckKind

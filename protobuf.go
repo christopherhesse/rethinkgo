@@ -173,6 +173,8 @@ func (ctx context) toTerm(o interface{}) *p.Term {
 		ctx.rightbound = e.args[1].(string)
 		return ctx.toTerm(e.args[0])
 
+	case nowKind:
+		termType = p.Term_NOW
 	case jsonKind:
 		termType = p.Term_JSON
 	case mapKind:
