@@ -9,10 +9,6 @@ import (
 )
 
 func datumMarshal(v interface{}) (*p.Term, error) {
-	return DatumMarshal(v)
-}
-
-func DatumMarshal(v interface{}) (*p.Term, error) {
 	// convert arbitrary types to a datum tree using the json module
 	data, err := json.Marshal(v)
 	if err != nil {
@@ -38,9 +34,6 @@ func DatumMarshal(v interface{}) (*p.Term, error) {
 }
 
 func datumUnmarshal(datum *p.Datum, v interface{}) error {
-	return DatumUnmarshal(datum, v)
-}
-func DatumUnmarshal(datum *p.Datum, v interface{}) error {
 	// convert a datum tree into an arbitrary type using the json module
 	data, err := datumToJson(datum)
 	if err != nil {
@@ -50,9 +43,6 @@ func DatumUnmarshal(datum *p.Datum, v interface{}) error {
 }
 
 func datumToJson(datum *p.Datum) ([]byte, error) {
-	return DatumToJson(datum)
-}
-func DatumToJson(datum *p.Datum) ([]byte, error) {
 	switch datum.GetType() {
 	case p.Datum_R_NULL:
 		return json.Marshal(nil)
