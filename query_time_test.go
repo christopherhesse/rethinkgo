@@ -35,3 +35,47 @@ func (s *RethinkSuite) TestInTimezone(c *test.C) {
 	c.Assert(err, test.IsNil)
 	c.Assert(response[1].Equal(response[0].In(loc)), test.Equals, true)
 }
+
+func (s *RethinkSuite) TestBetween(c *test.C) {
+	var response interface{}
+
+	times := Expr(List{
+		Time(1986, 9, 3, 12, 30, 15, "Z"),
+		Time(1986, 10, 3, 12, 30, 15, "Z"),
+		Time(1986, 11, 3, 12, 30, 15, "Z"),
+		Time(1986, 12, 3, 12, 30, 15, "Z"),
+	})
+	err := times.Filter(func(row Exp) Exp {
+		return row.During(Time(1986, 9, 3, 12, 30, 15, "Z"), Time(1986, 11, 3, 12, 30, 15, "Z"))
+	}).Count().Run(session).One(&response)
+
+	c.Assert(err, test.IsNil)
+	c.Assert(int(response.(float64)), test.Equals, 2)
+}
+
+func (s *RethinkSuite) TestYear(c *test.C) {
+	var response interface{}
+
+	err := Time(1986, 12, 3, 12, 30, 15, "Z").Year().Run(session).One(&response)
+
+	c.Assert(err, test.IsNil)
+	c.Assert(int(response.(float64)), test.Equals, 1986)
+}
+
+func (s *RethinkSuite) TestMonth(c *test.C) {
+	var response interface{}
+
+	err := Time(1986, 12, 3, 12, 30, 15, "Z").Month().Eq(December()).Run(session).One(&response)
+
+	c.Assert(err, test.IsNil)
+	c.Assert(response.(bool), test.Equals, true)
+}
+
+func (s *RethinkSuite) TestDay(c *test.C) {
+	var response interface{}
+
+	err := Time(1986, 12, 3, 12, 30, 15, "Z").Day().Eq(Wednesday()).Run(session).One(&response)
+
+	c.Assert(err, test.IsNil)
+	c.Assert(response.(bool), test.Equals, true)
+}
