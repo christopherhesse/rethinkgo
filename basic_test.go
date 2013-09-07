@@ -47,7 +47,7 @@ func Test(t *testing.T) { test.TestingT(t) }
 type RethinkSuite struct{}
 
 func (s *RethinkSuite) SetUpSuite(c *test.C) {
-	SetDebug(false)
+	// SetDebug(true)
 	var err error
 	session, err = Connect("localhost:28015", "test")
 	c.Assert(err, test.IsNil)
@@ -670,63 +670,48 @@ var testGroups = map[string][]ExpectPair{
 			1.2,
 		},
 	},
-	// "now": {
-	// 	{Now(), nil}, // ?? Cant test this with how tests are currently setup
-	// },
 }
 
-func (s *RethinkSuite) TestAGroups(c *test.C) {
-	fmt.Println("\nStarting Test 'TestGroups'")
+// func (s *RethinkSuite) TestGroups(c *test.C) {
+// 	for group, pairs := range testGroups {
+// 		if group != "time" {
+// 			continue
+// 		}
 
-	for group, pairs := range testGroups {
-		if group != "now" {
-			continue
-		}
+// 		resetDatabase(c)
 
-		resetDatabase(c)
+// 		for index, pair := range pairs {
+// 			fmt.Println("Group:", group, index)
+// 			runQuery(c, pair)
+// 			fmt.Println("")
+// 		}
+// 	}
+// }
 
-		for index, pair := range pairs {
-			fmt.Println("Group:", group, index)
-			runQuery(c, pair)
-			fmt.Println("")
-		}
-	}
-	fmt.Println("Finished Test")
-}
+// func (s *RethinkSuite) TestGet(c *test.C) {
+// 	resetDatabase(c)
+// 	for i := 0; i < 10; i++ {
+// 		pair := ExpectPair{tbl.Get(i), Map{"id": i, "num": 20 - i}}
+// 		runQuery(c, pair)
+// 		fmt.Println("")
+// 	}
+// }
 
-func (s *RethinkSuite) TestGet(c *test.C) {
-	fmt.Println("\nStarting Test 'TestGet'")
+// func (s *RethinkSuite) TestOrderBy(c *test.C) {
+// 	resetDatabase(c)
+// 	var results1 []Map
+// 	var results2 []Map
 
-	resetDatabase(c)
-	for i := 0; i < 10; i++ {
-		pair := ExpectPair{tbl.Get(i), Map{"id": i, "num": 20 - i}}
-		runQuery(c, pair)
-		fmt.Println("")
-	}
-	fmt.Println("Finished Test")
-}
+// 	tbl.OrderBy("num").Run(session).All(&results1)
+// 	tbl.OrderBy(Asc("num")).Run(session).All(&results2)
 
-func (s *RethinkSuite) TestOrderBy(c *test.C) {
-	fmt.Println("\nStarting Test 'TestOrderBy'")
+// 	c.Assert(results1, JsonEquals, results2)
+// }
 
-	resetDatabase(c)
-	var results1 []Map
-	var results2 []Map
-
-	tbl.OrderBy("num").Run(session).All(&results1)
-	tbl.OrderBy(Asc("num")).Run(session).All(&results2)
-
-	c.Assert(results1, JsonEquals, results2)
-	fmt.Println("Finished Test")
-}
-
-func (s *RethinkSuite) TestDropTable(c *test.C) {
-	fmt.Println("\nStarting Test 'TestDropTable'")
-
-	resetDatabase(c)
-	err := Db("test").TableCreate("tablex").Run(session).Err()
-	c.Assert(err, test.IsNil)
-	err = Db("test").TableDrop("tablex").Run(session).Err()
-	c.Assert(err, test.IsNil)
-	fmt.Println("Finished Test")
-}
+// func (s *RethinkSuite) TestDropTable(c *test.C) {
+// 	resetDatabase(c)
+// 	err := Db("test").TableCreate("tablex").Run(session).Err()
+// 	c.Assert(err, test.IsNil)
+// 	err = Db("test").TableDrop("tablex").Run(session).Err()
+// 	c.Assert(err, test.IsNil)
+// }

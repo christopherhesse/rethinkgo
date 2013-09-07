@@ -25,7 +25,7 @@ package rethinkgo
 //    ...
 //  ]
 func Literal(operand interface{}) Exp {
-	return naryOperator(mergeLiteralKind, operand)
+	return nullaryOperator(mergeLiteralKind, operand)
 }
 
 // Attr gets an attribute's value from the row.

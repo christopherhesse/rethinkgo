@@ -96,20 +96,44 @@ func DatumToJson(datum *p.Datum) ([]byte, error) {
 		for key, val := range obj {
 			if key == "\"$reql_type$\"" {
 				if val == "\"TIME\"" {
-					// TODO: Replace with info from context
-					timeformat := "raw"
+					epochTime := obj["\"epoch_time\""]
+					timezone, err := strconv.Unquote(obj["\"timezone\""])
+					if err != nil {
+						return nil, err
+					}
+
+					// TODO: Replace with info from context/session
+					timeformat := "native"
 					if timeformat == "native" {
-						seconds, err := strconv.ParseFloat(obj["\"epoch_time\""], 64)
+						seconds, err := strconv.ParseFloat(epochTime, 64)
 						if err != nil {
 							return nil, err
 						}
-						b, err := json.Marshal(time.Unix(int64(seconds), 0))
+						t := time.Unix(int64(seconds), 0)
+
+						// Caclulate the timezone
+						if timezone != "" {
+							hours, err := strconv.Atoi(timezone[1:3])
+							if err != nil {
+								return nil, err
+							}
+							minutes, err := strconv.Atoi(timezone[4:6])
+							if err != nil {
+								return nil, err
+							}
+							tzOffset := ((hours * 60) + minutes) * 60
+							if timezone[:1] == "-" {
+								tzOffset = 0 - tzOffset
+							}
+
+							t = t.In(time.FixedZone(timezone, tzOffset))
+						}
+
+						b, err := json.Marshal(t)
 						if err != nil {
 							return nil, err
 						}
 						return b, nil
-					} else if timeformat == "raw" {
-						continue
 					}
 				} else {
 					panic("unkown psudo-type")

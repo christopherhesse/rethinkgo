@@ -24,8 +24,8 @@ type Session struct {
 	// authorization key for servers configured to check this
 	authkey string
 
-	conn *connection
-	closed    bool
+	conn   *connection
+	closed bool
 }
 
 // Connect creates a new database session.
@@ -43,7 +43,7 @@ func Connect(address, database string) (*Session, error) {
 
 // ConnectWithAuth is the same as Connect, but also sets the authorization key
 // used to connect to the server.
-func ConnectWithAuth(address, database, authkey string) (*Session, error)  {
+func ConnectWithAuth(address, database, authkey string) (*Session, error) {
 	s := &Session{address: address, database: database, authkey: authkey, closed: true}
 	err := s.Reconnect()
 	return s, err

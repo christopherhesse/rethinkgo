@@ -175,6 +175,12 @@ func (ctx context) toTerm(o interface{}) *p.Term {
 
 	case nowKind:
 		termType = p.Term_NOW
+	case timeKind:
+		termType = p.Term_TIME
+	case epochTimeKind:
+		termType = p.Term_EPOCH_TIME
+	case inTimezoneKind:
+		termType = p.Term_IN_TIMEZONE
 	case jsonKind:
 		termType = p.Term_JSON
 	case mapKind:
@@ -481,6 +487,11 @@ func (ctx context) literalToTerm(literal interface{}) *p.Term {
 			Type:    p.Term_MAKE_OBJ.Enum(),
 			Optargs: ctx.mapToAssocPairs(literal),
 		}
+	} else if value.Kind() == reflect.Slice {
+		return &p.Term{
+			Type: p.Term_MAKE_ARRAY.Enum(),
+			Args: ctx.listToTerms(literal),
+		}
 	}
 
 	term, err := datumMarshal(literal)
@@ -531,6 +542,13 @@ func (ctx context) mapToAssocPairs(m interface{}) (pairs []*p.Term_AssocPair) {
 			Val: ctx.toTerm(value),
 		}
 		pairs = append(pairs, pair)
+	}
+	return pairs
+}
+
+func (ctx context) listToTerms(m interface{}) (pairs []*p.Term) {
+	for _, value := range toArray(m) {
+		pairs = append(pairs, ctx.toTerm(value))
 	}
 	return pairs
 }

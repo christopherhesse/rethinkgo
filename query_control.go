@@ -1,5 +1,10 @@
 package rethinkgo
 
+import (
+	"fmt"
+	"time"
+)
+
 // Do evalutes the last argument (a function) using all previous arguments as the arguments to the function.
 //
 // For instance, Do(a, b, c, f) will be run as f(a, b, c).
@@ -96,12 +101,72 @@ func (e Exp) Default(value interface{}) Exp {
 // Example response:
 //
 //  {"go": "awesome", "rethinkdb": "awesomer"}
-func Expr(value interface{}) Exp {
-	v, ok := value.(Exp) // check if it's already an Exp
-	if ok {
-		return v
+func ExprT(value interface{}) Exp {
+	return exprT(value, 20)
+	// v, ok := value.(Exp) // check if it's already an Exp
+	// if ok {
+	// 	return v
+	// }
+	// return naryOperator(literalKind, value)
+}
+
+func exprT(value interface{}, depth int) Exp {
+	if depth <= 0 {
+		panic("nesting depth limit exceeded")
 	}
-	return naryOperator(literalKind, value)
+
+	switch val := value.(type) {
+	case time.Time:
+		return nullaryOperator(literalKind, val)
+	case Exp:
+		return val
+	case func() Exp, func(Exp) Exp:
+		return funcWrapper(val, 1)
+	default:
+		return nullaryOperator(literalKind, val)
+	}
+}
+
+func Expr(value interface{}) Exp {
+	return expr(value, 20)
+	// v, ok := value.(Exp) // check if it's already an Exp
+	// if ok {
+	// 	return v
+	// }
+	// return naryOperator(literalKind, value)
+}
+
+func expr(value interface{}, depth int) Exp {
+	if depth <= 0 {
+		panic("nesting depth limit exceeded")
+	}
+
+	switch val := value.(type) {
+	default:
+		return nullaryOperator(literalKind, val)
+	case time.Time:
+		return nullaryOperator(literalKind, val)
+	case Exp:
+		return val
+	case List:
+	case []Map:
+		temp := List{}
+		for _, v := range val {
+			temp = append(temp, expr(v, depth-1))
+		}
+		return nullaryOperator(literalKind, temp)
+	case Map:
+		temp := Map{}
+		for k, v := range val {
+			temp[k] = expr(v, depth-1)
+		}
+		return nullaryOperator(literalKind, temp)
+	case func() Exp:
+	case func(Exp) Exp:
+		return funcWrapper(val, 1)
+	}
+
+	return nullaryOperator(literalKind, value)
 }
 
 // Js creates an expression using Javascript code.  The code is executed

@@ -38,6 +38,7 @@ const (
 	divideKind
 	defaultKind
 	eqJoinKind
+	epochTimeKind
 	equalityKind
 	errorKind
 	filterKind
@@ -63,6 +64,7 @@ const (
 	insertAtKind
 	insertKind
 	isEmptyKind
+	inTimezoneKind
 	javascriptKind
 	jsonKind
 	keysKind
@@ -98,6 +100,7 @@ const (
 	tableDropKind
 	tableKind
 	tableListKind
+	timeKind
 	typeOfKind
 	unionKind
 	updateKind
@@ -116,8 +119,8 @@ const (
 	rightboundKind
 )
 
-func nullaryOperator(kind expressionKind) Exp {
-	return Exp{kind: kind}
+func nullaryOperator(kind expressionKind, args ...interface{}) Exp {
+	return Exp{kind: kind, args: args}
 }
 
 func naryOperator(kind expressionKind, operand interface{}, operands ...interface{}) Exp {
