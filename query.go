@@ -110,6 +110,8 @@ const (
 	useOutdatedKind
 	durabilityKind
 	literalKind
+	leftboundKind
+	rightboundKind
 )
 
 func nullaryOperator(kind expressionKind) Exp {
@@ -861,8 +863,32 @@ func (e Exp) HasFields(keys ...string) Exp {
 //    "real_name": "Elektra Natchios",
 //    "speed": 6,
 //  }
-func (e Exp) Between(index string, lowerbound, upperbound interface{}) Exp {
-	return naryOperator(betweenKind, e, lowerbound, upperbound, index)
+func (e Exp) Between(index string, lowerKey, upperKey interface{}) Exp {
+	return naryOperator(betweenKind, e, lowerKey, upperKey, index)
+}
+
+// LeftBound tells the server when performing a between to include the left endpoint
+//
+// Example usage:
+//
+//   var response []interface{}
+//   // Retrieve all heroes with names between "E" and "F"
+//   err := r.Table("heroes").Between("name", "E", "F").RightBound.Run(session).All(&response)
+//
+func (e Exp) LeftBound(opt string) Exp {
+	return naryOperator(leftboundKind, e, opt)
+}
+
+// RightBound tells the server when performing a between to include the right endpoint
+//
+// Example usage:
+//
+//   var response []interface{}
+//   // Retrieve all heroes with names between "E" and "F"
+//   err := r.Table("heroes").Between("name", "E", "F").RightBound.Run(session).All(&response)
+//
+func (e Exp) RightBound(opt string) Exp {
+	return naryOperator(rightboundKind, e, opt)
 }
 
 // OrderBy sort the sequence by the values of the given key(s) in each row. The

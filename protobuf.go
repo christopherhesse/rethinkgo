@@ -22,6 +22,8 @@ type context struct {
 	overwrite    bool
 	atomic       bool
 	returnValues bool
+	leftbound    string
+	rightbound   string
 }
 
 // toTerm converts an arbitrary object to a Term, within the context that toTerm
@@ -60,6 +62,12 @@ func (ctx context) toTerm(o interface{}) *p.Term {
 			// last argument is an index
 			options["index"] = arguments[3]
 			arguments = arguments[:3]
+		}
+		if ctx.leftbound != "" {
+			options["left_bound"] = ctx.leftbound
+		}
+		if ctx.rightbound != "" {
+			options["right_bound"] = ctx.rightbound
 		}
 	case reduceKind:
 		termType = p.Term_REDUCE
@@ -157,6 +165,12 @@ func (ctx context) toTerm(o interface{}) *p.Term {
 		return ctx.toTerm(e.args[0])
 	case returnValuesKind:
 		ctx.returnValues = true
+		return ctx.toTerm(e.args[0])
+	case leftboundKind:
+		ctx.leftbound = e.args[1].(string)
+		return ctx.toTerm(e.args[0])
+	case rightboundKind:
+		ctx.rightbound = e.args[1].(string)
 		return ctx.toTerm(e.args[0])
 
 	case jsonKind:

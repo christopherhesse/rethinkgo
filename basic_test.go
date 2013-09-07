@@ -76,6 +76,9 @@ func resetDatabase(c *test.C) {
 	pair = ExpectPair{tbl.Insert(others), MatchMap{"inserted": 9}}
 	runQuery(c, pair)
 
+	pair = ExpectPair{tbl.IndexCreate("num", nil), MatchMap{"created": 1}}
+	runQuery(c, pair)
+
 	err = Db("test").TableCreate("table2").Run(session).Err()
 	c.Assert(err, test.IsNil)
 
@@ -353,7 +356,10 @@ var testGroups = map[string][]ExpectPair{
 		},
 	},
 	"between": {
-		{tbl.Between("id", 2, 3).Count(), 2},
+		{tbl.Between("id", 2, 3).Count(), 1},
+		{tbl.Between("num", 12, 14).Count(), 2},
+		{tbl.Between("num", 12, 14).LeftBound("open").Count(), 1},
+		{tbl.Between("num", 12, 14).RightBound("closed").Count(), 3},
 		{tbl.Between("id", 2, 3).OrderBy("id").Nth(0), Map{"id": 2, "num": 18}},
 	},
 	"groupedmapreduce": {
@@ -659,6 +665,10 @@ func (s *RethinkSuite) TestAGroups(c *test.C) {
 	fmt.Println("\nStarting Test 'TestGroups'")
 
 	for group, pairs := range testGroups {
+		// if group != "between" {
+		// 	continue
+		// }
+
 		resetDatabase(c)
 
 		for index, pair := range pairs {
