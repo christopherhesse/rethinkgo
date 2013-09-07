@@ -663,8 +663,11 @@ var testGroups = map[string][]ExpectPair{
 		},
 	},
 	"coerceto": {
-		{Expr(1).CoerceTo("string"),
+		{Expr(1).CoerceTo("STRING"),
 			"1",
+		},
+		{Expr("1.2").CoerceTo("NUMBER"),
+			1.2,
 		},
 	},
 }
@@ -673,7 +676,7 @@ func (s *RethinkSuite) TestAGroups(c *test.C) {
 	fmt.Println("\nStarting Test 'TestGroups'")
 
 	for group, pairs := range testGroups {
-		if group != "merge" {
+		if group != "coerceto" {
 			continue
 		}
 
