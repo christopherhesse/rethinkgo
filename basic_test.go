@@ -299,6 +299,13 @@ var testGroups = map[string][]ExpectPair{
 		{tbl.OrderBy(Asc("num")).Nth(2).Pluck("num"), Map{"num": 13}},
 		{tbl.OrderBy(Desc("num")).Nth(2), Map{"id": 2, "num": 18}},
 		{tbl.OrderBy(Desc("num")).Nth(2).Pluck("num"), Map{"num": 18}},
+		{tbl.OrderBy(func(row Exp) Exp {
+			return row.Attr("num")
+		}).Nth(2).Pluck("num"), Map{"num": 13}},
+		{tbl.OrderBy(Desc(func(row Exp) Exp {
+			return row.Attr("num")
+		})).Nth(2).Pluck("num"), Map{"num": 18}},
+		{tbl.OrderBy(Desc(Js("(function(row) {return row.num})"))).Nth(2).Pluck("num"), Map{"num": 18}},
 	},
 	"pluck": {
 		{tobj.Pluck("a"), Map{"a": 1}},
@@ -665,9 +672,9 @@ func (s *RethinkSuite) TestAGroups(c *test.C) {
 	fmt.Println("\nStarting Test 'TestGroups'")
 
 	for group, pairs := range testGroups {
-		// if group != "between" {
-		// 	continue
-		// }
+		if group != "orderby" {
+			continue
+		}
 
 		resetDatabase(c)
 

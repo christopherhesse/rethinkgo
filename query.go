@@ -903,7 +903,23 @@ func (e Exp) RightBound(opt string) Exp {
 //   // Retrieve villains in order of decreasing strength, then increasing intelligence
 //   query := r.Table("villains").OrderBy(r.Desc("strength"), "intelligence")
 //   err := query.Run(session).All(&response)
+//
+//   query := r.Table("villains").OrderBy(func(row r.Exp) r.Exp {
+//       return row.Attr("strength")
+//   }, "intelligence")
+//   err := query.Run(session).All(&response)
 func (e Exp) OrderBy(orderings ...interface{}) Exp {
+	for i, ordering := range orderings {
+		switch ordering.(type) {
+		case Exp:
+			if exp := ordering.(Exp); !(exp.kind == descendingKind || exp.kind == ascendingKind) {
+				orderings[i] = funcWrapper(ordering, 1)
+			}
+		default:
+			orderings[i] = funcWrapper(ordering, 1)
+		}
+	}
+
 	// These are not required to be strings because they could also be
 	// orderByAttr structs which specify the direction of sorting
 	return naryOperator(orderByKind, e, orderings...)
@@ -917,8 +933,8 @@ func (e Exp) OrderBy(orderings ...interface{}) Exp {
 //   var response []interface{}
 //   // Retrieve villains in order of increasing fighting ability (worst fighters first)
 //   err := r.Table("villains").OrderBy(r.Asc("fighting")).Run(session).All(&response)
-func Asc(attr string) Exp {
-	return naryOperator(ascendingKind, attr)
+func Asc(attr interface{}) Exp {
+	return naryOperator(ascendingKind, funcWrapper(attr, 1))
 }
 
 // Desc tells OrderBy to sort a particular attribute in descending order.
@@ -928,8 +944,8 @@ func Asc(attr string) Exp {
 //   var response []interface{}
 //   // Retrieve villains in order of decreasing speed (fastest villains first)
 //   err := r.Table("villains").OrderBy(r.Desc("speed")).Run(session).All(&response)
-func Desc(attr string) Exp {
-	return naryOperator(descendingKind, attr)
+func Desc(attr interface{}) Exp {
+	return naryOperator(descendingKind, funcWrapper(attr, 1))
 }
 
 // Reduce iterates over a sequence, starting with a base value and applying a
