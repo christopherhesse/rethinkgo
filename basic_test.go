@@ -672,46 +672,46 @@ var testGroups = map[string][]ExpectPair{
 	},
 }
 
-// func (s *RethinkSuite) TestGroups(c *test.C) {
-// 	for group, pairs := range testGroups {
-// 		if group != "time" {
-// 			continue
-// 		}
+func (s *RethinkSuite) TestGroups(c *test.C) {
+	for group, pairs := range testGroups {
+		if group != "time" {
+			continue
+		}
 
-// 		resetDatabase(c)
+		resetDatabase(c)
 
-// 		for index, pair := range pairs {
-// 			fmt.Println("Group:", group, index)
-// 			runQuery(c, pair)
-// 			fmt.Println("")
-// 		}
-// 	}
-// }
+		for index, pair := range pairs {
+			fmt.Println("Group:", group, index)
+			runQuery(c, pair)
+			fmt.Println("")
+		}
+	}
+}
 
-// func (s *RethinkSuite) TestGet(c *test.C) {
-// 	resetDatabase(c)
-// 	for i := 0; i < 10; i++ {
-// 		pair := ExpectPair{tbl.Get(i), Map{"id": i, "num": 20 - i}}
-// 		runQuery(c, pair)
-// 		fmt.Println("")
-// 	}
-// }
+func (s *RethinkSuite) TestGet(c *test.C) {
+	resetDatabase(c)
+	for i := 0; i < 10; i++ {
+		pair := ExpectPair{tbl.Get(i), Map{"id": i, "num": 20 - i}}
+		runQuery(c, pair)
+		fmt.Println("")
+	}
+}
 
-// func (s *RethinkSuite) TestOrderBy(c *test.C) {
-// 	resetDatabase(c)
-// 	var results1 []Map
-// 	var results2 []Map
+func (s *RethinkSuite) TestOrderBy(c *test.C) {
+	resetDatabase(c)
+	var results1 []Map
+	var results2 []Map
 
-// 	tbl.OrderBy("num").Run(session).All(&results1)
-// 	tbl.OrderBy(Asc("num")).Run(session).All(&results2)
+	tbl.OrderBy("num").Run(session).All(&results1)
+	tbl.OrderBy(Asc("num")).Run(session).All(&results2)
 
-// 	c.Assert(results1, JsonEquals, results2)
-// }
+	c.Assert(results1, JsonEquals, results2)
+}
 
-// func (s *RethinkSuite) TestDropTable(c *test.C) {
-// 	resetDatabase(c)
-// 	err := Db("test").TableCreate("tablex").Run(session).Err()
-// 	c.Assert(err, test.IsNil)
-// 	err = Db("test").TableDrop("tablex").Run(session).Err()
-// 	c.Assert(err, test.IsNil)
-// }
+func (s *RethinkSuite) TestDropTable(c *test.C) {
+	resetDatabase(c)
+	err := Db("test").TableCreate("tablex").Run(session).Err()
+	c.Assert(err, test.IsNil)
+	err = Db("test").TableDrop("tablex").Run(session).Err()
+	c.Assert(err, test.IsNil)
+}
