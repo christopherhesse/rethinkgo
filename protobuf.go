@@ -18,6 +18,7 @@ import (
 type context struct {
 	databaseName string
 	useOutdated  bool
+	timeFormat   string
 	durability   string
 	overwrite    bool
 	atomic       bool

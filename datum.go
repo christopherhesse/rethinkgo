@@ -3,10 +3,16 @@ package rethinkgo
 import (
 	"encoding/json"
 	p "github.com/christopherhesse/rethinkgo/ql2"
+	"strconv"
 	"strings"
+	"time"
 )
 
 func datumMarshal(v interface{}) (*p.Term, error) {
+	return DatumMarshal(v)
+}
+
+func DatumMarshal(v interface{}) (*p.Term, error) {
 	// convert arbitrary types to a datum tree using the json module
 	data, err := json.Marshal(v)
 	if err != nil {
@@ -16,7 +22,7 @@ func datumMarshal(v interface{}) (*p.Term, error) {
 	dataString := string(data)
 
 	datumTerm := &p.Term{
-		Type:  p.Term_DATUM.Enum(),
+		Type: p.Term_DATUM.Enum(),
 		Datum: &p.Datum{
 			Type: p.Datum_R_STR.Enum(),
 			RStr: &dataString,
@@ -32,6 +38,9 @@ func datumMarshal(v interface{}) (*p.Term, error) {
 }
 
 func datumUnmarshal(datum *p.Datum, v interface{}) error {
+	return DatumUnmarshal(datum, v)
+}
+func DatumUnmarshal(datum *p.Datum, v interface{}) error {
 	// convert a datum tree into an arbitrary type using the json module
 	data, err := datumToJson(datum)
 	if err != nil {
@@ -41,6 +50,9 @@ func datumUnmarshal(datum *p.Datum, v interface{}) error {
 }
 
 func datumToJson(datum *p.Datum) ([]byte, error) {
+	return DatumToJson(datum)
+}
+func DatumToJson(datum *p.Datum) ([]byte, error) {
 	switch datum.GetType() {
 	case p.Datum_R_NULL:
 		return json.Marshal(nil)
@@ -62,6 +74,8 @@ func datumToJson(datum *p.Datum) ([]byte, error) {
 		return []byte("[" + strings.Join(items, ",") + "]"), nil
 	case p.Datum_R_OBJECT:
 		pairs := []string{}
+		obj := map[string]string{}
+
 		for _, assoc := range datum.GetRObject() {
 			raw_key := assoc.GetKey()
 			raw_val := assoc.GetVal()
@@ -76,8 +90,35 @@ func datumToJson(datum *p.Datum) ([]byte, error) {
 				return nil, err
 			}
 
-			pairs = append(pairs, string(key)+":"+string(val))
+			obj[string(key)] = string(val)
 		}
+
+		for key, val := range obj {
+			if key == "\"$reql_type$\"" {
+				if val == "\"TIME\"" {
+					// TODO: Replace with info from context
+					timeformat := "raw"
+					if timeformat == "native" {
+						seconds, err := strconv.ParseFloat(obj["\"epoch_time\""], 64)
+						if err != nil {
+							return nil, err
+						}
+						b, err := json.Marshal(time.Unix(int64(seconds), 0))
+						if err != nil {
+							return nil, err
+						}
+						return b, nil
+					} else if timeformat == "raw" {
+						continue
+					}
+				} else {
+					panic("unkown psudo-type")
+				}
+			}
+
+			pairs = append(pairs, key+":"+val)
+		}
+
 		return []byte("{" + strings.Join(pairs, ",") + "}"), nil
 	}
 	panic("unknown datum type")

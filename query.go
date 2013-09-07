@@ -109,6 +109,7 @@ const (
 	atomicKind
 	useOutdatedKind
 	durabilityKind
+	timeformatKind
 	literalKind
 	leftboundKind
 	rightboundKind
@@ -2077,4 +2078,18 @@ func (e Exp) Default(value interface{}) Exp {
 //
 func (e Exp) ReturnValues() Exp {
 	return naryOperator(returnValuesKind, e)
+}
+
+// TimeFormat changes what format dates are returned in. If you do not want a
+// time object to be converted to a native date object, you can pass a time_format
+// flag to prevent it (valid flags are "raw" and "native"). This query returns an
+// object with two fields (epoch_time and $reql_type$) instead of a native date object.
+//
+// Example usage:
+//
+//  var response interface{}
+//  // This will work
+//  err := r.Table("heroes").TimeFormat("raw").Run(session).One(&response)
+func (e Exp) TimeFormat(format string) Exp {
+	return naryOperator(timeformatKind, e, format)
 }
