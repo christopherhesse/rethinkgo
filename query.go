@@ -30,15 +30,20 @@ const (
 	databaseDropKind
 	databaseKind
 	databaseListKind
+	dateKind
+	dayKind
+	dayOfWeekKind
+	dayOfYearKind
+	defaultKind
 	deleteAtKind
 	deleteKind
 	descendingKind
 	differenceKind
 	distinctKind
 	divideKind
-	defaultKind
-	eqJoinKind
+	duringKind
 	epochTimeKind
+	eqJoinKind
 	equalityKind
 	errorKind
 	filterKind
@@ -53,6 +58,7 @@ const (
 	groupByKind
 	groupedMapReduceKind
 	hasFieldsKind
+	hoursKind
 	implicitVariableKind
 	indexCreateKind
 	indexDropKind
@@ -63,9 +69,9 @@ const (
 	innerJoinKind
 	insertAtKind
 	insertKind
+	inTimezoneKind
 	isEmptyKind
 	iso8601Kind
-	inTimezoneKind
 	javascriptKind
 	jsonKind
 	keysKind
@@ -77,18 +83,21 @@ const (
 	matchKind
 	mergeKind
 	mergeLiteralKind
+	minutesKind
 	moduloKind
+	monthKind
 	multiplyKind
-	nthKind
 	nowKind
+	nthKind
 	orderByKind
 	outerJoinKind
 	pluckKind
 	prependKind
 	reduceKind
-	returnValuesKind
 	replaceKind
+	returnValuesKind
 	sampleKind
+	secondsKind
 	setDifferenceKind
 	setInsertKind
 	setIntersectionKind
@@ -102,13 +111,39 @@ const (
 	tableKind
 	tableListKind
 	timeKind
+	timeOfDayKind
+	timeZoneKind
+	toEpochTimeKind
+	toIso8601Kind
 	typeOfKind
 	unionKind
 	updateKind
 	variableKind
 	withFieldsKind
 	withoutKind
+	yearKind
 	zipKind
+
+	mondayKind
+	tuesdayKind
+	wednesdayKind
+	thursdayKind
+	fridayKind
+	saturdayKind
+	sundayKind
+
+	januaryKind
+	februaryKind
+	marchKind
+	aprilKind
+	mayKind
+	juneKind
+	julyKind
+	augustKind
+	septemberKind
+	octoberKind
+	novemberKind
+	decemberKind
 
 	// custom rethinkgo ones
 	upsertKind

@@ -56,6 +56,14 @@ func (ctx context) toTerm(o interface{}) *p.Term {
 			options["use_outdated"] = ctx.useOutdated
 		}
 
+	case duringKind:
+		termType = p.Term_DURING
+		if ctx.leftbound != "" {
+			options["left_bound"] = ctx.leftbound
+		}
+		if ctx.rightbound != "" {
+			options["right_bound"] = ctx.rightbound
+		}
 	case betweenKind:
 		termType = p.Term_BETWEEN
 		if len(arguments) == 4 {
@@ -183,6 +191,70 @@ func (ctx context) toTerm(o interface{}) *p.Term {
 		termType = p.Term_ISO8601
 	case inTimezoneKind:
 		termType = p.Term_IN_TIMEZONE
+	case timeZoneKind:
+		termType = p.Term_TIMEZONE
+	case dateKind:
+		termType = p.Term_DATE
+	case timeOfDayKind:
+		termType = p.Term_TIME_OF_DAY
+	case yearKind:
+		termType = p.Term_YEAR
+	case monthKind:
+		termType = p.Term_MONTH
+	case dayKind:
+		termType = p.Term_DAY
+	case dayOfWeekKind:
+		termType = p.Term_DAY_OF_WEEK
+	case dayOfYearKind:
+		termType = p.Term_DAY_OF_YEAR
+	case hoursKind:
+		termType = p.Term_HOURS
+	case minutesKind:
+		termType = p.Term_MINUTES
+	case secondsKind:
+		termType = p.Term_SECONDS
+	case toIso8601Kind:
+		termType = p.Term_TO_ISO8601
+	case toEpochTimeKind:
+		termType = p.Term_TO_EPOCH_TIME
+	case mondayKind:
+		termType = p.Term_MONDAY
+	case tuesdayKind:
+		termType = p.Term_TUESDAY
+	case wednesdayKind:
+		termType = p.Term_WEDNESDAY
+	case thursdayKind:
+		termType = p.Term_THURSDAY
+	case fridayKind:
+		termType = p.Term_FRIDAY
+	case saturdayKind:
+		termType = p.Term_SATURDAY
+	case sundayKind:
+		termType = p.Term_SUNDAY
+	case januaryKind:
+		termType = p.Term_JANUARY
+	case februaryKind:
+		termType = p.Term_FEBRUARY
+	case marchKind:
+		termType = p.Term_MARCH
+	case aprilKind:
+		termType = p.Term_APRIL
+	case mayKind:
+		termType = p.Term_MAY
+	case juneKind:
+		termType = p.Term_JUNE
+	case julyKind:
+		termType = p.Term_JULY
+	case augustKind:
+		termType = p.Term_AUGUST
+	case septemberKind:
+		termType = p.Term_SEPTEMBER
+	case octoberKind:
+		termType = p.Term_OCTOBER
+	case novemberKind:
+		termType = p.Term_NOVEMBER
+	case decemberKind:
+		termType = p.Term_DECEMBER
 	case jsonKind:
 		termType = p.Term_JSON
 	case mapKind:
