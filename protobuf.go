@@ -179,6 +179,8 @@ func (ctx context) toTerm(o interface{}) *p.Term {
 		termType = p.Term_TIME
 	case epochTimeKind:
 		termType = p.Term_EPOCH_TIME
+	case iso8601Kind:
+		termType = p.Term_ISO8601
 	case inTimezoneKind:
 		termType = p.Term_IN_TIMEZONE
 	case jsonKind:

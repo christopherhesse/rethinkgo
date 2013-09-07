@@ -12,6 +12,10 @@ func EpochTime(epochtime int) Exp {
 	return nullaryOperator(epochTimeKind, epochtime)
 }
 
+func Iso8601(date string) Exp {
+	return nullaryOperator(iso8601Kind, date)
+}
+
 func (e Exp) InTimezone(tz string) Exp {
 	return naryOperator(inTimezoneKind, e, tz)
 }

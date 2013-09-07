@@ -101,7 +101,7 @@ func (e Exp) Default(value interface{}) Exp {
 //
 //  {"go": "awesome", "rethinkdb": "awesomer"}
 func Expr(value interface{}) Exp {
-	return exprT(value, 20)
+	return expr(value, 20)
 }
 
 func expr(value interface{}, depth int) Exp {

@@ -19,11 +19,19 @@ func (s *RethinkSuite) TestEpochTime(c *test.C) {
 	c.Assert(response.Equal(time.Date(1986, 11, 3, 0, 0, 0, 0, time.Local)), test.Equals, true)
 }
 
+func (s *RethinkSuite) TestIso8601(c *test.C) {
+	var t1, t2 time.Time
+	t2, _ = time.Parse("2006-01-02T15:04:05-07:00", "1986-11-03T08:30:00-07:00")
+	err := Iso8601("1986-11-03T08:30:00-07:00").Run(session).One(&t1)
+	c.Assert(err, test.IsNil)
+	c.Assert(t1.Equal(t2), test.Equals, true)
+}
+
 func (s *RethinkSuite) TestInTimezone(c *test.C) {
-	loc, err := time.LoadLocation("PST8PDT")
+	loc, err := time.LoadLocation("MST")
 	c.Assert(err, test.IsNil)
 	var response []time.Time
-	err = ExprT(List{Now(), Now().InTimezone("-07:00")}).Run(session).One(&response)
+	err = Expr(List{Now(), Now().InTimezone("-07:00")}).Run(session).One(&response)
 	c.Assert(err, test.IsNil)
 	c.Assert(response[1].Equal(response[0].In(loc)), test.Equals, true)
 }

@@ -64,6 +64,7 @@ const (
 	insertAtKind
 	insertKind
 	isEmptyKind
+	iso8601Kind
 	inTimezoneKind
 	javascriptKind
 	jsonKind
