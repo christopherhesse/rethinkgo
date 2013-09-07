@@ -1,7 +1,6 @@
 package rethinkgo
 
 import (
-	"fmt"
 	"time"
 )
 
