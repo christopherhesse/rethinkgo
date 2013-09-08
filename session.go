@@ -24,6 +24,9 @@ type Session struct {
 	// authorization key for servers configured to check this
 	authkey string
 
+	// the format time values should be returned as
+	timeFormat string
+
 	conn   *connection
 	closed bool
 }

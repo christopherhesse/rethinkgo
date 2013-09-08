@@ -12,6 +12,22 @@ func (s *RethinkSuite) TestTime(c *test.C) {
 	c.Assert(response.Equal(time.Date(1986, 11, 3, 12, 30, 15, 0, time.Local)), test.Equals, true)
 }
 
+func (s *RethinkSuite) TestRawTimeFormat(c *test.C) {
+	var response map[string]interface{}
+	err := Time(1986, 11, 3, 12, 30, 15, "Z").TimeFormat("raw").Run(session).One(&response)
+	_, containsTimezone := response["timezone"]
+	_, containsEpoch := response["epoch_time"]
+	c.Assert(err, test.IsNil)
+	c.Assert(containsTimezone, test.Equals, true)
+	c.Assert(containsEpoch, test.Equals, true)
+}
+
+func (s *RethinkSuite) TestNativeTimeFormat(c *test.C) {
+	var response time.Time
+	err := Time(1986, 11, 3, 12, 30, 15, "Z").TimeFormat("native").Run(session).One(&response)
+	c.Assert(err, test.IsNil)
+}
+
 func (s *RethinkSuite) TestEpochTime(c *test.C) {
 	var response time.Time
 	err := EpochTime(531360000).Run(session).One(&response)

@@ -92,9 +92,8 @@ func datumToJson(datum *p.Datum) ([]byte, error) {
 						return nil, err
 					}
 
-					// TODO: Replace with info from context/session
-					timeformat := "native"
-					if timeformat == "native" {
+					// Format the time result based on the selected timeFormat option
+					if session.timeFormat == "" || session.timeFormat == "native" {
 						seconds, err := strconv.ParseFloat(epochTime, 64)
 						if err != nil {
 							return nil, err
@@ -124,9 +123,13 @@ func datumToJson(datum *p.Datum) ([]byte, error) {
 							return nil, err
 						}
 						return b, nil
+					} else if session.timeFormat == "raw" {
+						continue
+					} else {
+						panic("unknown time format")
 					}
 				} else {
-					panic("unkown pseudo-type")
+					panic("unknown pseudo-type")
 				}
 			}
 
