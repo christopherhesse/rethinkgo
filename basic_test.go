@@ -121,7 +121,6 @@ func resetDatabase(c *test.C) {
 	spec := TableSpec{Name: "joins3", PrimaryKey: "it"}
 	Db("test").TableCreateWithSpec(spec).Run(session)
 	j3.Insert(s3).Run(session)
-	fmt.Println("")
 }
 
 var _ = test.Suite(&RethinkSuite{})
@@ -683,7 +682,6 @@ func (s *RethinkSuite) TestGroups(c *test.C) {
 		for index, pair := range pairs {
 			fmt.Println("Group:", group, index)
 			runQuery(c, pair)
-			fmt.Println("")
 		}
 	}
 }
@@ -693,7 +691,6 @@ func (s *RethinkSuite) TestGet(c *test.C) {
 	for i := 0; i < 10; i++ {
 		pair := ExpectPair{tbl.Get(i), Map{"id": i, "num": 20 - i}}
 		runQuery(c, pair)
-		fmt.Println("")
 	}
 }
 
