@@ -180,9 +180,6 @@ func (ctx context) toTerm(o interface{}) *p.Term {
 	case rightboundKind:
 		ctx.rightbound = e.args[1].(string)
 		return ctx.toTerm(e.args[0])
-	case timeFormatKind:
-		session.timeFormat = e.args[1].(string)
-		return ctx.toTerm(e.args[0])
 	case nowKind:
 		termType = p.Term_NOW
 	case timeKind:

@@ -111,7 +111,6 @@ const (
 	tableKind
 	tableListKind
 	timeKind
-	timeFormatKind
 	timeOfDayKind
 	timeZoneKind
 	toEpochTimeKind
@@ -284,18 +283,4 @@ func (e Exp) Durability(durability string) Exp {
 //
 func (e Exp) ReturnValues() Exp {
 	return naryOperator(returnValuesKind, e)
-}
-
-// UseOutdated tells the server to use potentially out-of-date data from all
-// tables already specified in this query. The advantage is that read queries
-// may be faster if this is set.
-
-// TimeFormat tells the server which time format to use when reading times.
-// Currently supported options are "native" and "raw"
-//
-// Example usage:
-//
-//  rows := r.Now().TimeFormat("raw").Run(session)
-func (e Exp) TimeFormat(format string) Exp {
-	return naryOperator(timeFormatKind, e, format)
 }

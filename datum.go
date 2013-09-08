@@ -92,42 +92,35 @@ func datumToJson(datum *p.Datum) ([]byte, error) {
 						return nil, err
 					}
 
-					// Format the time result based on the selected timeFormat option
-					if session.timeFormat == "" || session.timeFormat == "native" {
-						seconds, err := strconv.ParseFloat(epochTime, 64)
-						if err != nil {
-							return nil, err
-						}
-						t := time.Unix(int64(seconds), 0)
-
-						// Caclulate the timezone
-						if timezone != "" {
-							hours, err := strconv.Atoi(timezone[1:3])
-							if err != nil {
-								return nil, err
-							}
-							minutes, err := strconv.Atoi(timezone[4:6])
-							if err != nil {
-								return nil, err
-							}
-							tzOffset := ((hours * 60) + minutes) * 60
-							if timezone[:1] == "-" {
-								tzOffset = 0 - tzOffset
-							}
-
-							t = t.In(time.FixedZone(timezone, tzOffset))
-						}
-
-						b, err := json.Marshal(t)
-						if err != nil {
-							return nil, err
-						}
-						return b, nil
-					} else if session.timeFormat == "raw" {
-						continue
-					} else {
-						panic("unknown time format")
+					seconds, err := strconv.ParseFloat(epochTime, 64)
+					if err != nil {
+						return nil, err
 					}
+					t := time.Unix(int64(seconds), 0)
+
+					// Caclulate the timezone
+					if timezone != "" {
+						hours, err := strconv.Atoi(timezone[1:3])
+						if err != nil {
+							return nil, err
+						}
+						minutes, err := strconv.Atoi(timezone[4:6])
+						if err != nil {
+							return nil, err
+						}
+						tzOffset := ((hours * 60) + minutes) * 60
+						if timezone[:1] == "-" {
+							tzOffset = 0 - tzOffset
+						}
+
+						t = t.In(time.FixedZone(timezone, tzOffset))
+					}
+
+					b, err := json.Marshal(t)
+					if err != nil {
+						return nil, err
+					}
+					return b, nil
 				} else {
 					panic("unknown pseudo-type")
 				}
