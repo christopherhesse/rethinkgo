@@ -673,10 +673,6 @@ var testGroups = map[string][]ExpectPair{
 
 func (s *RethinkSuite) TestGroups(c *test.C) {
 	for group, pairs := range testGroups {
-		if group != "time" {
-			continue
-		}
-
 		resetDatabase(c)
 
 		for index, pair := range pairs {
