@@ -126,7 +126,7 @@ func datumToJson(datum *p.Datum) ([]byte, error) {
 						return b, nil
 					}
 				} else {
-					panic("unkown psudo-type")
+					panic("unkown pseudo-type")
 				}
 			}
 
