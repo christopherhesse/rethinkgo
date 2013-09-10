@@ -1,6 +1,8 @@
 package rethinkgo
 
 import (
+	"fmt"
+	"reflect"
 	"time"
 )
 
@@ -111,11 +113,57 @@ func expr(value interface{}, depth int) Exp {
 
 	switch val := value.(type) {
 	case time.Time:
-		return nullaryOperator(literalKind, val)
+		return EpochTime(val.Unix())
 	case Exp:
 		return val
 	case func() Exp, func(Exp) Exp:
 		return funcWrapper(val, 1)
+	case List:
+		args := List{}
+
+		for _, v := range val {
+			args = append(args, expr(v, depth-1))
+		}
+
+		return nullaryOperator(literalKind, args)
+	case Map:
+		args := Map{}
+
+		for k, v := range val {
+			args[k] = expr(v, depth-1)
+		}
+
+		return nullaryOperator(literalKind, args)
+	case interface{}:
+		args := make(map[string]interface{})
+
+		typ := reflect.TypeOf(val)
+		str := reflect.ValueOf(val)
+
+		// if a pointer to a struct is passed, get the type of the dereferenced object
+		if typ.Kind() == reflect.Ptr {
+			typ = typ.Elem()
+		}
+
+		// Only structs are supported so return an empty result if the passed object
+		// isn't a struct
+		if typ.Kind() != reflect.Struct {
+			return nullaryOperator(literalKind, val)
+		}
+
+		// loop through the struct's fields and set the map
+		for i := 0; i < typ.NumField(); i++ {
+			ft := typ.Field(i)
+			fv := str.Field(i)
+
+			if !ft.Anonymous {
+				fmt.Println(fv.Interface())
+				args[ft.Name] = fv.Interface()
+			}
+		}
+
+		return nullaryOperator(literalKind, args)
+
 	default:
 		return nullaryOperator(literalKind, val)
 	}
