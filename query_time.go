@@ -16,7 +16,7 @@ func Now() Exp {
 //
 //  var response time.Time{}
 //  err = r.Time(2006, 12, 12, 11, 30, 0, "Z").Run(session).One(&response)
-func Time(year, month, day, hour, min, sec int, tz string) Exp {
+func Time(year, month, day, hour, min, sec interface{}, tz string) Exp {
 	return nullaryOperator(timeKind, year, month, day, hour, min, sec, tz)
 }
 
@@ -26,7 +26,7 @@ func Time(year, month, day, hour, min, sec int, tz string) Exp {
 //
 //  var response time.Time{}
 //  err = r.Now().Run(session).One(&response)
-func EpochTime(epochtime int) Exp {
+func EpochTime(epochtime interface{}) Exp {
 	return nullaryOperator(epochTimeKind, epochtime)
 }
 
@@ -36,7 +36,7 @@ func EpochTime(epochtime int) Exp {
 //
 //  var response time.Time{}
 //  err = r.Now().Run(session).One(&response)
-func ISO8601(date string) Exp {
+func ISO8601(date interface{}) Exp {
 	return nullaryOperator(iso8601Kind, date)
 }
 
@@ -49,7 +49,7 @@ func ISO8601(date string) Exp {
 //
 //  var response time.Time{}
 //  err = r.Now().InTimezone("-08:00").Hours().Run(session).One(&response)
-func (e Exp) InTimezone(tz string) Exp {
+func (e Exp) InTimezone(tz interface{}) Exp {
 	return naryOperator(inTimezoneKind, e, tz)
 }
 
