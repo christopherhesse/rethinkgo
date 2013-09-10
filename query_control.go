@@ -1,7 +1,6 @@
 package rethinkgo
 
 import (
-	"fmt"
 	"reflect"
 	"time"
 )
@@ -157,7 +156,6 @@ func expr(value interface{}, depth int) Exp {
 			fv := str.Field(i)
 
 			if !ft.Anonymous {
-				fmt.Println(fv.Interface())
 				args[ft.Name] = fv.Interface()
 			}
 		}
