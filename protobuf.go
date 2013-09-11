@@ -8,6 +8,8 @@ import (
 	"code.google.com/p/goprotobuf/proto"
 	"fmt"
 	p "github.com/christopherhesse/rethinkgo/ql2"
+
+	// "github.com/christopherhesse/rethinkgo/time"
 	"reflect"
 	"runtime"
 	"sync/atomic"
