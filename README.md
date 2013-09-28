@@ -5,6 +5,8 @@ rethinkgo
 
 Current supported RethinkDB version: 1.7.1
 
+NOTE: This driver works as is, but no future work is planned.  See @dancannon's [gorethink](https://github.com/dancannon/gorethink) for a more up-to-date driver.
+
 Installation
 ============
 
