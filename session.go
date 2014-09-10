@@ -8,6 +8,11 @@ import (
 	"time"
 )
 
+
+type Runner interface {
+	Run(query Exp) *Rows
+}
+
 // Session represents a connection to a server, use it to run queries against a
 // database, with either sess.Run(query) or query.Run(session).  Do not share a
 // session between goroutines, create a new one for each goroutine.
@@ -180,6 +185,6 @@ func (s *Session) getContext() context {
 
 // Run runs a query using the given session, there is one Run()
 // method for each type of query.
-func (e Exp) Run(session *Session) *Rows {
-	return session.Run(e)
+func (e Exp) Run(runner Runner) *Rows {
+	return runner.Run(e)
 }
