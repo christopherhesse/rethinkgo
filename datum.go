@@ -3,7 +3,9 @@ package rethinkgo
 import (
 	"encoding/json"
 	p "github.com/christopherhesse/rethinkgo/ql2"
+	"strconv"
 	"strings"
+	"time"
 )
 
 func datumMarshal(v interface{}) (*p.Term, error) {
@@ -16,7 +18,7 @@ func datumMarshal(v interface{}) (*p.Term, error) {
 	dataString := string(data)
 
 	datumTerm := &p.Term{
-		Type:  p.Term_DATUM.Enum(),
+		Type: p.Term_DATUM.Enum(),
 		Datum: &p.Datum{
 			Type: p.Datum_R_STR.Enum(),
 			RStr: &dataString,
@@ -62,6 +64,8 @@ func datumToJson(datum *p.Datum) ([]byte, error) {
 		return []byte("[" + strings.Join(items, ",") + "]"), nil
 	case p.Datum_R_OBJECT:
 		pairs := []string{}
+		obj := map[string]string{}
+
 		for _, assoc := range datum.GetRObject() {
 			raw_key := assoc.GetKey()
 			raw_val := assoc.GetVal()
@@ -76,8 +80,55 @@ func datumToJson(datum *p.Datum) ([]byte, error) {
 				return nil, err
 			}
 
-			pairs = append(pairs, string(key)+":"+string(val))
+			obj[string(key)] = string(val)
 		}
+
+		for key, val := range obj {
+			if key == "\"$reql_type$\"" {
+				if val == "\"TIME\"" {
+					epochTime := obj["\"epoch_time\""]
+					timezone, err := strconv.Unquote(obj["\"timezone\""])
+					if err != nil {
+						return nil, err
+					}
+
+					seconds, err := strconv.ParseFloat(epochTime, 64)
+					if err != nil {
+						return nil, err
+					}
+					t := time.Unix(int64(seconds), 0)
+
+					// Caclulate the timezone
+					if timezone != "" {
+						hours, err := strconv.Atoi(timezone[1:3])
+						if err != nil {
+							return nil, err
+						}
+						minutes, err := strconv.Atoi(timezone[4:6])
+						if err != nil {
+							return nil, err
+						}
+						tzOffset := ((hours * 60) + minutes) * 60
+						if timezone[:1] == "-" {
+							tzOffset = 0 - tzOffset
+						}
+
+						t = t.In(time.FixedZone(timezone, tzOffset))
+					}
+
+					b, err := json.Marshal(t)
+					if err != nil {
+						return nil, err
+					}
+					return b, nil
+				} else {
+					panic("unknown pseudo-type")
+				}
+			}
+
+			pairs = append(pairs, key+":"+val)
+		}
+
 		return []byte("{" + strings.Join(pairs, ",") + "}"), nil
 	}
 	panic("unknown datum type")

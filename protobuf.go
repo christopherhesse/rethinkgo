@@ -8,6 +8,8 @@ import (
 	"code.google.com/p/goprotobuf/proto"
 	"fmt"
 	p "github.com/christopherhesse/rethinkgo/ql2"
+
+	// "github.com/christopherhesse/rethinkgo/time"
 	"reflect"
 	"runtime"
 	"sync/atomic"
@@ -22,6 +24,8 @@ type context struct {
 	overwrite    bool
 	atomic       bool
 	returnValues bool
+	leftbound    string
+	rightbound   string
 }
 
 // toTerm converts an arbitrary object to a Term, within the context that toTerm
@@ -54,12 +58,26 @@ func (ctx context) toTerm(o interface{}) *p.Term {
 			options["use_outdated"] = ctx.useOutdated
 		}
 
+	case duringKind:
+		termType = p.Term_DURING
+		if ctx.leftbound != "" {
+			options["left_bound"] = ctx.leftbound
+		}
+		if ctx.rightbound != "" {
+			options["right_bound"] = ctx.rightbound
+		}
 	case betweenKind:
 		termType = p.Term_BETWEEN
 		if len(arguments) == 4 {
 			// last argument is an index
 			options["index"] = arguments[3]
 			arguments = arguments[:3]
+		}
+		if ctx.leftbound != "" {
+			options["left_bound"] = ctx.leftbound
+		}
+		if ctx.rightbound != "" {
+			options["right_bound"] = ctx.rightbound
 		}
 	case reduceKind:
 		termType = p.Term_REDUCE
@@ -158,7 +176,86 @@ func (ctx context) toTerm(o interface{}) *p.Term {
 	case returnValuesKind:
 		ctx.returnValues = true
 		return ctx.toTerm(e.args[0])
-
+	case leftboundKind:
+		ctx.leftbound = e.args[1].(string)
+		return ctx.toTerm(e.args[0])
+	case rightboundKind:
+		ctx.rightbound = e.args[1].(string)
+		return ctx.toTerm(e.args[0])
+	case nowKind:
+		termType = p.Term_NOW
+	case timeKind:
+		termType = p.Term_TIME
+	case epochTimeKind:
+		termType = p.Term_EPOCH_TIME
+	case iso8601Kind:
+		termType = p.Term_ISO8601
+	case inTimezoneKind:
+		termType = p.Term_IN_TIMEZONE
+	case timeZoneKind:
+		termType = p.Term_TIMEZONE
+	case dateKind:
+		termType = p.Term_DATE
+	case timeOfDayKind:
+		termType = p.Term_TIME_OF_DAY
+	case yearKind:
+		termType = p.Term_YEAR
+	case monthKind:
+		termType = p.Term_MONTH
+	case dayKind:
+		termType = p.Term_DAY
+	case dayOfWeekKind:
+		termType = p.Term_DAY_OF_WEEK
+	case dayOfYearKind:
+		termType = p.Term_DAY_OF_YEAR
+	case hoursKind:
+		termType = p.Term_HOURS
+	case minutesKind:
+		termType = p.Term_MINUTES
+	case secondsKind:
+		termType = p.Term_SECONDS
+	case toIso8601Kind:
+		termType = p.Term_TO_ISO8601
+	case toEpochTimeKind:
+		termType = p.Term_TO_EPOCH_TIME
+	case mondayKind:
+		termType = p.Term_MONDAY
+	case tuesdayKind:
+		termType = p.Term_TUESDAY
+	case wednesdayKind:
+		termType = p.Term_WEDNESDAY
+	case thursdayKind:
+		termType = p.Term_THURSDAY
+	case fridayKind:
+		termType = p.Term_FRIDAY
+	case saturdayKind:
+		termType = p.Term_SATURDAY
+	case sundayKind:
+		termType = p.Term_SUNDAY
+	case januaryKind:
+		termType = p.Term_JANUARY
+	case februaryKind:
+		termType = p.Term_FEBRUARY
+	case marchKind:
+		termType = p.Term_MARCH
+	case aprilKind:
+		termType = p.Term_APRIL
+	case mayKind:
+		termType = p.Term_MAY
+	case juneKind:
+		termType = p.Term_JUNE
+	case julyKind:
+		termType = p.Term_JULY
+	case augustKind:
+		termType = p.Term_AUGUST
+	case septemberKind:
+		termType = p.Term_SEPTEMBER
+	case octoberKind:
+		termType = p.Term_OCTOBER
+	case novemberKind:
+		termType = p.Term_NOVEMBER
+	case decemberKind:
+		termType = p.Term_DECEMBER
 	case jsonKind:
 		termType = p.Term_JSON
 	case mapKind:
@@ -269,6 +366,8 @@ func (ctx context) toTerm(o interface{}) *p.Term {
 		termType = p.Term_WITHOUT
 	case mergeKind:
 		termType = p.Term_MERGE
+	case mergeLiteralKind:
+		termType = p.Term_LITERAL
 	case indexCreateKind:
 		termType = p.Term_INDEX_CREATE
 	case indexListKind:
@@ -463,6 +562,11 @@ func (ctx context) literalToTerm(literal interface{}) *p.Term {
 			Type:    p.Term_MAKE_OBJ.Enum(),
 			Optargs: ctx.mapToAssocPairs(literal),
 		}
+	} else if value.Kind() == reflect.Slice {
+		return &p.Term{
+			Type: p.Term_MAKE_ARRAY.Enum(),
+			Args: ctx.listToTerms(literal),
+		}
 	}
 
 	term, err := datumMarshal(literal)
@@ -513,6 +617,13 @@ func (ctx context) mapToAssocPairs(m interface{}) (pairs []*p.Term_AssocPair) {
 			Val: ctx.toTerm(value),
 		}
 		pairs = append(pairs, pair)
+	}
+	return pairs
+}
+
+func (ctx context) listToTerms(m interface{}) (pairs []*p.Term) {
+	for _, value := range toArray(m) {
+		pairs = append(pairs, ctx.toTerm(value))
 	}
 	return pairs
 }
